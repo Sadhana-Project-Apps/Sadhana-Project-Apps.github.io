@@ -952,7 +952,33 @@ const DOC_CATS = [
   {k:'SHE', name:'Safety & Environmental', icon:'🦺', types:['TBT','PTW','SW']},
   {k:'SCR', name:'Scrap & Salvage', icon:'♻', types:['SSO']}
 ];
-const catOfType = t => DOC_CATS.find(c => c.types.includes(t)) || DOC_CATS[0];
+const DEFAULT_CAT = {}; DOC_CATS.forEach(c => c.types.forEach(t => DEFAULT_CAT[t] = c.k));
+// admin can move a document type to another folder (saved in company settings)
+const typeCat = t => ((S.company && S.company.typeCats) || {})[t] || DEFAULT_CAT[t] || 'OPS';
+const catTypes = c => TYPE_KEYS.filter(k => typeCat(k) === c.k);
+const catOfType = t => DOC_CATS.find(c => c.k === typeCat(t)) || DOC_CATS[0];
+/* ---------- ISO 9001 / 14001 / 45001: which records count as evidence for which clause ---------- */
+const ISO_STDS = [
+  {k:'9001', name:'ISO 9001 Quality'},
+  {k:'14001', name:'ISO 14001 Environmental'},
+  {k:'45001', name:'ISO 45001 Occupational Health & Safety'}
+];
+const ISO_MAP = {
+  DSR: {'9001':'8.5.1 Control of production & service provision', '45001':'8.1 Operational planning & control'},
+  PR:  {'9001':'9.1 Monitoring, measurement, analysis & evaluation', '45001':'9.1 Monitoring & performance evaluation'},
+  MM:  {'9001':'7.1 Resources (manpower & machinery)'},
+  SW:  {'14001':'8.1 Operational control – waste management', '9001':'9.1 Monitoring & measurement'},
+  SSO: {'14001':'8.1 Operational control – scrap & recycling', '9001':'8.5.3 Property belonging to customers'},
+  RFI: {'9001':'8.2.1 Customer communication'},
+  TR:  {'9001':'7.5 Documented information'},
+  PDH: {'9001':'8.5.3 Property belonging to customers', '45001':'6.1.2 Hazard identification & risk assessment'},
+  IAH: {'9001':'8.6 Release of products & services'},
+  EMD: {'9001':'7.1.3 Infrastructure', '45001':'8.1 Operational planning & control'},
+  TBT: {'45001':'5.4 Consultation & participation / 7.3 Awareness'},
+  PTW: {'45001':'8.1.2 Eliminating hazards & reducing OH&S risks', '14001':'8.1 Operational control'}
+};
+const isoOf = t => { const o = ((S.company && S.company.typeIso) || {})[t]; const base = ISO_MAP[t] || {};
+  if(!o) return base; const r = {}; o.forEach(std => r[std] = base[std] || 'Records – ' + (TYPES[t]?.name || t)); return r; };
 function projectView(id, tab){
   const p = projById(id);
   loadProjectDocs(id);
@@ -961,13 +987,13 @@ function projectView(id, tab){
   S.lastCat = S.lastCat || {};
   const cat = DOC_CATS.find(c => c.k === (S.view.cat || (tab !== 'ALL' ? catOfType(tab).k : S.lastCat[id] || 'OPS'))) || DOC_CATS[0];
   S.lastCat[id] = cat.k;
-  const ckeys = cat.types.filter(k => TYPES[k]);
+  const ckeys = catTypes(cat);
   const allP = S.docs.filter(d => d.projectId === id);
   const all = allP.filter(d => ckeys.includes(d.type));
   if(tab !== 'ALL' && !ckeys.includes(tab)) tab = 'ALL';
   const ds = (tab === 'ALL' ? all : all.filter(d => d.type === tab)).sort((a,b) => String(docDate(b)).localeCompare(String(docDate(a))) || String(b.number).localeCompare(String(a.number)));
   const tabs = ['ALL', ...ckeys].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
-  const folders = `<div class="folders">${DOC_CATS.map(c => { const n = allP.filter(d => c.types.includes(d.type)).length, pend = allP.filter(d => c.types.includes(d.type) && statusOf(d).next >= 0).length;
+  const folders = `<div class="folders">${DOC_CATS.map(c => { const ct = catTypes(c), n = allP.filter(d => ct.includes(d.type)).length, pend = allP.filter(d => ct.includes(d.type) && statusOf(d).next >= 0).length;
     return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name.toUpperCase())}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · ' + pend + ' awaiting' : ''}</span></span></button>`; }).join('')}</div>`;
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
@@ -982,7 +1008,7 @@ function projectView(id, tab){
   </div>
   ${folders}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Rename document names</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -990,14 +1016,111 @@ function projectView(id, tab){
 }
 
 /* ---------- REGISTER ---------- */
+/* ---------- ISO audit pack: every record for the period, arranged by standard & clause, in one ZIP ---------- */
+function isoPackForm(){
+  const y = new Date().getFullYear();
+  showModal(`<div class="box"><div class="mh"><h3>📦 ISO audit pack</h3></div><div class="mb"><div class="fgrid">
+    <div class="fld half"><label>From</label><input type="date" id="isoFrom" value="${y}-01-01"></div>
+    <div class="fld half"><label>To</label><input type="date" id="isoTo" value="${today()}"></div>
+    <div class="fld"><label>Quick pick</label><div class="tabs" style="margin:0">${[y, y - 1].map(v => `<button type="button" data-act="isoyear" data-y="${v}">Year ${v}</button>`).join('')}<button type="button" data-act="isoyear" data-y="12m">Last 12 months</button></div></div>
+    <div class="fld"><label>Standards</label><div class="checks">${ISO_STDS.map(st => `<label><input type="checkbox" class="isoStd" value="${st.k}" checked>${esc(st.name)}</label>`).join('')}</div></div>
+    <div class="fld half"><label>Project</label><select id="isoProj"><option value="">All projects</option>${S.projects.map(p => `<option value="${esc(p.id)}" title="${esc(p.name)}">${esc(shortName(p.code + ' — ' + p.name, 40))}</option>`).join('')}</select></div>
+    <div class="fld half"><label>Records</label><select id="isoStatus"><option value="done">Completed (fully signed) only</option><option value="all">All, including drafts & pending</option></select></div>
+    <div class="fld"><label><input type="checkbox" id="isoFiles" checked> Include project files (LOA, insurance, permits…)</label></div>
+  </div>
+  <p class="small muted">You get one ZIP file: <b>00 Index</b> (PDF + Excel list) and a folder per ISO standard → clause → project, with every record as a signed PDF in the Sadhana format. A record that is evidence for two standards appears in both.</p>
+  <div id="isoProg" style="display:none"><div class="prog"><i id="isoBar" style="width:0%"></i></div><div id="isoTxt" class="small muted" style="margin-top:6px"></div></div>
+  </div><div class="mf"><button class="btn ghost" data-act="closemodal" id="isoCancel">Cancel</button><button class="btn pri" data-act="isogo">⤓ Create audit pack</button></div></div>`);
+}
+async function jszip(){ if(!window.JSZip) await loadJs('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'); return window.JSZip; }
+const safeName = t => String(t || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 90);
+async function makeIsoPack(btn){
+  const from = $('#isoFrom').value, to = $('#isoTo').value, stds = [...document.querySelectorAll('.isoStd:checked')].map(i => i.value);
+  const pid = $('#isoProj').value, onlyDone = $('#isoStatus').value === 'done', withFiles = $('#isoFiles').checked;
+  if(!stds.length){ toast('Tick at least one standard.', true); return; }
+  btn.disabled = true; $('#isoCancel').disabled = true; $('#isoProg').style.display = '';
+  const say = (t, p) => { $('#isoTxt').textContent = t; if(p != null) $('#isoBar').style.width = p + '%'; };
+  try {
+    say('Collecting records…', 2);
+    if(!S.allLoaded) await loadAllDocs();
+    const Z = await jszip(); const zip = new Z();
+    const root = safeName(`ISO Audit Pack ${from} to ${to}`);
+    const docs = S.docs.filter(d => projById(d.projectId) && (!pid || d.projectId === pid) && (!onlyDone || statusOf(d).next === -1))
+      .filter(d => { const dt = String(docDate(d) || '').slice(0, 10); return (!from || dt >= from) && (!to || dt <= to); })
+      .sort((a, b) => String(docDate(a)).localeCompare(String(docDate(b))) || String(a.number).localeCompare(String(b.number)));
+    const jobs = []; docs.forEach(d => { const m = isoOf(d.type); stds.forEach(st => { if(m[st]) jobs.push({d, st, clause: m[st]}); }); });
+    if(!jobs.length){ toast('No records found for that period.', true); btn.disabled = false; $('#isoCancel').disabled = false; return; }
+    const pdfCache = {}, index = [];
+    const uniq = [...new Set(jobs.map(j => j.d.id))];
+    for(let i = 0; i < uniq.length; i++){
+      const d = docById(uniq[i]); say(`Making PDF ${i + 1} of ${uniq.length} — ${d.number}`, 5 + Math.round(i / uniq.length * 80));
+      try { pdfCache[d.id] = await makePDF(d.id, {blob: true}); } catch(e){ console.error(e); pdfCache[d.id] = null; }
+    }
+    for(const j of jobs){
+      const p = projById(j.d.projectId) || {}, r = pdfCache[j.d.id];
+      const stName = ISO_STDS.find(x => x.k === j.st).name;
+      const path = `${root}/${safeName(stName)}/${safeName(j.clause + ' - ' + TYPES[j.d.type].name)}/${safeName(p.code)}/${r ? r.name : safeName(j.d.number) + '.pdf'}`;
+      if(r) zip.file(path, r.blob);
+      index.push([stName, j.clause, TYPES[j.d.type].name, p.code || '', j.d.number, fmtDate(docDate(j.d)), statusOf(j.d).label, (j.d.signatures || []).map(g => g.name).join(', '), r ? path.slice(root.length + 1) : 'PDF could not be created']);
+    }
+    let fileCount = 0;
+    if(withFiles){
+      const fl = S.files.filter(f => (!pid || f.projectId === pid) && f.status !== 'uploading');
+      for(let i = 0; i < fl.length; i++){ const f = fl[i], p = projById(f.projectId) || {};
+        say(`Adding project file ${i + 1} of ${fl.length}`, 86 + Math.round(i / Math.max(1, fl.length) * 8));
+        const dir = `${root}/Project files/${safeName(p.code)}/${safeName(f.folder || f.category || 'General')}`;
+        if(f.kind === 'link'){ zip.file(`${dir}/${safeName(f.title)} (link).txt`, f.url + '\n'); fileCount++; continue; }
+        try { zip.file(`${dir}/${safeName(f.name || f.title)}`, await fileBlob(f)); fileCount++; } catch(e){ console.error(e); } }
+    }
+    say('Writing the index…', 95);
+    const csv = [['Standard','Clause','Record','Project','Doc no.','Date','Status','Signed by','File in pack'], ...index].map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    zip.file(`${root}/00 Index.csv`, '\ufeff' + csv);
+    zip.file(`${root}/00 Index.pdf`, await isoIndexPdf(index, {from, to, stds, pid, onlyDone, fileCount}));
+    say('Compressing…', 97);
+    const blob = await zip.generateAsync({type: 'blob'});
+    await S.dl.save({filename: root + '.zip', data: blob});
+    closeModal(); toast(`Audit pack ready — ${uniq.length} record${uniq.length === 1 ? '' : 's'}`);
+  } catch(e){ console.error(e); toast('Could not create the audit pack.', true); btn.disabled = false; $('#isoCancel').disabled = false; }
+}
+async function isoIndexPdf(index, o){
+  const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4'});
+  Object.assign(HS, {W:210, H:297, CW:170, BOTTOM:277});
+  const {L, CW, TOP, BOTTOM} = HS; let y = TOP;
+  const base = {margin:{left:L, right:HS.R, top:TOP, bottom:HS.H-BOTTOM}, theme:'grid',
+    styles:{font:'helvetica', fontSize:7.6, cellPadding:1.3, lineColor:GRID, lineWidth:0.15, textColor:INK, overflow:'linebreak', valign:'middle'},
+    headStyles:{fillColor:GREEN_HEAD, textColor:INK, fontStyle:'bold', fontSize:7.4, halign:'center'}, footStyles:{fillColor:TOTAL_FILL, textColor:INK, fontStyle:'bold'}};
+  const period = fmtDate(o.from) + ' – ' + fmtDate(o.to), p = o.pid ? projById(o.pid) : null;
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...INK); doc.text('ISO AUDIT RECORD INDEX', HS.W/2, y + 5, {align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text(pt('Period: ' + period + '     |     ' + (p ? p.code : 'All projects') + '     |     ' + (o.onlyDone ? 'Completed records' : 'All records')), HS.W/2, y + 11, {align:'center'}); y += 16;
+  // summary per standard / clause
+  const sum = {}; index.forEach(r => { const k = r[0] + '|' + r[1] + '|' + r[2]; sum[k] = (sum[k] || 0) + 1; });
+  doc.autoTable({...base, startY:y, head:[['STANDARD','CLAUSE','RECORD TYPE','NO. OF RECORDS']], body:Object.entries(sum).map(([k, n]) => [...k.split('|').map(pt), String(n)]),
+    foot:[[{content:'TOTAL RECORD ENTRIES', colSpan:3}, {content:String(index.length), styles:{halign:'center'}}]], showFoot:'lastPage', columnStyles:{0:{cellWidth:38}, 3:{cellWidth:24, halign:'center'}}}); y = doc.lastAutoTable.finalY + 6;
+  for(const st of ISO_STDS.filter(x => o.stds.includes(x.k))){
+    const rows = index.filter(r => r[0] === st.name); if(!rows.length) continue;
+    if(y + 30 > BOTTOM){ doc.addPage(); y = TOP; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(pt(st.name.toUpperCase()), L, y + 4); doc.setDrawColor(...GREEN_LINE); doc.setLineWidth(0.6); doc.line(L, y + 6, L + CW, y + 6); y += 9;
+    doc.autoTable({...base, startY:y, head:[['CLAUSE','DOC NO.','DATE','STATUS','SIGNED BY']], body: rows.map(r => [pt(r[1]), pt(r[4]), pt(r[5]), pt(r[6]), pt(r[7])]),
+      columnStyles:{0:{cellWidth:48}, 1:{cellWidth:32}, 2:{cellWidth:20, halign:'center'}, 3:{cellWidth:24, halign:'center'}}}); y = doc.lastAutoTable.finalY + 6;
+  }
+  if(o.fileCount){ if(y + 12 > BOTTOM){ doc.addPage(); y = TOP; } doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.text(pt(o.fileCount + ' project file(s) included in the "Project files" folder (LOA, insurance, permits, etc.).'), L, y + 4); }
+  const LH = await letterheadData(); const pages = doc.getNumberOfPages();
+  for(let i = 1; i <= pages; i++){ doc.setPage(i);
+    try { doc.addImage(LH.url, 'JPEG', L, HS.LH_Y, 170, 170 * LH.h / LH.w); } catch(e){}
+    doc.setDrawColor(...GRID); doc.setLineWidth(0.2); doc.line(L, HS.H - 13, L + CW, HS.H - 13);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102);
+    doc.text(pt('ISO Audit Record Index  |  ' + period), L, HS.H - 8.5); doc.text(`Page ${i} of ${pages}`, L + CW, HS.H - 8.5, {align:'right'}); }
+  return doc.output('blob');
+}
 function registerView(){
   const rows = [...S.docs].filter(d => projById(d.projectId)).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return `<div class="pagehead"><div><div class="eyebrow">All projects</div><h1>Document register</h1></div><div class="sp"></div>${S.dl?'<button class="btn" data-act="csv">Export CSV</button>':''}</div>
+  return `<div class="pagehead"><div><div class="eyebrow">All projects</div><h1>Document register</h1></div><div class="sp"></div>${S.dl?'<button class="btn pri" data-act="isopack">📦 ISO audit pack</button><button class="btn" data-act="csv">Export CSV</button>':''}</div>
   <div class="card">
     <div class="filters">
       <input id="fq" placeholder="Search number, title, project…" data-filter>
       <select id="fp" data-filter><option value="">All projects</option>${S.projects.map(p=>`<option value="${esc(p.id)}" title="${esc(p.code)} — ${esc(p.name)}">${esc(shortName(p.code + ' — ' + p.name, 48))}</option>`).join('')}</select>
-      <select id="ft" data-filter><option value="">All types</option>${DOC_CATS.map(c => `<optgroup label="${esc(c.name)}">${c.types.filter(k => TYPES[k]).map(k=>`<option value="${k}">${esc(TYPES[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
+      <select id="ft" data-filter><option value="">All types</option>${DOC_CATS.map(c => `<optgroup label="${esc(c.name)}">${catTypes(c).map(k=>`<option value="${k}">${esc(TYPES[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
       <select id="fs" data-filter><option value="">Any status</option><option value="draft">Draft</option><option value="pending">Awaiting signature</option><option value="done">Completed</option></select>
     </div>
     ${rows.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Project</th><th class="hm">Date</th><th>Status</th></tr></thead><tbody id="regbody">
@@ -1048,7 +1171,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (R) · formal wording</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (S) · folders + ISO audit pack</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1734,11 +1857,12 @@ async function letterheadData(){
   if(c.letterheadId){ try { return await imgData(await photoData(c.letterheadId), 1600, 'jpeg'); } catch(e){} }
   return {url: LETTERHEAD_JPG, w:1400, h:286};
 }
-async function makePDF(id){
+async function makePDF(id, opt){
+  opt = opt || {};
   const d = docById(id); if(!d) return;
   if(!window.jspdf){ toast('PDF tools are still loading — try again in a moment.', true); return; }
-  if(!S.dl){ toast('Downloads aren\'t available in this view.', true); return; }
-  const btn = document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+  if(!S.dl && !opt.blob){ toast('Downloads aren\'t available in this view.', true); return; }
+  const btn = opt.blob ? null : document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
     const T = TYPES[d.type], p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
     const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'});
@@ -1915,8 +2039,10 @@ async function makePDF(id){
       doc.text(`Page ${i} of ${pages}`, L + CW, HS.H - 8.5, {align:'right'});
     }
     const blob = doc.output('blob');
-    await S.dl.save({filename: `${d.number} ${docName(T, data)}.pdf`.replace(/[\\/:*?"<>|]/g,'-'), data: blob});
-  } catch(e){ if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } }
+    const fname = `${d.number} ${docName(T, data)}.pdf`.replace(/[\\/:*?"<>|]/g,'-');
+    if(opt.blob) return {blob, name: fname};
+    await S.dl.save({filename: fname, data: blob});
+  } catch(e){ if(opt.blob) throw e; if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } }
   finally { if(btn){ btn.disabled = false; btn.textContent = '⤓ Download PDF'; } }
 }
 function drawSCurve(doc, rows){
@@ -2269,6 +2395,9 @@ document.addEventListener('click', async e => {
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
     case 'typenames': typeNamesForm(); break;
+    case 'isopack': isoPackForm(); break;
+    case 'isogo': makeIsoPack(el); break;
+    case 'isoyear': { const v = el.dataset.y; if(v === '12m'){ $('#isoFrom').value = addDays(today(), -365); $('#isoTo').value = today(); } else { $('#isoFrom').value = v + '-01-01'; $('#isoTo').value = v + '-12-31'; } break; }
     case 'wa': waForm(id); break;
     case 'wadraft': if(S.draft) waForm(null, S.draft); break;
     case 'wacopy': { const tx = $('#waText').value; try { await navigator.clipboard.writeText(tx); } catch(e){ $('#waText').select(); document.execCommand('copy'); } toast('Copied — paste it in the WhatsApp group'); break; }
@@ -2276,7 +2405,7 @@ document.addEventListener('click', async e => {
     case 'scraprep': scrapReportForm(el.dataset.p); break;
     case 'scraprepgo': makeScrapReport(el); break;
     case 'typenamessave': typeNamesSave(el); break;
-    case 'typenamesreset': document.querySelectorAll('[data-tn]').forEach(i => i.value = TYPE_ORIG[i.dataset.tn][i.dataset.f]); break;
+    case 'typenamesreset': document.querySelectorAll('[data-tn]').forEach(i => i.value = TYPE_ORIG[i.dataset.tn][i.dataset.f]); document.querySelectorAll('[data-tc]').forEach(i => i.value = DEFAULT_CAT[i.dataset.tc] || 'OPS'); document.querySelectorAll('[data-ti]').forEach(i => i.checked = !!(ISO_MAP[i.dataset.ti] || {})[i.value]); break;
     case 'renamedocsave': renameDocSave(id, el); break;
     case 'renamegroup': renameGroupForm(el.dataset.p, el.dataset.g); break;
     case 'renamegroupsave': renameGroupSave(el); break;
@@ -2950,12 +3079,14 @@ async function renameDocSave(id, btn){
 /* ---------- admin: rename document types (titles on buttons, lists and PDFs) ---------- */
 function typeNamesForm(){
   if(!S.canEdit) return;
-  showModal(`<div class="box"><div class="mh"><h3>Rename document names</h3></div><div class="mb">
-    <p class="small muted" style="margin-top:0">The name is used on the buttons, lists and as the heading of the PDF. Reference numbers (e.g. DSR, PR) stay the same.</p>
-    ${TYPE_KEYS.map(k => `<div class="card pad" style="box-shadow:none;margin-bottom:10px"><div class="fgrid">
+  showModal(`<div class="box"><div class="mh"><h3>Document names & folders</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0">Rename a document, move it to another folder, and choose which ISO standards it is evidence for. Reference numbers (e.g. DSR, PR) stay the same.</p>
+    ${DOC_CATS.map(c => `<div class="eyebrow" style="margin:14px 0 6px">${c.icon} ${esc(c.name)}</div>${catTypes(c).map(k => `<div class="card pad" style="box-shadow:none;margin-bottom:10px"><div class="fgrid">
       <div class="fld"><label><span class="pill type">${k}</span> Name</label><input data-tn="${k}" data-f="name" value="${esc(TYPES[k].name)}" placeholder="${esc(TYPE_ORIG[k].name)}"></div>
+      <div class="fld half"><label>Folder</label><select data-tc="${k}">${DOC_CATS.map(x => `<option value="${x.k}" ${x.k === typeCat(k) ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div class="fld half"><label>ISO evidence for</label><div class="checks" style="gap:4px 12px">${ISO_STDS.map(st => `<label><input type="checkbox" data-ti="${k}" value="${st.k}" ${isoOf(k)[st.k] ? 'checked' : ''}>ISO ${st.k}</label>`).join('')}</div></div>
       <div class="fld"><label>Short description</label><input data-tn="${k}" data-f="blurb" value="${esc(TYPES[k].blurb)}" placeholder="${esc(TYPE_ORIG[k].blurb)}"></div>
-    </div></div>`).join('')}
+    </div></div>`).join('')}`).join('')}
   </div><div class="mf"><button class="btn ghost" data-act="typenamesreset" style="margin-right:auto">Reset to original</button><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="typenamessave">Save</button></div></div>`);
 }
 async function typeNamesSave(btn){
@@ -2963,9 +3094,11 @@ async function typeNamesSave(btn){
   document.querySelectorAll('[data-tn]').forEach(i => { const k = i.dataset.tn, v = i.value.trim(); if(v && v !== TYPE_ORIG[k][i.dataset.f]) (out[k] = out[k] || {})[i.dataset.f] = v; });
   btn.disabled = true;
   try {
-    await S.db.doc('settings/company').set({...(S.company || {}), typeNames: out});
-    S.company = {...(S.company || {}), typeNames: out}; applyTypeNames();
-    closeModal(); toast('Names saved'); render();
+    const cats = {}; document.querySelectorAll('[data-tc]').forEach(i => { if(i.value !== (DEFAULT_CAT[i.dataset.tc] || 'OPS')) cats[i.dataset.tc] = i.value; });
+    const iso = {}; TYPE_KEYS.forEach(k => { const sel = [...document.querySelectorAll(`[data-ti="${k}"]:checked`)].map(i => i.value).sort(); const def = Object.keys(ISO_MAP[k] || {}).sort(); if(sel.join() !== def.join()) iso[k] = sel; });
+    await S.db.doc('settings/company').set({...(S.company || {}), typeNames: out, typeCats: cats, typeIso: iso});
+    S.company = {...(S.company || {}), typeNames: out, typeCats: cats, typeIso: iso}; applyTypeNames(); S.view.cat = null;
+    closeModal(); toast('Saved'); render();
   } catch(e){ btn.disabled = false; dbErr(e); }
 }
 /* ---------- admin: rename a group (folder) of project files ---------- */
