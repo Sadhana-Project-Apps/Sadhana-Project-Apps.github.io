@@ -667,6 +667,13 @@ const TYPES = {
 };
 
 const TYPE_KEYS = Object.keys(TYPES);
+// Admin can rename document types (Settings → company.typeNames). Originals kept so names can be reset.
+const TYPE_ORIG = {}; TYPE_KEYS.forEach(k => TYPE_ORIG[k] = {name: TYPES[k].name, blurb: TYPES[k].blurb});
+function applyTypeNames(){
+  const o = (S.company && S.company.typeNames) || {};
+  TYPE_KEYS.forEach(k => { TYPES[k].name = (o[k] && o[k].name) || TYPE_ORIG[k].name; TYPES[k].blurb = (o[k] && o[k].blurb) || TYPE_ORIG[k].blurb; });
+}
+const swapTypeName = (k, str) => { const o = TYPE_ORIG[k]; return o && TYPES[k] && TYPES[k].name !== o.name ? String(str).replace(o.name, TYPES[k].name) : str; };
 
 /* ---------- utils ---------- */
 const $ = s => document.querySelector(s);
@@ -701,7 +708,7 @@ function statusOf(d){
 }
 const pill = d => { const s = statusOf(d); return `<span class="pill ${s.cls}"><span class="dot"></span>${esc(s.label)}</span>`; };
 const docDate = d => d.data?.[TYPES[d.type].dateField] || d.createdAt;
-const docTitle = d => { if(d.customTitle) return d.customTitle; try { return TYPES[d.type].title(d.data || {}); } catch(e){ return TYPES[d.type].name; } };
+const docTitle = d => { if(d.customTitle) return d.customTitle; try { return swapTypeName(d.type, TYPES[d.type].title(d.data || {})); } catch(e){ return TYPES[d.type].name; } };
 const nameOf = id => (id && S.names[id]) || 'Team member';
 
 async function resolveNames(ids){
@@ -845,7 +852,7 @@ function projectView(id, tab){
     <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
     <div><span>Period</span>${fmtDate(p.start)} – ${fmtDate(p.end)}</div><div><span>Project manager</span>${esc(p.pm||'—')}</div>
   </div>
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="eyebrow" style="margin-bottom:8px">Create new</div><div class="newgrid">${TYPE_KEYS.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Rename document names</button>` : ''}</div><div class="newgrid">${TYPE_KEYS.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -911,7 +918,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (D) · rename names</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1316,7 +1323,7 @@ const LETTERHEAD_JPG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDA
    · body starts 50 mm from top · Arial-style (Helvetica) · green table headers · page x of y */
 const HS = {W:210, H:297, L:20, R:20, TOP:50, BOTTOM:277, CW:170, LH_Y:10, LH_H:170*286/1400};
 const GREEN_HEAD = [197,224,180], GREEN_LINE = [46,125,50], LABEL_FILL = [242,242,242], TOTAL_FILL = [255,230,153], GRID = [153,153,153], INK = [26,28,30];
-const docName = (T, data) => T.nameFn ? T.nameFn(data || {}) : T.name;
+const docName = (T, data) => T.nameFn ? swapTypeName(T.code || TYPE_KEYS.find(k => TYPES[k] === T), T.nameFn(data || {})) : T.name;
 function dayLabel(from, i){ if(!from) return 'Day '+(i+1); const d = new Date(from+'T00:00:00'); d.setDate(d.getDate()+i); return pad2(d.getDate())+'/'+pad2(d.getMonth()+1); }
 function periodDays(data, max = 7){ if(!data.from || !data.to) return max; const n = Math.round((new Date(data.to+'T00:00:00') - new Date(data.from+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
 async function letterheadData(){
@@ -1843,6 +1850,9 @@ document.addEventListener('click', async e => {
     case 'bulkgo': runBulk(el); break;
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
+    case 'typenames': typeNamesForm(); break;
+    case 'typenamessave': typeNamesSave(el); break;
+    case 'typenamesreset': document.querySelectorAll('[data-tn]').forEach(i => i.value = TYPE_ORIG[i.dataset.tn][i.dataset.f]); break;
     case 'renamedocsave': renameDocSave(id, el); break;
     case 'renamegroup': renameGroupForm(el.dataset.p, el.dataset.g); break;
     case 'renamegroupsave': renameGroupSave(el); break;
@@ -2507,6 +2517,27 @@ async function renameDocSave(id, btn){
     closeModal(); toast('Saved'); render();
   } catch(e){ btn.disabled = false; dbErr(e); }
 }
+/* ---------- admin: rename document types (titles on buttons, lists and PDFs) ---------- */
+function typeNamesForm(){
+  if(!S.canEdit) return;
+  showModal(`<div class="box"><div class="mh"><h3>Rename document names</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0">The name is used on the buttons, lists and as the heading of the PDF. Reference numbers (e.g. DSR, PR) stay the same.</p>
+    ${TYPE_KEYS.map(k => `<div class="card pad" style="box-shadow:none;margin-bottom:10px"><div class="fgrid">
+      <div class="fld"><label><span class="pill type">${k}</span> Name</label><input data-tn="${k}" data-f="name" value="${esc(TYPES[k].name)}" placeholder="${esc(TYPE_ORIG[k].name)}"></div>
+      <div class="fld"><label>Short description</label><input data-tn="${k}" data-f="blurb" value="${esc(TYPES[k].blurb)}" placeholder="${esc(TYPE_ORIG[k].blurb)}"></div>
+    </div></div>`).join('')}
+  </div><div class="mf"><button class="btn ghost" data-act="typenamesreset" style="margin-right:auto">Reset to original</button><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="typenamessave">Save</button></div></div>`);
+}
+async function typeNamesSave(btn){
+  const out = {};
+  document.querySelectorAll('[data-tn]').forEach(i => { const k = i.dataset.tn, v = i.value.trim(); if(v && v !== TYPE_ORIG[k][i.dataset.f]) (out[k] = out[k] || {})[i.dataset.f] = v; });
+  btn.disabled = true;
+  try {
+    await S.db.doc('settings/company').set({...(S.company || {}), typeNames: out});
+    S.company = {...(S.company || {}), typeNames: out}; applyTypeNames();
+    closeModal(); toast('Names saved'); render();
+  } catch(e){ btn.disabled = false; dbErr(e); }
+}
 /* ---------- admin: rename a group (folder) of project files ---------- */
 function renameGroupForm(pid, g){
   showModal(`<div class="box" style="max-width:460px"><div class="mh"><h3>Rename group</h3></div><div class="mb"><div class="fld"><label>Group name</label><input id="rgName" value="${esc(g)}"></div></div>
@@ -2578,7 +2609,7 @@ function startData(){
     S.users.forEach(u => { if(u.name) S.names[u.id] = u.name; });
     softRender();
   }, () => {}));
-  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; softRender(); }, () => {}));
+  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); softRender(); }, () => {}));
 }
 async function onSignedIn(u){
   S.me = u.uid; S.names[u.uid] = u.displayName || u.email || 'Me';
