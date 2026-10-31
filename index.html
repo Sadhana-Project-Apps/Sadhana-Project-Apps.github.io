@@ -113,6 +113,7 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .filters{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line2)}
 .filters input,.filters select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;font-size:14px;max-width:100%;min-width:0;text-overflow:ellipsis}
 .filters select{flex:1 1 180px}
+.filters #fq{flex:1 1 100%}
 .filters input{flex:1;min-width:160px}
 /* forms */
 .form{max-width:860px}
@@ -952,7 +953,7 @@ function registerView(){
   <div class="card">
     <div class="filters">
       <input id="fq" placeholder="Search number, title, project…" data-filter>
-      <select id="fp" data-filter><option value="">All projects</option>${S.projects.map(p=>`<option value="${esc(p.id)}">${esc(p.code)} — ${esc(p.name)}</option>`).join('')}</select>
+      <select id="fp" data-filter><option value="">All projects</option>${S.projects.map(p=>`<option value="${esc(p.id)}" title="${esc(p.code)} — ${esc(p.name)}">${esc(shortName(p.code + ' — ' + p.name, 48))}</option>`).join('')}</select>
       <select id="ft" data-filter><option value="">All types</option>${TYPE_KEYS.map(k=>`<option value="${k}">${TYPES[k].name}</option>`).join('')}</select>
       <select id="fs" data-filter><option value="">Any status</option><option value="draft">Draft</option><option value="pending">Awaiting signature</option><option value="done">Completed</option></select>
     </div>
@@ -1004,7 +1005,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (J) · auto-calculations</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (K) · auto-calculations</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1825,6 +1826,7 @@ function projectForm(p){
     ${f('pm','Project manager')}${f('insurance','Insurance policies',"text",1,"e.g. CAR, Workmen's Compensation")}
   </div></div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="saveproj" data-id="${esc(p.id||'')}">${p.id?'Save':'Create project'}</button></div></div>`);
 }
+const shortName = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; };
 function projDaysText(a, b){
   if(!a || !b) return 'Enter the start and completion dates';
   const n = dayDiff(a, b) + 1; if(n < 1) return '⚠ Completion date is before the start date';
