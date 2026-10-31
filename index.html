@@ -85,6 +85,14 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .tick{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:13px}
 .tick.y{background:var(--ok-l);color:var(--ok)}
 .tick.n{background:var(--hazard-l);color:var(--hazard)}
+.folders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.folder{display:flex;gap:10px;align-items:center;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
+.folder .fi{font-size:24px;line-height:1}
+.folder .ft{display:flex;flex-direction:column;min-width:0}
+.folder .ft b{font-size:13px;letter-spacing:.04em}
+.folder .ft span{font-size:12px;color:var(--muted)}
+.folder.on{border-color:var(--ok);background:#e9f6ee;box-shadow:inset 0 -3px 0 var(--ok)}
+@media (max-width:640px){ .folders{grid-template-columns:1fr} }
 .projgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
 .proj{padding:16px;cursor:pointer;position:relative;overflow:hidden;transition:transform .12s}
 .proj:hover{transform:translateY(-2px)}
@@ -938,14 +946,29 @@ function docRow(d, showProj){
 }
 
 /* ---------- PROJECT ---------- */
+// three folders for the documents of each project
+const DOC_CATS = [
+  {k:'OPS', name:'Operation', icon:'🏗', types:['DSR','PR','MM','RFI','TR','PDH','IAH','EMD']},
+  {k:'SHE', name:'Safety & Environmental', icon:'🦺', types:['TBT','PTW','SW']},
+  {k:'SCR', name:'Scrap & Salvage', icon:'♻', types:['SSO']}
+];
+const catOfType = t => DOC_CATS.find(c => c.types.includes(t)) || DOC_CATS[0];
 function projectView(id, tab){
   const p = projById(id);
   loadProjectDocs(id);
   if(!p) return `<div class="card empty">Project not found. <button class="btn sm" data-act="nav" data-v="home">Back</button></div>`;
   tab = tab || 'ALL';
-  const all = S.docs.filter(d => d.projectId === id);
+  S.lastCat = S.lastCat || {};
+  const cat = DOC_CATS.find(c => c.k === (S.view.cat || (tab !== 'ALL' ? catOfType(tab).k : S.lastCat[id] || 'OPS'))) || DOC_CATS[0];
+  S.lastCat[id] = cat.k;
+  const ckeys = cat.types.filter(k => TYPES[k]);
+  const allP = S.docs.filter(d => d.projectId === id);
+  const all = allP.filter(d => ckeys.includes(d.type));
+  if(tab !== 'ALL' && !ckeys.includes(tab)) tab = 'ALL';
   const ds = (tab === 'ALL' ? all : all.filter(d => d.type === tab)).sort((a,b) => String(docDate(b)).localeCompare(String(docDate(a))) || String(b.number).localeCompare(String(a.number)));
-  const tabs = ['ALL', ...TYPE_KEYS].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
+  const tabs = ['ALL', ...ckeys].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
+  const folders = `<div class="folders">${DOC_CATS.map(c => { const n = allP.filter(d => c.types.includes(d.type)).length, pend = allP.filter(d => c.types.includes(d.type) && statusOf(d).next >= 0).length;
+    return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name.toUpperCase())}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · ' + pend + ' awaiting' : ''}</span></span></button>`; }).join('')}</div>`;
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
@@ -957,8 +980,9 @@ function projectView(id, tab){
     <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
     <div><span>Period</span>${(p.status||'Active') === 'Completed' ? fmtDate(p.start) + ' – ' + fmtDate(p.end) : countdownHTML(p)}</div><div><span>Project manager</span>${esc(p.pm||'—')}</div>
   </div>
-  ${scrapCard(id)}
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Rename document names</button>` : ''}</div><div class="newgrid">${TYPE_KEYS.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${folders}
+  ${cat.k === 'SCR' ? scrapCard(id) : ''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Rename document names</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -973,7 +997,7 @@ function registerView(){
     <div class="filters">
       <input id="fq" placeholder="Search number, title, project…" data-filter>
       <select id="fp" data-filter><option value="">All projects</option>${S.projects.map(p=>`<option value="${esc(p.id)}" title="${esc(p.code)} — ${esc(p.name)}">${esc(shortName(p.code + ' — ' + p.name, 48))}</option>`).join('')}</select>
-      <select id="ft" data-filter><option value="">All types</option>${TYPE_KEYS.map(k=>`<option value="${k}">${TYPES[k].name}</option>`).join('')}</select>
+      <select id="ft" data-filter><option value="">All types</option>${DOC_CATS.map(c => `<optgroup label="${esc(c.name)}">${c.types.filter(k => TYPES[k]).map(k=>`<option value="${k}">${esc(TYPES[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
       <select id="fs" data-filter><option value="">Any status</option><option value="draft">Draft</option><option value="pending">Awaiting signature</option><option value="done">Completed</option></select>
     </div>
     ${rows.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Project</th><th class="hm">Date</th><th>Status</th></tr></thead><tbody id="regbody">
@@ -1024,7 +1048,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (O) · input boxes</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (P) · document folders</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1279,6 +1303,7 @@ function letterheadHTML(d){
 }
 function docView(id){
   const d = docById(id);
+  if(d){ S.lastCat = S.lastCat || {}; S.lastCat[d.projectId] = catOfType(d.type).k; }
   if(!d) return `<div class="card empty">Document not found — it may have been deleted. <button class="btn sm" data-act="nav" data-v="home">Back</button></div>`;
   const T = TYPES[d.type], p = projById(d.projectId) || {}, st = statusOf(d), sigs = d.signatures || [];
   const needResp = st.next >= 0 && T.sigs[st.next].needsResponse;
@@ -2126,6 +2151,7 @@ document.addEventListener('click', async e => {
     case 'copycreds': try { await navigator.clipboard.writeText(el.dataset.t); toast('Copied'); } catch(err){ toast('Copy failed — select the text instead.', true); } break;
     case 'proj': go('project', {id}); break;
     case 'tab': S.view.tab = el.dataset.t; render(); break;
+    case 'cat': S.view.cat = el.dataset.c; S.view.tab = 'ALL'; render(); break;
     case 'open': go('doc', {id}); break;
     case 'newproj': projectForm(); break;
     case 'editproj': projectForm(projById(id)); break;
