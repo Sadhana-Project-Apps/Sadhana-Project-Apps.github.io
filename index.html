@@ -256,6 +256,8 @@ html,body{overflow-x:clip;max-width:100%}
 .pagehead>div:first-child{min-width:0;flex:1 1 260px}
 table.reg td{overflow-wrap:anywhere}
 @media (max-width:640px){ .list .it{flex-wrap:wrap} .list .it .t{flex:1 1 calc(100% - 60px)} .list .it>:last-child:not(.t){margin-left:auto} .list .it{align-items:flex-start} .list .it>.pill.type,.list .it>.tick{margin-top:2px} }
+.dropzone{border:1.5px dashed #c9c2b4;border-radius:10px;padding:10px 14px;margin:-6px 0 14px;text-align:center;background:#fffdf9}
+body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);color:var(--hazard-d)}
 .loading{display:grid;place-items:center;min-height:50vh;color:var(--muted);text-align:center}
 .spin{width:30px;height:30px;border:3px solid #ddd6ca;border-top-color:var(--hazard);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 12px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -1796,7 +1798,7 @@ async function fixAll(){
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-act]'); if(!el) return;
   const a = el.dataset.act, id = el.dataset.id;
-  if(a === 'backdrop'){ if(e.target === el && !$('#sgPad') && !S.voice?.busy){ if($('#vtext') && S.voice) S.voice.text = $('#vtext').value; closeModal(); } return; }
+  if(a === 'backdrop'){ if(e.target === el && !$('#sgPad') && !S.voice?.busy && !S.bulkBusy){ if($('#vtext') && S.voice) S.voice.text = $('#vtext').value; closeModal(); } return; }
   switch(a){
     case 'nav': go(el.dataset.v); break;
     case 'gsignin': googleSignIn(); break;
@@ -1834,6 +1836,7 @@ document.addEventListener('click', async e => {
     case 'fileedit': fileForm(S.files.find(x => x.id === id)?.projectId, S.files.find(x => x.id === id)); break;
     case 'fkind': S.fileKind = el.dataset.k; el.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); $('#fUpBox').style.display = S.fileKind === 'upload' ? '' : 'none'; $('#fLinkBox').style.display = S.fileKind === 'link' ? '' : 'none'; break;
     case 'filesave': saveFile(el.dataset.p, id, el); break;
+    case 'bulkgo': runBulk(el); break;
     case 'fileopen': openFile(id, false); break;
     case 'filedl': openFile(id, true); break;
     case 'filedel': { const f = S.files.find(x => x.id === id); confirmBox('Delete this document?', 'This permanently removes "' + (f?.title || '') + '" for everyone.', 'Delete', () => deleteFile(id), true); break; }
@@ -1903,6 +1906,7 @@ document.addEventListener('change', async e => {
   const t = e.target;
   if(t.dataset.role){ const uid = t.dataset.role, role = t.value; try { await S.db.doc('users/'+uid).update({role, roleBy:S.me, roleAt:new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; }
   if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
+  if(t.dataset.bulk && t.files?.length){ const fs = [...t.files]; const isFolder = t.dataset.bulk === 'folder'; prepareBulk(t.dataset.p, fs.map(f => ({file: f, path: isFolder ? (f.webkitRelativePath || f.name).split('/').slice(1).join('/') : f.name}))); t.value = ''; }
   if(t.dataset.photos && t.files?.length){ uploadPhotos(t.dataset.photos, t.files); t.value = ''; }
   if(t.matches('[data-filter]')) applyRegFilter();
   if(t.hasAttribute('data-lhfile') && t.files?.[0]){
@@ -2196,11 +2200,14 @@ const fileIcon = f => f.kind === 'link' ? '🔗' : /pdf/.test(f.mime || '') ? '�
 function filesView(pid){
   const p = projById(pid); if(!p) return `<div class="card empty">Project not found.</div>`;
   const q = (S.fileQ || '').toLowerCase();
-  const list = S.files.filter(f => f.projectId === pid && f.status !== 'uploading' && (!q || (f.title + ' ' + (f.refNo || '') + ' ' + (f.notes || '') + ' ' + f.category + ' ' + (f.name || '')).toLowerCase().includes(q)));
-  const groups = FILE_CATS.map(c => [c, list.filter(f => f.category === c).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))]).filter(g => g[1].length);
+  const list = S.files.filter(f => f.projectId === pid && f.status !== 'uploading' && (!q || (f.title + ' ' + (f.refNo || '') + ' ' + (f.notes || '') + ' ' + (f.category || '') + ' ' + (f.folder || '') + ' ' + (f.subfolder || '') + ' ' + (f.name || '')).toLowerCase().includes(q)));
+  const gkey = f => f.folder || f.category || 'General';
+  const keys = [...new Set(list.map(gkey))].sort((a, b) => { const ia = FILE_CATS.indexOf(a), ib = FILE_CATS.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b); });
+  const groups = keys.map(k => [k, list.filter(f => gkey(f) === k).sort((a, b) => String(a.subfolder || '').localeCompare(String(b.subfolder || '')) || String(b.date || '').localeCompare(String(a.date || '')) || String(a.title).localeCompare(String(b.title)))]);
+  const used = S.files.filter(f => f.kind === 'upload').reduce((a, f) => a + (f.size || 0), 0) * 1.37;
   const row = f => { const ex = expiryInfo(f); const mine = f.uploadedBy === S.me;
     return `<div class="it" style="cursor:default"><div style="font-size:22px;width:28px;text-align:center">${fileIcon(f)}</div>
-      <div class="t"><b style="white-space:normal">${esc(f.title)}</b><span>${[f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0)].filter(Boolean).join(' · ')}${f.notes ? '<br>' + esc(f.notes) : ''}</span>
+      <div class="t"><b style="white-space:normal">${esc(f.title)}</b><span>${[f.subfolder && '📂 ' + esc(f.subfolder), f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0)].filter(Boolean).join(' · ')}${f.notes && !f.notes.startsWith('Folder: ') ? '<br>' + esc(f.notes) : ''}</span>
       ${ex ? `<div style="margin-top:4px"><span class="pill ${ex.cls === 'bad' ? '' : ex.cls}" style="${ex.cls === 'bad' ? 'background:#fbeeed;color:var(--bad)' : ''}"><span class="dot"></span>${esc(ex.label)}</span></div>` : ''}</div>
       <div class="row" style="gap:6px;flex-wrap:nowrap">
         <button class="btn sm" data-act="fileopen" data-id="${esc(f.id)}">Open</button>
@@ -2209,16 +2216,18 @@ function filesView(pid){
       </div></div>`; };
   return `<button class="crumb" data-act="proj" data-id="${esc(pid)}">← ${esc(p.name)}</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">Project files</h1><div class="muted small">Tender, LOA, insurance, stamp duty and other reference documents — everyone on the team can open them.</div></div><div class="sp"></div>
-  ${S.canWrite ? `<button class="btn pri" data-act="fileadd" data-p="${esc(pid)}">+ Add document</button>` : ''}</div>
+  ${S.canWrite ? `<div class="row"><label class="btn pri" style="margin:0">⇪ Upload files<input type="file" multiple hidden data-bulk="files" data-p="${esc(pid)}"></label>${'webkitdirectory' in document.createElement('input') && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<label class="btn" style="margin:0">📁 Upload a folder<input type="file" webkitdirectory multiple hidden data-bulk="folder" data-p="${esc(pid)}"></label>` : ''}<button class="btn ghost" data-act="fileadd" data-p="${esc(pid)}">+ Add one (with details or link)</button></div>` : ''}</div>
+  ${S.canWrite && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<div class="dropzone small muted">Tip: drag a folder or files from your computer onto this page to upload them all at once. Sub-folders become groups.</div>` : ''}
   <div class="filters card" style="margin-bottom:14px"><input id="fileq" placeholder="Search title, reference no., notes…" value="${esc(S.fileQ || '')}"></div>
   ${groups.length ? groups.map(([c, fs]) => `<div class="card" style="margin-bottom:14px"><div class="sechead"><h3>${esc(c)}</h3><div class="sp"></div><span class="small muted">${fs.length}</span></div><div class="list">${fs.map(row).join('')}</div></div>`).join('')
-    : `<div class="card empty">${q ? 'No documents match your search.' : 'No documents yet. Add the tender documents, LOA, insurance policies, stamp duty and permits here so the whole team can find them.'}</div>`}`;
+    : `<div class="card empty">${q ? 'No documents match your search.' : 'No documents yet. Upload your project folder (tender, LOA, insurance, stamp duty, permits…) so the whole team can find everything.'}</div>`}
+  <p class="small muted" style="text-align:center">Storage used by all projects: ${fmtSize(used)} of about 1,000 MB on the free plan.</p>`;
 }
 function fileForm(pid, f){
   f = f || {category: FILE_CATS[0], kind: 'upload'};
   const isNew = !f.id;
   showModal(`<div class="box"><div class="mh"><h3>${isNew ? 'Add document' : 'Edit document'}</h3></div><div class="mb"><div class="fgrid">
-    <div class="fld half"><label>Category <em>*</em></label><select id="fCat">${FILE_CATS.map(c => `<option ${c === f.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+    <div class="fld half"><label>Category <em>*</em></label><select id="fCat">${[...new Set([...(f.category && !FILE_CATS.includes(f.category) ? [f.category] : []), ...FILE_CATS])].map(c => `<option ${c === f.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
     <div class="fld half"><label>Reference no.</label><input id="fRef" value="${esc(f.refNo || '')}" placeholder="e.g. policy / LOA no."></div>
     <div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="e.g. Contractor's All Risks policy"></div>
     <div class="fld half"><label>Document date</label><input type="date" id="fDate" value="${esc(f.date || '')}"></div>
@@ -2239,7 +2248,7 @@ async function saveFile(pid, id, btn){
   const meta = {projectId: pid, category: $('#fCat').value, title, refNo: $('#fRef').value.trim(), date: $('#fDate').value, expiry: $('#fExp').value, notes: $('#fNotes').value.trim(), updatedAt: new Date().toISOString(), updatedBy: S.me || null};
   btn.disabled = true; const prog = $('#fProg');
   try {
-    if(id){ await S.db.doc('files/' + id).update(meta); closeModal(); toast('Saved'); render(); return; }
+    if(id){ await S.db.doc('files/' + id).update({...meta, folder: meta.category}); closeModal(); toast('Saved'); render(); return; }
     const ref = S.db.collection('files').doc();
     if(S.fileKind === 'link'){
       const url = $('#fUrl').value.trim();
@@ -2293,6 +2302,86 @@ async function deleteFile(id){
     closeModal(); toast('Deleted'); render();
   } catch(e){ dbErr(e); }
 }
+/* ---------- bulk upload: whole folder or many files at once, no details needed ---------- */
+const SKIP_NAMES = /^(\.|~\$|thumbs\.db$|desktop\.ini$)/i;
+async function uploadOne(pid, file, meta, onPart){
+  const b64 = await readAsBase64(file);
+  const n = Math.ceil(b64.length / FILE_CHUNK) || 1;
+  const ref = S.db.collection('files').doc();
+  await ref.set({...meta, projectId: pid, kind: 'upload', name: file.name, mime: file.type || 'application/octet-stream', size: file.size, chunks: n,
+    uploadedBy: S.me || null, uploadedAt: new Date().toISOString(), status: 'uploading'});
+  for(let i = 0; i < n; i++){
+    if(onPart) onPart(i, n);
+    await S.db.doc('fileChunks/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)});
+  }
+  await ref.update({status: 'ready'});
+}
+// entries: [{file, path}] where path is relative to the chosen folder, e.g. "LOA/Letter of Award.pdf"
+function prepareBulk(pid, entries){
+  const items = [], skipped = [];
+  for(const e of entries){
+    const nm = e.file.name;
+    if(SKIP_NAMES.test(nm)) continue;
+    if(e.file.size > FILE_MAX){ skipped.push(e); continue; }
+    const parts = e.path.split('/').filter(Boolean); parts.pop();
+    items.push({...e, folder: parts[0] || 'General', sub: parts.slice(1).join(' / ')});
+  }
+  if(!items.length && !skipped.length){ toast('No files found.', true); return; }
+  const total = items.reduce((a, x) => a + x.file.size, 0);
+  const byFolder = {}; items.forEach(x => byFolder[x.folder] = (byFolder[x.folder] || 0) + 1);
+  S.bulk = {pid, items};
+  showModal(`<div class="box"><div class="mh"><h3>Upload ${items.length} file${items.length === 1 ? '' : 's'}</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0">Each file keeps its own name. Sub-folders become groups. ${fmtSize(total)} in total.</p>
+    <div class="list card" style="box-shadow:none">${Object.entries(byFolder).map(([f, c]) => `<div class="it" style="cursor:default"><div style="font-size:20px">📁</div><div class="t"><b>${esc(f)}</b></div><span class="small muted">${c} file${c === 1 ? '' : 's'}</span></div>`).join('')}</div>
+    ${skipped.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-top:10px"><b>!</b><span>${skipped.length} file${skipped.length === 1 ? ' is' : 's are'} over 15 MB and will be skipped:<br>${skipped.map(x => esc(x.path) + ' (' + fmtSize(x.file.size) + ')').join('<br>')}<br>Save ${skipped.length === 1 ? 'it' : 'them'} to Google Drive and use <b>+ Add document → Link</b>.</span></div>` : ''}
+    <div id="bulkProg" style="display:none;margin-top:12px"><div class="prog"><i id="bulkBar" style="width:0%"></i></div><div id="bulkTxt" class="small muted" style="margin-top:6px"></div></div>
+  </div><div class="mf"><button class="btn ghost" data-act="closemodal" id="bulkCancel">Cancel</button>${items.length ? `<button class="btn pri" data-act="bulkgo">Upload ${items.length} file${items.length === 1 ? '' : 's'}</button>` : ''}</div></div>`);
+}
+async function runBulk(btn){
+  const B = S.bulk; if(!B) return;
+  if(!navigator.onLine){ toast('No internet — uploading needs a connection.', true); return; }
+  btn.disabled = true; $('#bulkCancel').disabled = true; $('#bulkProg').style.display = '';
+  const total = B.items.reduce((a, x) => a + x.file.size, 0) || 1; let done = 0, ok = 0, failed = [];
+  S.bulkBusy = true;
+  for(let k = 0; k < B.items.length; k++){
+    const x = B.items[k];
+    $('#bulkTxt').textContent = `Uploading ${k + 1} of ${B.items.length} — ${x.file.name}`;
+    try {
+      await uploadOne(B.pid, x.file, {category: x.folder, folder: x.folder, subfolder: x.sub, title: x.file.name.replace(/\.[^.]+$/, ''), refNo: '', date: '', expiry: '', notes: x.sub ? 'Folder: ' + x.sub : ''},
+        (i, n) => { $('#bulkBar').style.width = Math.round((done + x.file.size * i / n) / total * 100) + '%'; });
+      ok++;
+    } catch(e){ console.error(e); failed.push(x.file.name); }
+    done += x.file.size; $('#bulkBar').style.width = Math.round(done / total * 100) + '%';
+  }
+  S.bulkBusy = false; S.bulk = null; closeModal(); render();
+  if(failed.length) toast(`${ok} uploaded, ${failed.length} failed: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}`, true);
+  else toast(`${ok} file${ok === 1 ? '' : 's'} uploaded ✓`);
+}
+// drag & drop of files or whole folders (laptop)
+async function walkEntry(entry, path, out){
+  if(entry.isFile){ await new Promise(res => entry.file(f => { out.push({file: f, path: path + f.name}); res(); }, () => res())); return; }
+  if(entry.isDirectory){
+    const reader = entry.createReader();
+    let batch;
+    do { batch = await new Promise(res => reader.readEntries(res, () => res([]))); for(const e of batch) await walkEntry(e, path + entry.name + '/', out); } while(batch.length);
+  }
+}
+document.addEventListener('dragover', e => { if(S.view.name === 'files' && S.canWrite){ e.preventDefault(); document.body.classList.add('dropping'); } });
+document.addEventListener('dragleave', e => { if(!e.relatedTarget) document.body.classList.remove('dropping'); });
+document.addEventListener('drop', async e => {
+  if(S.view.name !== 'files' || !S.canWrite) return;
+  e.preventDefault(); document.body.classList.remove('dropping');
+  const items = [...(e.dataTransfer.items || [])].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  const out = [];
+  if(items.length){
+    // a single dropped folder: its sub-folders become the groups
+    const single = items.length === 1 && items[0].isDirectory;
+    for(const it of items) await walkEntry(it, '', out);
+    if(single) out.forEach(o => o.path = o.path.split('/').slice(1).join('/'));
+  } else [...e.dataTransfer.files].forEach(f => out.push({file: f, path: f.name}));
+  prepareBulk(S.view.id, out);
+});
+
 function expiringFiles(){
   return S.files.filter(f => f.status !== 'uploading' && projById(f.projectId)).map(f => ({f, ex: expiryInfo(f)})).filter(x => x.ex && x.ex.days <= 30).sort((a, b) => a.ex.days - b.ex.days);
 }
