@@ -256,6 +256,12 @@ html,body{overflow-x:clip;max-width:100%}
 .proj h3,.pagehead h1,.sheet,.metat td,.kv div,.dsec .body{overflow-wrap:anywhere}
 .pagehead>div:first-child{min-width:0;flex:1 1 260px}
 table.reg td{overflow-wrap:anywhere}
+@media (max-width:640px){
+  table.reg.stack thead{display:none} table.reg.stack tr{display:block;padding:10px 14px;border-bottom:1px solid var(--line2)}
+  table.reg.stack td{display:block;border:0;padding:1px 0} table.reg.stack td.hm{display:none} table.reg.stack td.mono{font-size:12px;color:var(--muted)}
+  table.reg.stack td:first-child+td{font-weight:600} table.reg.stack td:last-child{margin-top:4px}
+  table.reg.scrap th,table.reg.scrap td{padding:8px 6px;font-size:13px}
+}
 @media (max-width:640px){ .list .it{flex-wrap:wrap} .list .it .t{flex:1 1 calc(100% - 60px)} .list .it>:last-child:not(.t){margin-left:auto} .list .it{align-items:flex-start} .list .it>.pill.type,.list .it>.tick{margin-top:2px} }
 .dropzone{border:1.5px dashed #c9c2b4;border-radius:10px;padding:10px 14px;margin:-6px 0 14px;text-align:center;background:#fffdf9}
 body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);color:var(--hazard-d)}
@@ -336,6 +342,7 @@ const WEATHER = ['Sunny','Cloudy','Light rain','Heavy rain','Thunderstorm','No w
 const MANPOWER_LIST = ['Project Manager','Site Manager','Safety Manager','Site Safety Supervisor','Site Supervisor','Machinery Operator','General Workers'];
 const MACHINERY_LIST = ['Excavator c/w Breaker','Excavator c/w Crusher','Excavator c/w Bucket','Excavator c/w Magnet','Excavator c/w Cutter','Excavator Long Arm','Mobile Crane','Boomlift','Forklift','Oxygen & Acetylene Set','Tipper Lorry','Roro Bin','Genset'];
 const DAY_COLS = n => Array.from({length:n}, (_, i) => ({k:'d'+i, l:'Day '+(i+1), day:i, n:1, w:52}));
+const SCRAP_TYPES = ['Rebar', 'Stainless steel', 'Cables', 'Aluminium', 'Copper', 'Mild steel / structural steel', 'Cast iron', 'Others'];
 const TYPES = {
   DSR: {
     name: 'Site Daily Report', code: 'DSR', blurb: 'Manpower, machinery, weather, activities',
@@ -476,6 +483,38 @@ const TYPES = {
       {sec:'Other Green Features & Innovations'},
       {k:'diesel', l:'Diesel consumption', t:'table', cols:[{k:'month',l:'Month',center:1},{k:'period',l:'Period',center:1},{k:'used',l:'Used (litre)',n:1},{k:'target',l:'Target (litre)',n:1},{k:'var',l:'Variation (%)',center:1},{k:'reason',l:'Reason'},{k:'remarks',l:'Remarks'}], def: () => [{}]},
       {k:'dieselPhotos', l:'Diesel invoices', t:'photos'}
+    ]
+  },
+  SSO: {
+    name: 'Scrap & Salvage Out Slip', code: 'SSO', blurb: 'Slip for each load leaving site — client verifies type & weight',
+    sigs: [
+      {role:'Prepared by', hint:'Sadhana site PIC'},
+      {role:'Verified by', hint:'Client representative (weight & type)'}
+    ],
+    done: 'Verified',
+    title: d => 'Scrap Out — ' + [d.vehicle, fmtDate(d.date)].filter(Boolean).join(' · '),
+    dateField: 'date',
+    fields: [
+      {sec:'Load details'},
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'timeOut', l:'Time out', t:'text', w:'half', def: () => new Date().toLocaleTimeString('en-MY', {hour:'numeric', minute:'2-digit'})},
+      {k:'vehicle', l:'Lorry / vehicle no.', t:'text', req:1, w:'half'},
+      {k:'driver', l:'Driver name', t:'text', w:'half'},
+      {k:'buyer', l:'Buyer / destination', t:'text', req:1, w:'half', ph:'e.g. Lim & Lim Hardware Sdn Bhd'},
+      {k:'ticket', l:'Weighbridge ticket no.', t:'text', w:'half'},
+      {k:'area', l:'Taken from (area on site)', t:'text', w:'half'},
+      {k:'remarks', l:'Remarks', t:'text', w:'half'},
+      {sec:'Scrap & Salvage Items'},
+      {k:'items', l:'Items', t:'table', num:1, sub:false, req:1, sumCols:['qty','kg','value'], cols:[
+        {k:'type', l:'Type', o:SCRAP_TYPES, w:150, pw:30},
+        {k:'desc', l:'Description'},
+        {k:'qty', l:'Qty', n:1, w:60, pw:13, fmt:1},
+        {k:'kg', l:'Weight (kg)', n:1, w:100, pw:24, fmt:1},
+        {k:'rate', l:'Rate (RM/kg)', n:1, w:100, pw:22, dp:2},
+        {k:'value', l:'Value (RM)', n:1, w:110, pw:26, mul:['kg','rate'], dp:2}
+      ], def: () => [{}]},
+      {k:'photos', l:'Photos — weighbridge ticket & loaded lorry', t:'photos', optional:1},
+      {k:'declare', l:'Verification', t:'textarea', def:'The client representative confirms that the type and weight of the scrap / salvage above are correct as weighed and loaded at site, and the load is released from site.'}
     ]
   },
   RFI: {
@@ -852,9 +891,10 @@ function projectView(id, tab){
     <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
     <div><span>Period</span>${fmtDate(p.start)} – ${fmtDate(p.end)}</div><div><span>Project manager</span>${esc(p.pm||'—')}</div>
   </div>
+  ${scrapCard(id)}
   ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Rename document names</button>` : ''}</div><div class="newgrid">${TYPE_KEYS.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
-  <div class="card">${ds.length ? `<table class="reg"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
+  <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
   </tbody></table>` : `<div class="empty">No ${tab==='ALL'?'documents':TYPES[tab].name.toLowerCase()+'s'} yet.</div>`}</div>`;
 }
@@ -870,7 +910,7 @@ function registerView(){
       <select id="ft" data-filter><option value="">All types</option>${TYPE_KEYS.map(k=>`<option value="${k}">${TYPES[k].name}</option>`).join('')}</select>
       <select id="fs" data-filter><option value="">Any status</option><option value="draft">Draft</option><option value="pending">Awaiting signature</option><option value="done">Completed</option></select>
     </div>
-    ${rows.length ? `<table class="reg"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Project</th><th class="hm">Date</th><th>Status</th></tr></thead><tbody id="regbody">
+    ${rows.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Project</th><th class="hm">Date</th><th>Status</th></tr></thead><tbody id="regbody">
       ${rows.map(d => { const p = projById(d.projectId); const s = statusOf(d);
         return `<tr class="click" data-act="open" data-id="${esc(d.id)}" data-p="${esc(d.projectId)}" data-t="${d.type}" data-s="${s.cls}" data-q="${esc((d.number+' '+docTitle(d)+' '+p.name+' '+p.code).toLowerCase())}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm">${esc(p.code)}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td>${pill(d)}</td></tr>`; }).join('')}
     </tbody></table><div id="regnone" class="empty" style="display:none">No matching documents.</div>` : '<div class="empty">No documents yet.</div>'}
@@ -918,7 +958,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (D) · rename names</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (F) · scrap slip + summary</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -940,6 +980,115 @@ function valueText(f, v){
   return v ?? '';
 }
 function cleanRows(f, rows){ return (rows||[]).filter(r => f.cols.some(c => !isEmpty(r?.[c.k]))); }
+const numv = v => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
+const fmtN = (v, dp) => dp ? numv(v).toLocaleString('en-MY', {minimumFractionDigits: dp, maximumFractionDigits: dp}) : (+numv(v).toFixed(2)).toLocaleString('en-MY');
+// fill in calculated columns (e.g. value = weight x rate)
+function calcRow(f, r){
+  if(!r) return;
+  f.cols.forEach(c => { if(c.mul){ const ok = c.mul.every(k => !isEmpty(r[k])); r[c.k] = ok ? (c.mul.reduce((a, k) => a * numv(r[k]), 1)).toFixed(c.dp || 2) : ''; } });
+}
+// cumulative scrap record: every earlier record of this project + this one
+function scrapCum(d){
+  const data = d.data || {};
+  const prev = S.docs.filter(x => x.type === d.type && x.projectId === d.projectId && x.id !== d.id && (x.seq || 0) < (d.seq || 1e9));
+  const acc = {};
+  const add = (rows, now) => { const seen = new Set();
+    (rows || []).forEach(r => { if(!r || !(r.type || r.kg || r.value)) return; const t = r.type || 'Others';
+      const a = acc[t] = acc[t] || {loads: 0, qty: 0, kg: 0, val: 0, kgNow: 0, valNow: 0};
+      if(!seen.has(t)){ a.loads++; seen.add(t); }
+      a.qty += numv(r.qty); a.kg += numv(r.kg); a.val += numv(r.value);
+      if(now){ a.kgNow += numv(r.kg); a.valNow += numv(r.value); } }); };
+  prev.forEach(x => add((x.data || {}).items, false)); add(data.items, true);
+  const keys = Object.keys(acc).sort((a, b) => { const ia = SCRAP_TYPES.indexOf(a), ib = SCRAP_TYPES.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b); });
+  const tot = keys.reduce((t, k) => { Object.keys(t).forEach(z => t[z] += acc[k][z]); return t; }, {loads: 0, qty: 0, kg: 0, val: 0, kgNow: 0, valNow: 0});
+  const row = (l, a, loads) => [l, String(loads), fmtN(a.qty), fmtN(a.kgNow), fmtN(a.kg), fmtN(a.valNow, 2), fmtN(a.val, 2)];
+  return {head: ['Type', 'Loads', 'Qty', 'Weight this load (kg)', 'Weight to date (kg)', 'Value this load (RM)', 'Value to date (RM)'],
+    rows: keys.map(k => row(k, acc[k], acc[k].loads)), total: row('TOTAL', tot, prev.length + 1), records: prev.length + 1};
+}
+function scrapCard(pid){
+  const recs = S.docs.filter(x => x.type === 'SSO' && x.projectId === pid);
+  if(!recs.length) return '';
+  const c = scrapCum({type: 'SSO', projectId: pid, id: '_', seq: 1e9, data: {}});
+  const pick = r => [r[0], r[1], r[2], r[4], r[6]];
+  const verified = recs.filter(x => statusOf(x).next === -1).length;
+  return `<div class="card" style="margin-bottom:16px"><div class="sechead"><h3>♻ ${esc(TYPES.SSO.name)} — to date</h3><div class="sp"></div><span class="small muted">${recs.length} load${recs.length === 1 ? '' : 's'} · ${verified} verified by client</span><button class="btn sm" data-act="scraprep" data-p="${esc(pid)}" style="margin-left:8px">⤓ Summary report</button></div>
+    <table class="reg scrap"><thead><tr><th>Type</th><th>Loads</th><th>Qty</th><th style="text-align:right">kg</th><th style="text-align:right">RM</th></tr></thead><tbody>
+    ${c.rows.map(r => `<tr>${pick(r).map((x, i) => `<td style="${i > 2 ? 'text-align:right;white-space:nowrap' : ''}">${esc(x)}</td>`).join('')}</tr>`).join('')}
+    <tr style="font-weight:800;background:#fff6d6">${pick([...c.total.slice(0, 1), String(recs.length), ...c.total.slice(2)]).map((x, i) => `<td style="${i > 2 ? 'text-align:right;white-space:nowrap' : ''}">${esc(x)}</td>`).join('')}</tr></tbody></table><div class="small muted" style="padding:8px 12px">Our own record · weight in kg · value in RM · tap "Summary report" to print it when needed</div></div>`;
+}
+/* ---------- scrap summary report (printed only when needed) ---------- */
+function scrapReportForm(pid){
+  const recs = S.docs.filter(x => x.type === 'SSO' && x.projectId === pid);
+  const dates = recs.map(x => x.data?.date).filter(Boolean).sort();
+  showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Scrap & salvage summary report</h3></div><div class="mb"><div class="fgrid">
+    <div class="fld half"><label>From</label><input type="date" id="srFrom" value="${esc(dates[0] || today())}"></div>
+    <div class="fld half"><label>To</label><input type="date" id="srTo" value="${esc(today())}"></div>
+    <div class="fld"><label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" id="srVer"> Only loads verified by the client</label></div>
+  </div><p class="small muted" style="margin-bottom:0">A4 report in the Sadhana format: totals by type, then every load with its slip number and status.</p></div>
+  <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="scraprepgo" data-p="${esc(pid)}">⤓ Download PDF</button></div></div>`);
+}
+async function makeScrapReport(btn){
+  const pid = btn.dataset.p, from = $('#srFrom').value, to = $('#srTo').value, verOnly = $('#srVer').checked;
+  if(!window.jspdf){ toast('PDF tools are still loading — try again in a moment.', true); return; }
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    await loadProjectDocs(pid);
+    const p = projById(pid) || {};
+    const recs = S.docs.filter(x => x.type === 'SSO' && x.projectId === pid && (!from || (x.data?.date || '') >= from) && (!to || (x.data?.date || '') <= to) && (!verOnly || statusOf(x).next === -1))
+      .sort((a, b) => String(a.data?.date || '').localeCompare(String(b.data?.date || '')) || (a.seq || 0) - (b.seq || 0));
+    if(!recs.length){ toast('No loads in that period.', true); btn.disabled = false; btn.textContent = '⤓ Download PDF'; return; }
+    const acc = {}, lines = [];
+    recs.forEach(x => { const seen = new Set(); const st = statusOf(x);
+      (x.data?.items || []).forEach(r => { if(!r || !(r.type || r.kg || r.value)) return; const t = r.type || 'Others';
+        const a = acc[t] = acc[t] || {loads: 0, qty: 0, kg: 0, val: 0}; if(!seen.has(t)){ a.loads++; seen.add(t); }
+        a.qty += numv(r.qty); a.kg += numv(r.kg); a.val += numv(r.value);
+        lines.push([fmtDate(x.data.date), x.number, x.data.vehicle || '', x.data.buyer || '', t + (r.desc ? ' – ' + r.desc : ''), fmtN(r.kg), r.value ? fmtN(r.value, 2) : '', st.next === -1 ? 'Verified' : 'Pending']); }); });
+    const keys = Object.keys(acc).sort((a, b) => { const ia = SCRAP_TYPES.indexOf(a), ib = SCRAP_TYPES.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b); });
+    const tot = keys.reduce((t, k) => ({qty: t.qty + acc[k].qty, kg: t.kg + acc[k].kg, val: t.val + acc[k].val}), {qty: 0, kg: 0, val: 0});
+    const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4'});
+    Object.assign(HS, {W:210, H:297, CW:170, BOTTOM:277});
+    const {L, CW, TOP, BOTTOM} = HS; let y = TOP;
+    const base = {margin:{left:L, right:HS.R, top:TOP, bottom:HS.H-BOTTOM}, theme:'grid',
+      styles:{font:'helvetica', fontSize:8.5, cellPadding:1.6, lineColor:GRID, lineWidth:0.15, textColor:INK, overflow:'linebreak', valign:'middle'},
+      headStyles:{fillColor:GREEN_HEAD, textColor:INK, fontStyle:'bold', fontSize:8.2, halign:'center'},
+      footStyles:{fillColor:TOTAL_FILL, textColor:INK, fontStyle:'bold'}};
+    const heading = (n, title) => { y += n === 1 ? 0 : 6; if(y + 30 > BOTTOM){ doc.addPage(); y = TOP; }
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(pt(n + '.  ' + title.toUpperCase()), L, y + 4);
+      doc.setDrawColor(...GREEN_LINE); doc.setLineWidth(0.6); doc.line(L, y + 6, L + CW, y + 6); y += 9; };
+    const period = fmtDate(from || recs[0].data.date) + ' – ' + fmtDate(to || today());
+    const title = 'Scrap & Salvage Summary Report';
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...INK); doc.text(title.toUpperCase(), HS.W/2, y + 5, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text(pt('Period: ' + period + '     |     ' + (verOnly ? 'Verified loads only' : 'All loads') + '     |     Printed: ' + fmtDate(today())), HS.W/2, y + 11, {align:'center'}); y += 16;
+    doc.autoTable({...base, startY:y, body:[
+      ['PROJECT', pt(p.name || ''), 'PROJECT CODE', pt(p.code || '')],
+      ['CLIENT', pt(p.client || '-'), 'CONTRACT NO.', pt(p.contractNo || '-')],
+      ['LOCATION', pt(p.location || '-'), 'LOADS', String(recs.length)]
+    ], columnStyles:{0:{cellWidth:26, fontStyle:'bold', fillColor:LABEL_FILL}, 2:{cellWidth:30, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth:32}}}); y = doc.lastAutoTable.finalY + 2;
+    heading(1, 'Summary by type');
+    doc.autoTable({...base, startY:y, head:[['TYPE', 'LOADS', 'QTY', 'WEIGHT (KG)', 'VALUE (RM)']],
+      body: keys.map(k => [pt(k), String(acc[k].loads), fmtN(acc[k].qty), fmtN(acc[k].kg), fmtN(acc[k].val, 2)]),
+      foot: [[{content:'TOTAL'}, {content:String(recs.length), styles:{halign:'center'}}, {content:fmtN(tot.qty), styles:{halign:'center'}}, {content:fmtN(tot.kg), styles:{halign:'right'}}, {content:fmtN(tot.val, 2), styles:{halign:'right'}}]], showFoot:'lastPage',
+      columnStyles:{1:{halign:'center', cellWidth:20}, 2:{halign:'center', cellWidth:20}, 3:{halign:'right', cellWidth:34}, 4:{halign:'right', cellWidth:36}}}); y = doc.lastAutoTable.finalY;
+    heading(2, 'Load register');
+    doc.autoTable({...base, startY:y, head:[['NO', 'DATE', 'SLIP NO.', 'LORRY', 'BUYER', 'TYPE / DESCRIPTION', 'KG', 'RM', 'STATUS']],
+      body: lines.map((r, i) => [String(i + 1), ...r.map(pt)]),
+      foot: [[{content:'TOTAL', colSpan:6}, {content:fmtN(tot.kg), styles:{halign:'right'}}, {content:fmtN(tot.val, 2), styles:{halign:'right'}}, '']], showFoot:'lastPage',
+      styles:{...base.styles, fontSize:7.2, cellPadding:1.2}, headStyles:{...base.headStyles, fontSize:7},
+      columnStyles:{0:{cellWidth:9, halign:'center'}, 1:{cellWidth:18, halign:'center'}, 2:{cellWidth:27}, 3:{cellWidth:17, halign:'center'}, 6:{cellWidth:15, halign:'right'}, 7:{cellWidth:18, halign:'right'}, 8:{cellWidth:15, halign:'center'}}}); y = doc.lastAutoTable.finalY;
+    const LH = await letterheadData(); const pages = doc.getNumberOfPages();
+    for(let i = 1; i <= pages; i++){
+      doc.setPage(i);
+      try { doc.addImage(LH.url, 'JPEG', L, HS.LH_Y, 170, 170 * LH.h / LH.w); } catch(e){}
+      doc.setDrawColor(...GRID); doc.setLineWidth(0.2); doc.line(L, HS.H - 13, L + CW, HS.H - 13);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102);
+      doc.text(pt(title + ' ' + (p.code || '') + '  |  ' + period), L, HS.H - 8.5);
+      doc.text(`Page ${i} of ${pages}`, L + CW, HS.H - 8.5, {align:'right'});
+    }
+    await S.dl.save({filename: `${p.code || 'Project'} Scrap & Salvage Summary ${from || ''} to ${to || ''}.pdf`.replace(/[\\/:*?"<>|]/g, '-'), data: doc.output('blob')});
+    closeModal();
+  } catch(e){ if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } btn.disabled = false; btn.textContent = '⤓ Download PDF'; }
+}
 function salvageSummary(data){
   const cats = [['Re-use','reuse'],['Recycle – scrap','scrap'],['Recycle – wood','wood'],['Dispose','dispose']];
   return cats.map(([label, k]) => { const rows = (data[k] || []).filter(r => r && (r.item || r.kg || r.date));
@@ -972,6 +1121,9 @@ function docBodyHTML(d){
     } else if(f.t === 'table'){
       const rows = cleanRows(f, data[f.k]);
       out += wrapStart + head + (rows.length ? `<table><thead><tr>${f.cols.map(c=>`<th>${esc(c.day!=null ? dayLabel(data.from, c.day) : c.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${f.cols.map(c=>`<td>${esc(r[c.k])}</td>`).join('')}</tr>`).join('')}${tableTotals(f, rows)}</tbody></table>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
+    } else if(f.t === 'calc' && f.calc === 'scrap'){
+      const c = scrapCum(d);
+      out += wrapStart + head + (c.rows.length ? `<table><thead><tr>${c.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}<tr style="font-weight:700;background:#fff6d6">${c.total.map(x => `<td>${esc(x)}</td>`).join('')}</tr></tbody></table><div class="small muted" style="padding:6px 10px">Includes ${c.records} record${c.records === 1 ? '' : 's'} up to and including this one.</div>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
     } else if(f.t === 'calc' && f.calc === 'salvage'){
       out += wrapStart + head + `<table><thead><tr><th>Category</th><th>Trips</th><th>Total weight (kg)</th></tr></thead><tbody>${salvageSummary(data).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` + wrapEnd;
     } else if(f.t === 'photos'){
@@ -990,9 +1142,9 @@ function docBodyHTML(d){
   return out;
 }
 function tableTotals(f, rows){
-  const numCols = f.cols.filter(c => c.n && !/%/.test(c.l));
-  if(!numCols.length || rows.length < 2) return '';
-  return `<tr style="font-weight:700;background:#faf8f4">${f.cols.map((c,i) => { if(i===0) return '<td>Total</td>'; if(numCols.includes(c) && rows.some(r=>!isEmpty(r[c.k]))){ const s = rows.reduce((a,r)=>a+(parseFloat(r[c.k])||0),0); return `<td>${+s.toFixed(2)}</td>`; } return '<td></td>'; }).join('')}</tr>`;
+  const numCols = f.sumCols ? f.cols.filter(c => f.sumCols.includes(c.k)) : f.cols.filter(c => c.n && !/%/.test(c.l));
+  if(!numCols.length || rows.length < (f.sumCols ? 1 : 2)) return '';
+  return `<tr style="font-weight:700;background:#faf8f4">${f.cols.map((c,i) => { if(i===0) return '<td>Total</td>'; if(numCols.includes(c) && rows.some(r=>!isEmpty(r[c.k]))){ const s = rows.reduce((a,r)=>a+numv(r[c.k]),0); return `<td>${c.dp ? fmtN(s, c.dp) : +s.toFixed(2)}</td>`; } return '<td></td>'; }).join('')}</tr>`;
 }
 function letterheadHTML(d){
   const c = company(), T = TYPES[d.type];
@@ -1101,7 +1253,7 @@ function fieldInput(f, v){
       const rows = v && v.length ? v : [{}];
       const fcols = f.cols.filter(c => c.day == null || c.day < periodDays(S.draft?.data || {}, f.maxDays || 7));
       return `<div class="ftbl"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=>`<tr>${fcols.map(c=>`<td>${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : `<input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+        ${rows.map((r,i)=>`<tr>${fcols.map(c=>`<td>${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : c.mul ? `<input readonly tabindex="-1" style="background:#f4f2ec;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : `<input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
       </tbody></table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button></div>`;
     }
     case 'photos': {
@@ -1439,14 +1591,14 @@ async function makePDF(id){
         const dayCols = cols.filter(cc => cc.day != null);
         if(f.rowTotal) head.push('TOTAL');
         const body = rows.map((r, i) => {
-          const out = [...(f.num ? [String(i + 1)] : []), ...cols.map(cc => pt(r[cc.k]))];
+          const out = [...(f.num ? [String(i + 1)] : []), ...cols.map(cc => (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : pt(r[cc.k]))];
           if(f.rowTotal) out.push(String(dayCols.reduce((a, cc) => a + (parseFloat(r[cc.k]) || 0), 0)));
           return out;
         });
         if(!body.length) body.push([{content:'-', colSpan:head.length}]);
         let foot;
         if(f.sumCols && rows.length){
-          foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? rows.reduce((a, r) => a + (parseFloat(String(r[cc.k] || '').replace(/,/g, '')) || 0), 0).toLocaleString('en-MY') : (ci === 0 ? 'TOTAL' : ''))]];
+          foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : ''))]];
           if(f.num){ foot[0][0] = ''; foot[0][1] = 'TOTAL'; }
         }
         if(f.colTotal && rows.length){
@@ -1461,6 +1613,12 @@ async function makePDF(id){
         if(f.rowTotal) colStyles[ci] = {halign:'center', fontStyle:'bold'};
         doc.autoTable({...base, startY:y, head:[head], body, foot, showFoot:'lastPage', columnStyles:colStyles, styles:{...base.styles, fontSize: head.length > 20 ? (HS.CW < 200 ? 5.2 : 5.6) : head.length > 9 ? 6.8 : head.length > 7 ? 7.6 : 8.5, cellPadding: head.length > 20 ? (HS.CW < 200 ? 0.5 : 0.8) : head.length > 9 ? 1 : 1.6}, headStyles:{...base.headStyles, fontSize: head.length > 20 ? 5.2 : head.length > 9 ? 6.6 : 8.2}}); after();
         if(f.k === 'scurve' && rows.length) { drawSCurve(doc, rows); after(); }
+      } else if(f.t === 'calc' && f.calc === 'scrap'){
+        const c = scrapCum(d);
+        subLabel(f.l.toUpperCase());
+        doc.autoTable({...base, startY:y, head:[c.head.map(h => pt(h.toUpperCase()))], body: c.rows.length ? c.rows.map(r => r.map(pt)) : [[{content:'-', colSpan:7}]], foot: c.rows.length ? [c.total.map((x, i) => ({content: pt(x), styles: {halign: i === 0 ? 'left' : i < 3 ? 'center' : 'right'}}))] : undefined, showFoot:'lastPage',
+          styles:{...base.styles, fontSize:7.6, cellPadding:1.2}, headStyles:{...base.headStyles, fontSize:7}, columnStyles:{0:{cellWidth:34}, 1:{halign:'center'}, 2:{halign:'center'}, 3:{halign:'right'}, 4:{halign:'right'}, 5:{halign:'right'}, 6:{halign:'right'}}}); after();
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); need(6); doc.text(pt('Includes ' + c.records + ' record(s) for this project up to and including this one.'), L, y + 3.5); y += 5;
       } else if(f.t === 'calc' && f.calc === 'salvage'){
         subLabel('SUMMARY');
         doc.autoTable({...base, startY:y, head:[['CATEGORY','TRIPS','TOTAL WEIGHT (KG)']], body: salvageSummary(data).map(r => r.map(pt)), columnStyles:{1:{halign:'center'}, 2:{halign:'center'}}}); after();
@@ -1851,6 +2009,8 @@ document.addEventListener('click', async e => {
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
     case 'typenames': typeNamesForm(); break;
+    case 'scraprep': scrapReportForm(el.dataset.p); break;
+    case 'scraprepgo': makeScrapReport(el); break;
     case 'typenamessave': typeNamesSave(el); break;
     case 'typenamesreset': document.querySelectorAll('[data-tn]').forEach(i => i.value = TYPE_ORIG[i.dataset.tn][i.dataset.f]); break;
     case 'renamedocsave': renameDocSave(id, el); break;
@@ -1916,7 +2076,9 @@ document.addEventListener('input', e => {
       const toEl = document.querySelector('[data-f="to"]'); if(toEl) toEl.value = S.draft.data.to;
     }
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
-  else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err'); }
+  else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
+    const fd = TYPES[S.draft.type].fields.find(x => x.k === t.dataset.tbl);
+    if(fd && fd.cols.some(c => c.mul)){ calcRow(fd, rows[i]); t.closest('tr').querySelectorAll('[data-calc]').forEach(o => o.value = rows[i][o.dataset.col] || ''); } }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
 });
 document.addEventListener('change', e => { const t = e.target; if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; } });
