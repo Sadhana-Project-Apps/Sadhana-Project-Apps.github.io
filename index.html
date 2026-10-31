@@ -375,7 +375,7 @@ function contractDay(p, date){
   if(total < 1) return 'Check the project dates (completion is before start)';
   if(day < 1) return `Before contract start (${dayDiff(date, p.start)} days to go)`;
   if(day > total) return `Day ${day} — ${day - total} days past completion date (contract ${total} days)`;
-  return `Day ${day} of ${total} (${Math.round(day / total * 100)}% of contract time)`;
+  return `${dayDiff(date, p.end)}/${total} days remaining (Day ${day})`;
 }
 
 const SCRAP_TYPES = ['Rebar', 'Stainless steel', 'Cables', 'Aluminium', 'Copper', 'Mild steel / structural steel', 'Cast iron', 'Others'];
@@ -901,6 +901,22 @@ function homeView(){
     ${others.length ? `<h3 style="margin:24px 0 10px;font-size:16px">Completed & on hold</h3><div class="projgrid">${others.map(projCard).join('')}</div>`:''}
   ` : `<div class="card empty"><h3 style="color:var(--ink);margin-bottom:6px">Set up your first project</h3><p>Each project keeps its own daily reports, progress reports, RFIs, transmittals, toolbox talks and permits — signed and filed.</p>${S.canWrite?'<button class="btn pri" data-act="newproj">+ New project</button>':''}</div>`}`;
 }
+// countdown to the contract completion date
+function countdown(p){
+  if(!p || !p.end) return null;
+  const left = dayDiff(today(), p.end), total = p.start ? dayDiff(p.start, p.end) + 1 : 0, day = p.start ? dayDiff(p.start, today()) + 1 : 0;
+  const pct = total ? Math.max(0, Math.min(100, Math.round(day / total * 100))) : 0;
+  if(p.start && day < 1) return {big: dayDiff(today(), p.start), unit: 'days to start', sub: `Starts ${fmtDate(p.start)} · ${total} days contract`, cls: 'ok', pct: 0};
+  if(left < 0) return {big: -left, unit: 'days overdue', sub: `Completion was ${fmtDate(p.end)}`, cls: 'bad', pct: 100};
+  if(left === 0) return {big: 0, unit: 'days left — completion today', sub: fmtDate(p.end), cls: 'warn', pct: 100};
+  return {big: left, unit: left === 1 ? 'day left' : 'days left', sub: (total ? `Day ${day} of ${total} · ` : '') + `Completion ${fmtDate(p.end)}`, cls: left <= 14 ? 'warn' : 'ok', pct};
+}
+function countdownHTML(p, small){
+  const c = countdown(p); if(!c) return small ? '' : '<span class="muted">Add start & completion dates</span>';
+  const col = c.cls === 'bad' ? 'var(--bad)' : c.cls === 'warn' ? 'var(--warn)' : 'var(--ok)';
+  return `<div class="cdown"><b style="color:${col};font-size:${small ? 20 : 26}px">${c.big}</b> <span style="color:${col};font-weight:700">${c.unit}</span>
+    <div class="prog" style="margin:6px 0 4px;height:6px"><i style="width:${c.pct}%;background:${col}"></i></div><div class="small muted">${esc(c.sub)}</div></div>`;
+}
 function projCard(p){
   const ds = S.docs.filter(d => d.projectId === p.id);
   const c = k => ds.filter(d => d.type === k).length;
@@ -908,6 +924,7 @@ function projCard(p){
     <span class="pill type">${esc(p.code)}</span>${(p.status&&p.status!=='Active')?` <span class="pill draft">${esc(p.status)}</span>`:''}
     <h3>${esc(p.name)}</h3>
     <div class="meta">${esc(p.client||'—')}${p.location?' · '+esc(p.location):''}</div>
+    ${(p.status||'Active') === 'Active' ? `<div style="margin:10px 0 2px">${countdownHTML(p, true)}</div>` : ''}
     <div class="counts"><div><b>${c('DSR')}</b>Daily</div><div><b>${c('PR')}</b>Progress</div><div><b>${c('RFI')}</b>RFI</div><div><b>${ds.length}</b>Total</div></div>
   </div>`;
 }
@@ -936,7 +953,7 @@ function projectView(id, tab){
   <div class="card projinfo">
     <div><span>Client</span>${esc(p.client||'—')}</div><div><span>Consultant</span>${esc(p.consultant||'—')}</div>
     <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
-    <div><span>Period</span>${fmtDate(p.start)} – ${fmtDate(p.end)}</div><div><span>Project manager</span>${esc(p.pm||'—')}</div>
+    <div><span>Period</span>${(p.status||'Active') === 'Completed' ? fmtDate(p.start) + ' – ' + fmtDate(p.end) : countdownHTML(p)}</div><div><span>Project manager</span>${esc(p.pm||'—')}</div>
   </div>
   ${scrapCard(id)}
   ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Rename document names</button>` : ''}</div><div class="newgrid">${TYPE_KEYS.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
@@ -1005,7 +1022,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (L) · WhatsApp in form</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (N) · countdown</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1160,7 +1177,7 @@ function waText(d){
   const bullets = t => String(t || '').split(/\n+/).map(l => l.replace(/^\s*([-*•·]|\d+[.)])\s*/, '').trim()).filter(Boolean).map(l => '• ' + l);
   L.push('*' + (p.name || '') + '*');
   L.push('');
-  if(p.start && p.end && x.date){ const total = dayDiff(p.start, p.end) + 1, day = dayDiff(p.start, x.date) + 1; if(day >= 1) L.push(`*Day No. : ${day}/${total}*`); }
+  if(p.start && p.end && x.date){ const total = dayDiff(p.start, p.end) + 1, left = dayDiff(x.date, p.end); L.push(left >= 0 ? `*Days Remaining : ${Math.min(left, total)}/${total} Days*` : `*Overdue : ${-left} Days (contract ${total} Days)*`); }
   L.push(`*Date: ${dmy(x.date)}*`);
   if(p.start) L.push(`*Commencement date (Contract) : ${dmy(p.start)}*`);
   if(p.end) L.push(`*Completion date (Contract) : ${dmy(p.end)}*`);
