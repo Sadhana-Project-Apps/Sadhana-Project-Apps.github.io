@@ -1,7 +1,7 @@
 {
  "id": "./",
- "name": "Sadhana Site Records",
- "short_name": "Site Records",
+ "name": "Sadhana (Operation & Safety)",
+ "short_name": "Sadhana",
  "description": "Daily site reports, progress reports, RFIs, transmittals and permits for Sadhana Demolition & Engineering.",
  "start_url": "./",
  "scope": "./",

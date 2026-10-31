@@ -8,7 +8,8 @@
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Sadhana Site Records</title>
+<title>Sadhana (Operation &amp; Safety)</title>
+<meta name="apple-mobile-web-app-title" content="Sadhana (Operation & Safety)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -289,7 +290,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
 </head>
 <body>
 <header class="top"><div class="top-in">
-  <div class="brand" data-act="nav" data-v="home"><div class="mark" id="logoMark"></div><div style="min-width:0"><b id="coName">Sadhana Demolition &amp; Engineering</b><small>Site Records</small></div></div>
+  <div class="brand" data-act="nav" data-v="home"><div class="mark" id="logoMark"></div><div style="min-width:0"><b id="coName">Sadhana Demolition &amp; Engineering</b><small>Operation &amp; Safety</small></div></div>
   <nav class="nav" id="nav">
     <button data-act="nav" data-v="home">Projects</button>
     <button data-act="nav" data-v="register">Document register</button>
@@ -760,7 +761,7 @@ function render(){
 }
 function noDbView(){
   return `<div class="card pad" style="max-width:560px;margin:40px auto;text-align:center">
-    <h2 style="margin-bottom:8px">Sign in to use Site Records</h2>
+    <h2 style="margin-bottom:8px">Sign in to Sadhana (Operation &amp; Safety)</h2>
     <p class="muted">This app keeps your project records in a shared database. Open it while signed in to Claude, from a link the owner has shared with you.</p></div>`;
 }
 
@@ -2081,7 +2082,7 @@ aiSample.json = async (prompt, opts = {}) => parseLooseJSON(await aiCall(prompt 
 function authShell(inner){
   return `<div style="max-width:420px;margin:28px auto" class="card pad">
     <div class="row" style="gap:12px;margin-bottom:14px"><div class="mark" style="width:52px;height:52px;border:1px solid var(--line)"><img src="${LOGO_PNG}" alt="Sadhana"></div>
-    <div><b style="font:800 17px Archivo">${esc(company().name)}</b><div class="small muted">Site Records</div></div></div>${inner}</div>`;
+    <div><b style="font:800 17px Archivo">${esc(company().name)}</b><div class="small muted">Operation &amp; Safety</div></div></div>${inner}</div>`;
 }
 function loginView(mode){
   mode = mode || 'signin';
@@ -2105,7 +2106,7 @@ function loginView(mode){
 function pendingView(){
   const u = FB.auth.currentUser, r = S.myRole;
   return authShell(`<h3 style="margin-bottom:6px">${r === 'removed' ? 'Access removed' : 'Waiting for approval'}</h3>
-    <p class="muted" style="margin-top:0">${r === 'removed' ? 'Your access to Site Records has been removed. Contact your admin if this is a mistake.' : 'Your account has been created. An admin needs to approve it before you can see projects. This page will open automatically once you are approved.'}</p>
+    <p class="muted" style="margin-top:0">${r === 'removed' ? 'Your access to the app has been removed. Contact your admin if this is a mistake.' : 'Your account has been created. An admin needs to approve it before you can see projects. This page will open automatically once you are approved.'}</p>
     <div class="small muted">Signed in as <b>${esc(u.email || u.displayName || '')}</b></div>
     <button class="btn" style="margin-top:14px" data-act="signout">Sign out</button>`);
 }
@@ -2149,7 +2150,7 @@ function teamView(){
   const order = {pending: 0, admin: 1, staff: 2, removed: 3};
   const list = [...S.users].sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || String(a.name).localeCompare(String(b.name)));
   const pend = list.filter(u => u.role === 'pending').length;
-  return `<div class="pagehead"><div><div class="eyebrow">Who can use Site Records</div><h1>Team</h1></div><div class="sp"></div><button class="btn pri" data-act="addstaff">+ Add staff</button></div>
+  return `<div class="pagehead"><div><div class="eyebrow">Who can use the app</div><h1>Team</h1></div><div class="sp"></div><button class="btn pri" data-act="addstaff">+ Add staff</button></div>
   ${pend ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn)"><b>!</b><span>${pend} person${pend > 1 ? 's are' : ' is'} waiting for approval. Choose <b>Staff</b> to let them in.</span></div>` : ''}
   <div class="card"><table class="reg"><thead><tr><th>Name</th><th class="hm">Email</th><th>Access</th></tr></thead><tbody>
   ${list.map(u => { const owner = isOwnerEmail(u); const me = u.id === S.me;
@@ -2185,7 +2186,7 @@ async function createStaff(){
     closeModal(); render();
     showModal(`<div class="box" style="max-width:440px"><div class="mh"><h3>Account created ✓</h3></div><div class="mb"><p style="margin-top:0">Send these to <b>${esc(name)}</b>:</p>
       <div class="vchg"><div class="b">Website: ${esc(location.origin)}\nEmail: ${esc(email)}\nPassword: ${esc(pw)}</div></div>
-      <p class="small muted">They sign in with "Sign in" (not Google).</p></div><div class="mf"><button class="btn" data-act="copycreds" data-t="${esc('Sadhana Site Records\n' + location.origin + '\nEmail: ' + email + '\nPassword: ' + pw)}">Copy</button><button class="btn pri" data-act="closemodal">Done</button></div></div>`);
+      <p class="small muted">They sign in with "Sign in" (not Google).</p></div><div class="mf"><button class="btn" data-act="copycreds" data-t="${esc('Sadhana (Operation & Safety)\n' + location.origin + '\nEmail: ' + email + '\nPassword: ' + pw)}">Copy</button><button class="btn pri" data-act="closemodal">Done</button></div></div>`);
   } catch(e){ btn.disabled = false; authError(e); }
 }
 
@@ -2549,12 +2550,12 @@ S.installEvt = null;
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; softRender(); });
-window.addEventListener('appinstalled', () => { S.installEvt = null; toast('Installed ✓ — open Site Records from your home screen'); softRender(); });
+window.addEventListener('appinstalled', () => { S.installEvt = null; toast('Installed ✓ — open Sadhana from your home screen'); softRender(); });
 if('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 function installBanner(){
   if(isStandalone()) return '';
   try { if(localStorage.getItem('sde-hide-install')) return ''; } catch(e){}
-  if(S.installEvt) return `<div class="vhint" style="background:#e9f6ee;color:#1f6b3f;align-items:center"><b>📲</b><span style="flex:1"><b style="font-size:14px">Install Site Records as an app</b><br>Opens full screen from your home screen, like any app.</span><button class="btn pri sm" data-act="install">Install</button><button class="xbtn" data-act="hideinstall" title="Hide">×</button></div>`;
+  if(S.installEvt) return `<div class="vhint" style="background:#e9f6ee;color:#1f6b3f;align-items:center"><b>📲</b><span style="flex:1"><b style="font-size:14px">Install Sadhana (Operation &amp; Safety) as an app</b><br>Opens full screen from your home screen, like any app.</span><button class="btn pri sm" data-act="install">Install</button><button class="xbtn" data-act="hideinstall" title="Hide">×</button></div>`;
   if(isIOS()) return `<div class="vhint" style="align-items:center"><b>📲</b><span style="flex:1"><b style="font-size:14px">Install on iPhone</b><br>In Safari tap <b>Share</b> ⬆️ then <b>Add to Home Screen</b>.</span><button class="xbtn" data-act="hideinstall" title="Hide">×</button></div>`;
   return '';
 }
