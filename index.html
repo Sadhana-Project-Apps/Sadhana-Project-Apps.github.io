@@ -137,6 +137,24 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .ftbl td input:focus{background:#fff!important;outline:2px solid var(--hazard)!important}
 .ftbl td select.tsel{width:100%;border:1px solid transparent;border-radius:6px;padding:7px 4px;font-size:14px;background:transparent}
 .ftbl td.x{width:34px;text-align:center}
+.autobox{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 12px;border:1px dashed var(--line);border-radius:8px;background:#f4f2ec;font-weight:600}
+.autobox em{margin-left:auto;font-style:normal;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ok);font-weight:700}
+.ftbl tfoot td{background:#fff6d6;padding:7px 8px;font-size:14px}
+@media (max-width:640px){ .ftbl tfoot td:empty{display:none} .ftbl tfoot tr{background:#fff6d6} }
+@media (max-width:640px){
+  .ftbl{overflow:visible}
+  .ftbl table{min-width:0}
+  .ftbl thead{display:none}
+  .ftbl tr{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px 8px;position:relative;padding:8px 40px 8px 10px;border-bottom:1px solid var(--line)}
+  .ftbl td{display:block;border:0;padding:0;min-width:0}
+  .ftbl td:first-child{grid-column:1/-1}
+  .ftbl td::before{content:attr(data-l);display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 2px 2px}
+  .ftbl td.x{position:absolute;top:6px;right:4px;width:auto}
+  .ftbl td.x::before{content:none}
+  .ftbl.compact tr{grid-template-columns:minmax(0,2.2fr) repeat(var(--n),minmax(0,1fr))}
+  .ftbl.compact td:first-child{grid-column:auto}
+  .ftbl td input,.ftbl td select.tsel{width:100%;border:1px solid var(--line)!important;background:#fff!important}
+}
 .xbtn{border:0;background:none;color:#a29a8c;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:6px}
 .xbtn:hover{color:var(--bad);background:#fbeeed}
 .addrow{border:0;background:none;color:var(--hazard-d);font-weight:600;padding:8px 10px;cursor:pointer;font-size:13.5px}
@@ -343,6 +361,22 @@ const WEATHER = ['Sunny','Cloudy','Light rain','Heavy rain','Thunderstorm','No w
 const MANPOWER_LIST = ['Project Manager','Site Manager','Safety Manager','Site Safety Supervisor','Site Supervisor','Machinery Operator','General Workers'];
 const MACHINERY_LIST = ['Excavator c/w Breaker','Excavator c/w Crusher','Excavator c/w Bucket','Excavator c/w Magnet','Excavator c/w Cutter','Excavator Long Arm','Mobile Crane','Boomlift','Forklift','Oxygen & Acetylene Set','Tipper Lorry','Roro Bin','Genset'];
 const DAY_COLS = n => Array.from({length:n}, (_, i) => ({k:'d'+i, l:'Day '+(i+1), day:i, n:1, w:52}));
+/* ---------- automatic calculations (days, totals, percentages) ---------- */
+const numv = v => parseFloat(String(v ?? '').replace(/,/g, '').replace(/%$/, '')) || 0;
+const fmtN = (v, dp) => dp ? numv(v).toLocaleString('en-MY', {minimumFractionDigits: dp, maximumFractionDigits: dp}) : (+numv(v).toFixed(2)).toLocaleString('en-MY');
+const dayDiff = (a, b) => Math.round((new Date(String(b).slice(0, 10) + 'T00:00:00') - new Date(String(a).slice(0, 10) + 'T00:00:00')) / 86400000);
+const addDays = (v, n) => { const x = new Date(String(v).slice(0, 10) + 'T00:00:00'); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+const monthEnd = v => { const x = new Date(String(v).slice(0, 10) + 'T00:00:00'); x.setMonth(x.getMonth() + 1, 0); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+// "Day 12 of 93 (13%)" from the project's contract dates
+function contractDay(p, date){
+  if(!p || !p.start || !p.end || !date) return 'Add the project start & completion dates';
+  const total = dayDiff(p.start, p.end) + 1, day = dayDiff(p.start, date) + 1;
+  if(total < 1) return 'Check the project dates (completion is before start)';
+  if(day < 1) return `Before contract start (${dayDiff(date, p.start)} days to go)`;
+  if(day > total) return `Day ${day} — ${day - total} days past completion date (contract ${total} days)`;
+  return `Day ${day} of ${total} (${Math.round(day / total * 100)}% of contract time)`;
+}
+
 const SCRAP_TYPES = ['Rebar', 'Stainless steel', 'Cables', 'Aluminium', 'Copper', 'Mild steel / structural steel', 'Cast iron', 'Others'];
 const TYPES = {
   DSR: {
@@ -358,6 +392,7 @@ const TYPES = {
     fields: [
       {sec:'General'},
       {k:'date', l:'Day & date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'dayNo', l:'Contract day', t:'auto', w:'half', calc:(x, d, p) => contractDay(p, x.date)},
       {k:'hours', l:'Working hours', t:'text', w:'half', def:'8:00am – 6:00pm'},
       {k:'weatherAM', l:'Weather (AM)', t:'select', o:WEATHER, w:'half', def:'Sunny'},
       {k:'weatherPM', l:'Weather (PM)', t:'select', o:WEATHER, w:'half', def:'Sunny'},
@@ -368,7 +403,9 @@ const TYPES = {
       {k:'machinery', l:'Machinery', t:'table', keepRows:1, sumCols:['qty'], cols:[{k:'item',l:'Machinery'},{k:'qty',l:'No.',n:1,w:60,pw:20},{k:'hrs',l:'Hours',n:1,w:70,pw:20},{k:'remarks',l:'Remarks'}],
         def: () => MACHINERY_LIST.map(item => ({item}))},
       {sec:'Activities'},
-      {k:'activities', l:'Activities (work carried out today)', t:'textarea', req:1, ph:'e.g. Demolished Level 3 slab grid A–C, gas cutting of roof steel trusses…'},
+      {k:'works', l:'Works done today & progress', t:'table', num:1, sub:false, req:1, sumCols:[], hint:'Works from the last daily report are brought forward — just update the %. Works at 100% drop off the next day.',
+        cols:[{k:'work',l:'Work activity / location'},{k:'pct',l:'Progress (%)',n:1,w:110,pw:28,suffix:'%'}], def: () => [{}]},
+      {k:'activities', l:'Other activities / notes', t:'textarea', ph:'e.g. Housekeeping, toolbox talk, site visit by client…'},
       {sec:'Forecast'},
       {k:'tomorrow', l:'Forecast (plan for tomorrow)', t:'textarea'},
       {sec:'Safety & Remarks'},
@@ -397,7 +434,12 @@ const TYPES = {
       {sec:'S-Curve'},
       {k:'planned', l:'Scheduled progress to date (%)', t:'number', w:'half'},
       {k:'actual', l:'Actual progress to date (%)', t:'number', req:1, w:'half'},
-      {k:'aheadDelay', l:'Ahead / delay', t:'text', w:'half', ph:'e.g. On schedule (0 days)'},
+      {k:'aheadDelay', l:'Ahead / delay', t:'auto', w:'half', calc:(x, d, p) => {
+        if(isEmpty(x.actual) || isEmpty(x.planned)) return 'Enter scheduled and actual %';
+        const v = +(numv(x.actual) - numv(x.planned)).toFixed(1); if(!v) return 'On schedule';
+        const tot = p && p.start && p.end ? dayDiff(p.start, p.end) + 1 : 0, days = tot ? Math.round(Math.abs(v) / 100 * tot) : 0;
+        return (v > 0 ? 'Ahead by ' : 'Behind by ') + Math.abs(v) + '%' + (days ? ` (≈ ${days} day${days === 1 ? '' : 's'})` : ''); }},
+      {k:'timeElapsed', l:'Contract time at end of period', t:'auto', w:'half', calc:(x, d, p) => contractDay(p, x.to)},
       {k:'scurve', l:'S-curve data (cumulative %)', t:'table', cols:[{k:'date',l:'Date',center:1},{k:'sched',l:'Schedule %',n:1,w:90},{k:'actual',l:'Actual %',n:1,w:90}], def: () => [{},{},{},{}]},
       {sec:'Progress Summary – Main Works'},
       {k:'mainWorks', l:'Main works', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description',pw:80},{k:'start',l:'Start date',w:100,center:1},{k:'finish',l:'Finish date',w:100,center:1},{k:'status',l:'Status',w:110,center:1}], def: () => [{},{},{}]},
@@ -409,7 +451,7 @@ const TYPES = {
       {sec:'Major Issues Affecting Progress'},
       {k:'issues', l:'Issues', t:'table', num:1, sub:false, cols:[{k:'issue',l:'Issue',pw:36},{k:'desc',l:'Description',pw:38},{k:'by',l:'Action by',w:90,center:1,pw:22},{k:'status',l:'Status'}], def: () => [{},{}]},
       {sec:'Weather Report'},
-      {k:'weather', l:'Weather', t:'table', sub:false, cols:[{k:'date',l:'Date',center:1,pw:26},{k:'am',l:'Morning',center:1},{k:'pm',l:'Afternoon',center:1},{k:'rain',l:'Rain hours',n:1,w:80,pw:24},{k:'remarks',l:'Remarks'}], def: () => []},
+      {k:'weather', l:'Weather', t:'table', sub:false, sumCols:['rain'], cols:[{k:'date',l:'Date',center:1,pw:26},{k:'am',l:'Morning',center:1},{k:'pm',l:'Afternoon',center:1},{k:'rain',l:'Rain hours',n:1,w:80,pw:24},{k:'remarks',l:'Remarks'}], def: () => []},
       {sec:'Manpower at Site'},
       {k:'manpower', l:'Manpower', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:31, cols:[{k:'name',l:'Personnel',pw:42}, ...DAY_COLS(31)],
         def: () => MANPOWER_LIST.map(name => ({name}))},
@@ -417,7 +459,7 @@ const TYPES = {
       {k:'machinery', l:'Machinery', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:31, cols:[{k:'name',l:'Machinery',pw:42}, ...DAY_COLS(31)],
         def: () => MACHINERY_LIST.map(name => ({name}))},
       {sec:'Safety Statistics & Manhours'},
-      {k:'hse', l:'HSE statistics', t:'table', sub:false, keepRows:1, cols:[{k:'item',l:'HSE statistic'},{k:'week',l:'This period',n:1,w:90,pw:30},{k:'todate',l:'Total to date',n:1,w:100,pw:30}],
+      {k:'hse', l:'HSE statistics', t:'table', sub:false, keepRows:1, hint:'Previous total comes from the last progress report; total to date is added up automatically.', cols:[{k:'item',l:'HSE statistic'},{k:'prev',l:'Previous total',n:1,w:90,pw:26},{k:'week',l:'This period',n:1,w:90,pw:26},{k:'todate',l:'Total to date',n:1,w:100,pw:26,calc: r => (isEmpty(r.prev) && isEmpty(r.week)) ? '' : String(+(numv(r.prev) + numv(r.week)).toFixed(2))}],
         def: () => ['Lost Time Injury (LTI)','Recordable incidents','Near misses','Total manhours','Safe workdays'].map(item => ({item}))},
       {sec:'Progress Photos'},
       {k:'photosBefore', l:'Before', t:'photos', hint:'Condition at the start of this period'},
@@ -482,7 +524,7 @@ const TYPES = {
       {sec:'Indoor Air Quality Performance'},
       {k:'iaq', l:'Indoor air quality performance', t:'textarea', def:'NIL'},
       {sec:'Other Green Features & Innovations'},
-      {k:'diesel', l:'Diesel consumption', t:'table', cols:[{k:'month',l:'Month',center:1},{k:'period',l:'Period',center:1},{k:'used',l:'Used (litre)',n:1},{k:'target',l:'Target (litre)',n:1},{k:'var',l:'Variation (%)',center:1},{k:'reason',l:'Reason'},{k:'remarks',l:'Remarks'}], def: () => [{}]},
+      {k:'diesel', l:'Diesel consumption', t:'table', cols:[{k:'month',l:'Month',center:1},{k:'period',l:'Period',center:1},{k:'used',l:'Used (litre)',n:1},{k:'target',l:'Target (litre)',n:1},{k:'var',l:'Variation (%)',center:1,calc: r => numv(r.target) && !isEmpty(r.used) ? ((numv(r.used) - numv(r.target)) / numv(r.target) * 100).toFixed(1) : ''},{k:'reason',l:'Reason'},{k:'remarks',l:'Remarks'}], def: () => [{}]},
       {k:'dieselPhotos', l:'Diesel invoices', t:'photos'}
     ]
   },
@@ -512,7 +554,7 @@ const TYPES = {
         {k:'qty', l:'Qty', n:1, w:60, pw:13, fmt:1},
         {k:'kg', l:'Weight (kg)', n:1, w:100, pw:24, fmt:1},
         {k:'rate', l:'Rate (RM/kg)', n:1, w:100, pw:22, dp:2},
-        {k:'value', l:'Value (RM)', n:1, w:110, pw:26, mul:['kg','rate'], dp:2}
+        {k:'value', l:'Value (RM)', n:1, w:110, pw:26, dp:2, calc: r => !isEmpty(r.kg) && !isEmpty(r.rate) ? (numv(r.kg) * numv(r.rate)).toFixed(2) : ''}
       ], def: () => [{}]},
       {k:'photos', l:'Photos — weighbridge ticket & loaded lorry', t:'photos', optional:1},
       {k:'declare', l:'Verification', t:'textarea', def:'The client representative confirms that the type and weight of the scrap / salvage above are correct as weighed and loaded at site, and the load is released from site.'}
@@ -535,7 +577,7 @@ const TYPES = {
       {k:'copied', l:'Copied to', t:'textarea', ph:'One company per line'},
       {k:'attn', l:'Attention', t:'text'},
       {k:'reference', l:'Drawing no. / reference', t:'text', w:'half'},
-      {k:'requiredBy', l:'Reply required by', t:'date', w:'half'},
+      {k:'requiredBy', l:'Reply required by', t:'date', w:'half', def: () => addDays(today(), 7), hint:'Set to 7 days after the RFI date automatically — change it if needed'},
       {sec:'Enquiries'},
       {k:'subject', l:'Subject', t:'text', req:1},
       {k:'enquiries', l:'Enquiries', t:'table', num:1, sub:false, req:1, cols:[{k:'q',l:'Enquiry'}], def: () => [{},{},{}]},
@@ -544,6 +586,7 @@ const TYPES = {
       {sec:'Reply', phase:'response'},
       {k:'response', l:'Reply', t:'textarea', phase:'response', req:1},
       {k:'respDate', l:'Reply date', t:'date', phase:'response', w:'half', def: () => today()},
+      {k:'replyDays', l:'Days taken to reply', t:'auto', phase:'response', w:'half', calc: x => x.issued && x.respDate ? (n => n < 0 ? 'Reply date is before the RFI date' : n + ' day' + (n === 1 ? '' : 's') + (x.requiredBy ? (dayDiff(x.requiredBy, x.respDate) > 0 ? ` — ${dayDiff(x.requiredBy, x.respDate)} day(s) late` : ' — on time') : ''))(dayDiff(x.issued, x.respDate)) : ''},
       {k:'respAction', l:'Attachment', t:'select', phase:'response', o:['No','Yes'], w:'half', def:'No'}
     ]
   },
@@ -673,6 +716,7 @@ const TYPES = {
       {k:'location', l:'Location on site', t:'text', w:'half'},
       {k:'duration', l:'Duration', t:'text', w:'half', def:'15 min'},
       {k:'points', l:'Key points discussed', t:'textarea', req:1},
+      {k:'attCount', l:'Total attendance', t:'auto', calc: x => { const n = (x.attendees || []).filter(r => r && (r.name || r.id)).length; return n + ' person' + (n === 1 ? '' : 's'); }},
       {k:'attendees', l:'Attendance', t:'table', cols:[{k:'name',l:'Name'},{k:'company',l:'Company / trade'},{k:'id',l:'IC / passport no.'}],
         def: () => [{},{},{},{}]}
     ]
@@ -694,6 +738,7 @@ const TYPES = {
       {k:'location', l:'Exact location', t:'text', req:1},
       {k:'from', l:'Valid from', t:'datetime', req:1, w:'half'},
       {k:'until', l:'Valid until', t:'datetime', req:1, w:'half'},
+      {k:'duration', l:'Permit duration', t:'auto', calc: x => { if(!x.from || !x.until) return ''; const h = (new Date(x.until) - new Date(x.from)) / 3600000; if(h <= 0) return '⚠ Valid until is before valid from'; return (h >= 24 ? Math.floor(h / 24) + ' day(s) ' : '') + (+(h % 24).toFixed(1)) + ' hour(s)'; }},
       {k:'desc', l:'Description of work', t:'textarea', req:1},
       {k:'workers', l:'Workers involved', t:'table', cols:[{k:'name',l:'Name'},{k:'id',l:'IC / passport'},{k:'role',l:'Role'}], def: () => [{},{}]},
       {sec:'Precautions'},
@@ -959,7 +1004,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (G) · register fix</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (J) · auto-calculations</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -975,18 +1020,35 @@ function settingsView(){
 
 /* ---------- DOC VIEW ---------- */
 function valueText(f, v){
+  if(f.t === 'auto') return v ?? '';
   if(f.t === 'date') return fmtDate(v);
   if(f.t === 'datetime') return fmtDT(v);
   if(f.t === 'checks') return (v||[]).join(', ');
   return v ?? '';
 }
 function cleanRows(f, rows){ return (rows||[]).filter(r => f.cols.some(c => !isEmpty(r?.[c.k]))); }
-const numv = v => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
-const fmtN = (v, dp) => dp ? numv(v).toLocaleString('en-MY', {minimumFractionDigits: dp, maximumFractionDigits: dp}) : (+numv(v).toFixed(2)).toLocaleString('en-MY');
 // fill in calculated columns (e.g. value = weight x rate)
+function autoValue(f, d){ try { return f.calc(d.data || {}, d, projById(d.projectId) || {}) ?? ''; } catch(e){ return ''; } }
+function withAutos(d){ const T = TYPES[d.type], out = {...(d.data || {})}; T.fields.forEach(f => { if(f.t === 'auto') out[f.k] = autoValue(f, {...d, data: out}); }); return out; }
+// recompute every automatic value in the open form
+function refreshAutos(){
+  const d = S.draft; if(!d) return; const T = TYPES[d.type];
+  T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc || c.mul)) (d.data[f.k] || []).forEach(r => calcRow(f, r)); });
+  T.fields.forEach(f => { if(f.t === 'auto'){ d.data[f.k] = autoValue(f, d); const el = document.querySelector(`[data-auto="${f.k}"]`); if(el) el.textContent = d.data[f.k] || '—'; } });
+  document.querySelectorAll('[data-calc]').forEach(o => { const r = (d.data[o.dataset.calc] || [])[+o.dataset.row]; if(r) o.value = r[o.dataset.col] || ''; });
+  T.fields.forEach(f => { if(f.t === 'table') refreshTotals(f); });
+}
+const sumKeysOf = (f, fcols) => f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? fcols.filter(c => c.day != null).map(c => c.k) : [];
+const sumOf = (rows, k) => (rows || []).reduce((a, r) => a + numv(r && r[k]), 0);
+function refreshTotals(f){
+  const rows = (S.draft && S.draft.data[f.k]) || [];
+  document.querySelectorAll(`[data-rt="${f.k}"]`).forEach(b => { const r = rows[+b.dataset.row] || {}; b.textContent = f.cols.filter(c => c.day != null).reduce((a, c) => a + numv(r[c.k]), 0); });
+  document.querySelectorAll(`[data-ft="${f.k}"]`).forEach(b => { const k = b.dataset.col, c = f.cols.find(x => x.k === k);
+    b.textContent = k === '_all' ? rows.reduce((a, r) => a + f.cols.filter(c => c.day != null).reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0) : fmtN(sumOf(rows, k), c && c.dp); });
+}
 function calcRow(f, r){
   if(!r) return;
-  f.cols.forEach(c => { if(c.mul){ const ok = c.mul.every(k => !isEmpty(r[k])); r[c.k] = ok ? (c.mul.reduce((a, k) => a * numv(r[k]), 1)).toFixed(c.dp || 2) : ''; } });
+  f.cols.forEach(c => { if(c.calc){ r[c.k] = c.calc(r) ?? ''; } else if(c.mul){ const ok = c.mul.every(k => !isEmpty(r[k])); r[c.k] = ok ? (c.mul.reduce((a, k) => a * numv(r[k]), 1)).toFixed(c.dp || 2) : ''; } });
 }
 // cumulative scrap record: every earlier record of this project + this one
 function scrapCum(d){
@@ -1090,13 +1152,53 @@ async function makeScrapReport(btn){
     closeModal();
   } catch(e){ if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } btn.disabled = false; btn.textContent = '⤓ Download PDF'; }
 }
+/* ---------- daily WhatsApp update from the Site Daily Report ---------- */
+const dmy = v => { if(!v) return ''; const [y, m, d] = String(v).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+function waText(d){
+  const p = projById(d.projectId) || {}, x = d.data || {}, L = [];
+  const bullets = t => String(t || '').split(/\n+/).map(l => l.replace(/^\s*([-*•·]|\d+[.)])\s*/, '').trim()).filter(Boolean).map(l => '• ' + l);
+  L.push('*' + (p.name || '') + '*');
+  L.push('');
+  if(p.start && p.end && x.date){ const total = dayDiff(p.start, p.end) + 1, day = dayDiff(p.start, x.date) + 1; if(day >= 1) L.push(`*Day No. : ${day}/${total}*`); }
+  L.push(`*Date: ${dmy(x.date)}*`);
+  if(p.start) L.push(`*Commencement date (Contract) : ${dmy(p.start)}*`);
+  if(p.end) L.push(`*Completion date (Contract) : ${dmy(p.end)}*`);
+  if(p.start && p.end) L.push(`*Contract Period : ${dayDiff(p.start, p.end) + 1} Days*`);
+  const w = x.weatherAM && x.weatherPM && x.weatherAM !== x.weatherPM ? `AM ${x.weatherAM}, PM ${x.weatherPM}` : (x.weatherAM || x.weatherPM || '');
+  if(w) L.push(`*Weather: ${w}*` + (numv(x.rainHours) ? ` (${x.rainHours} hr lost to rain)` : ''));
+  const mp = (x.manpower || []).filter(r => numv(r.qty) > 0);
+  const tot = mp.reduce((a, r) => a + numv(r.qty), 0);
+  if(tot) L.push(`*Manpower: ${tot}pax*`);
+  if(mp.length > 1) mp.forEach(r => L.push(`   ${r.trade} – ${numv(r.qty)}`));
+  const mc = (x.machinery || []).filter(r => numv(r.qty) > 0);
+  if(mc.length){ L.push(`*Machinery:*`); mc.forEach(r => L.push(`   ${r.item} – ${numv(r.qty)}`)); }
+  L.push('', `*Today's Activity*`);
+  if(x.hours) L.push(x.hours);
+  L.push('');
+  (x.works || []).filter(r => r && r.work).forEach(r => { const pc = numv(r.pct); L.push(`• ${r.work}` + (!isEmpty(r.pct) ? ` — *${pc}%*` : '')); });
+  L.push(...bullets(x.activities));
+  if(bullets(x.tomorrow).length) L.push('', `*Tomorrow's Plan*`, ...bullets(x.tomorrow));
+  if(bullets(x.safety).length) L.push('', `*Safety*`, ...bullets(x.safety));
+  if(bullets(x.issues).length) L.push('', `*Issues / Delays*`, ...bullets(x.issues));
+  L.push('', `_${d.number || 'Site Daily Report'}_`);
+  return L.join('\n');
+}
+function waForm(id){
+  const d = docById(id); if(!d) return;
+  const p = projById(d.projectId) || {};
+  const miss = !(p.start && p.end) ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-bottom:10px"><b>!</b><span>Add the project's start and completion dates (Edit project) to show Day No. and contract period.</span></div>` : '';
+  showModal(`<div class="box"><div class="mh"><h3>💬 WhatsApp update</h3></div><div class="mb">${miss}
+    <p class="small muted" style="margin-top:0">Made from this daily report. You can still edit it below. Add your site photos in WhatsApp as usual.</p>
+    <textarea id="waText" style="width:100%;min-height:320px;font:14px/1.45 system-ui,sans-serif;padding:10px;border:1px solid var(--line);border-radius:8px">${esc(waText(d))}</textarea>
+  </div><div class="mf"><button class="btn ghost" data-act="closemodal">Close</button><button class="btn" data-act="wacopy">📋 Copy</button><button class="btn pri" data-act="wasend" style="background:#25D366;border-color:#25D366">Send to WhatsApp</button></div></div>`);
+}
 function salvageSummary(data){
   const cats = [['Re-use','reuse'],['Recycle – scrap','scrap'],['Recycle – wood','wood'],['Dispose','dispose']];
   return cats.map(([label, k]) => { const rows = (data[k] || []).filter(r => r && (r.item || r.kg || r.date));
     return [label, String(rows.length), rows.reduce((a, r) => a + (parseFloat(String(r.kg || '').replace(/,/g, '')) || 0), 0).toLocaleString('en-MY')]; });
 }
 function docBodyHTML(d){
-  const T = TYPES[d.type], data = d.data || {};
+  const T = TYPES[d.type], data = withAutos(d);
   const st = statusOf(d);
   const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase==='response' && !isEmpty(data[f.k]));
   let out = '', kv = [];
@@ -1107,7 +1209,7 @@ function docBodyHTML(d){
   for(const f of T.fields){
     if(f.phase === 'response' && !showResp) continue;
     if(f.sec){ closeSec(); openSec(f.sec); continue; }
-    if(['date','datetime','select','text','number'].includes(f.t)){
+    if(['date','datetime','select','text','number','auto'].includes(f.t)){
       if(d.type==='PR' && (f.k==='planned'||f.k==='actual')) continue;
       if(!secOpen) openSec('Details');
       kv.push(`<div><span>${esc(f.l)}</span>${esc(valueText(f, data[f.k])) || '—'}</div>`);
@@ -1121,7 +1223,7 @@ function docBodyHTML(d){
       out += wrapStart + head + `<div class="body">${esc(valueText(f, data[f.k])) || '<span class="muted">—</span>'}</div>` + wrapEnd;
     } else if(f.t === 'table'){
       const rows = cleanRows(f, data[f.k]);
-      out += wrapStart + head + (rows.length ? `<table><thead><tr>${f.cols.map(c=>`<th>${esc(c.day!=null ? dayLabel(data.from, c.day) : c.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${f.cols.map(c=>`<td>${esc(r[c.k])}</td>`).join('')}</tr>`).join('')}${tableTotals(f, rows)}</tbody></table>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
+      out += wrapStart + head + (rows.length ? `<table><thead><tr>${f.cols.map(c=>`<th>${esc(c.day!=null ? dayLabel(data.from, c.day) : c.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${f.cols.map(c=>`<td>${esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : r[c.k])}</td>`).join('')}</tr>`).join('')}${tableTotals(f, rows)}</tbody></table>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
     } else if(f.t === 'calc' && f.calc === 'scrap'){
       const c = scrapCum(d);
       out += wrapStart + head + (c.rows.length ? `<table><thead><tr>${c.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}<tr style="font-weight:700;background:#fff6d6">${c.total.map(x => `<td>${esc(x)}</td>`).join('')}</tr></tbody></table><div class="small muted" style="padding:6px 10px">Includes ${c.records} record${c.records === 1 ? '' : 's'} up to and including this one.</div>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
@@ -1189,6 +1291,7 @@ function docView(id){
         ${needResp && S.canWrite ? `<button class="btn ${respFilled?'':'pri'}" data-act="respond" data-id="${esc(d.id)}">${respFilled?'Edit':'Add'} ${T.code==='PTW'?'close-out':'response'}</button>`:''}
         ${st.next>0 && S.canWrite && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF</button>
+        ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
         ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
         ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
@@ -1203,8 +1306,20 @@ function docView(id){
 function newDraft(pid, type){
   const T = TYPES[type], data = {};
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
-  if(type === 'PR'){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); }
-  if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); data.until = iso(u); }
+  const prevOf = t => S.docs.filter(x => x.type === t && x.projectId === pid).sort((a, b) => (b.seq || 0) - (a.seq || 0));
+  if(type === 'PR' || type === 'SW'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
+  if(type === 'PR'){ const last = prevOf('PR')[0];
+    if(last && last.data?.hse) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
+    if(last && last.data?.to){ data.from = addDays(last.data.to, 1); } }
+  if(type === 'MM'){ data.to = monthEnd(data.from); }
+  if(type === 'DSR'){
+    const last = S.docs.filter(x => x.type === 'DSR' && x.projectId === pid && (x.data?.works || []).length).sort((a, b) => String(b.data?.date || '').localeCompare(String(a.data?.date || '')) || (b.seq || 0) - (a.seq || 0))[0];
+    const carry = last ? last.data.works.filter(r => r && r.work && numv(r.pct) < 100).map(r => ({work: r.work, pct: r.pct || ''})) : [];
+    if(carry.length) data.works = carry;
+  }
+  if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); } data.to = addDays(data.from, 6); }
+  T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
+  if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); if(u <= n) u.setTime(n.getTime() + 8 * 3600000); data.until = iso(u); }
   return {projectId:pid, type, data, signatures:[]};
 }
 const MIC_SMALL = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg>';
@@ -1245,6 +1360,7 @@ function fieldInput(f, v){
   const dk = `data-f="${f.k}"`;
   switch(f.t){
     case 'textarea': return `<div class="dict"><textarea ${dk} placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>${micBtn(f.k)}</div>${S.sample?`<div class="fixrow">${f.k in S.fixUndo?`<button class="undo" data-act="undofix" data-k="${f.k}">Undo</button>`:''}<button class="aibtn" data-act="fixen" data-k="${f.k}">✨ Fix English</button></div>`:''}`;
+    case 'auto': return `<div class="autobox"><span data-auto="${f.k}">${esc(S.draft ? autoValue(f, S.draft) : v) || '—'}</span><em>auto</em></div>`;
     case 'date': return `<input type="date" ${dk} value="${esc(v)}">`;
     case 'datetime': return `<input type="datetime-local" ${dk} value="${esc(v)}">`;
     case 'number': return `<input type="number" inputmode="decimal" step="any" ${dk} value="${esc(v)}">`;
@@ -1253,9 +1369,11 @@ function fieldInput(f, v){
     case 'table': {
       const rows = v && v.length ? v : [{}];
       const fcols = f.cols.filter(c => c.day == null || c.day < periodDays(S.draft?.data || {}, f.maxDays || 7));
-      return `<div class="ftbl"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=>`<tr>${fcols.map(c=>`<td>${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : c.mul ? `<input readonly tabindex="-1" style="background:#f4f2ec;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : `<input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
-      </tbody></table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button></div>`;
+      const sk = sumKeysOf(f, fcols), dayC = fcols.filter(c => c.day != null);
+      const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
+      return `<div class="ftbl ${fcols.length <= 3 ? 'compact' : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
+        ${rows.map((r,i)=>`<tr>${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : `<input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button></div>`;
     }
     case 'photos': {
       const ph = v || [];
@@ -1312,7 +1430,8 @@ async function saveDraft(){
   // tidy empty table rows
   const T = TYPES[d.type];
   const data = clone(d.data);
-  T.fields.forEach(f => { if(f.t==='table'){ const r = cleanRows(f, data[f.k]); data[f.k] = r; } });
+  T.fields.forEach(f => { if(f.t==='table'){ const r = cleanRows(f, data[f.k]); r.forEach(x => calcRow(f, x)); data[f.k] = r; } });
+  T.fields.forEach(f => { if(f.t === 'auto') data[f.k] = autoValue(f, {...d, data}); });
   if(!d.id){
     const p = projById(d.projectId);
     if(!navigator.onLine){ toast('No internet — a new report needs a connection to get its number. Try again when you have signal.', true); return false; }
@@ -1490,7 +1609,7 @@ async function makePDF(id){
   if(!S.dl){ toast('Downloads aren\'t available in this view.', true); return; }
   const btn = document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
-    const T = TYPES[d.type], p = projById(d.projectId) || {}, c = company(), data = d.data || {};
+    const T = TYPES[d.type], p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
     const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'});
     Object.assign(HS, T.landscape ? {W:297, H:210, CW:257, BOTTOM:190} : {W:210, H:297, CW:170, BOTTOM:277});
     const {L, CW, TOP, BOTTOM} = HS;
@@ -1578,7 +1697,7 @@ async function makePDF(id){
       if(f.sec){ flush(); const i = T.fields.indexOf(f), nx = T.fields.slice(i + 1).find(g => !g.sec && g.pdf !== false);
         heading(f.sec, !nx ? 18 : nx.t === 'photos' ? 80 : nx.t === 'table' ? 40 : 28); started = true; continue; }
       if(!started){ heading('Details'); started = true; }
-      if(['date','datetime','select','text','number'].includes(f.t)){ kv.push([pt(f.l.toUpperCase()), pt(valueText(f, data[f.k])) || '-']); continue; }
+      if(['date','datetime','select','text','number','auto'].includes(f.t)){ kv.push([pt(f.l.toUpperCase()), pt(valueText(f, data[f.k])) || '-']); continue; }
       flush();
       if(f.t === 'textarea' || f.t === 'checks'){
         need(16);
@@ -1592,13 +1711,13 @@ async function makePDF(id){
         const dayCols = cols.filter(cc => cc.day != null);
         if(f.rowTotal) head.push('TOTAL');
         const body = rows.map((r, i) => {
-          const out = [...(f.num ? [String(i + 1)] : []), ...cols.map(cc => (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : pt(r[cc.k]))];
+          const out = [...(f.num ? [String(i + 1)] : []), ...cols.map(cc => (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
           if(f.rowTotal) out.push(String(dayCols.reduce((a, cc) => a + (parseFloat(r[cc.k]) || 0), 0)));
           return out;
         });
         if(!body.length) body.push([{content:'-', colSpan:head.length}]);
         let foot;
-        if(f.sumCols && rows.length){
+        if(f.sumCols && f.sumCols.length && rows.length){
           foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : ''))]];
           if(f.num){ foot[0][0] = ''; foot[0][1] = 'TOTAL'; }
         }
@@ -1702,8 +1821,15 @@ function projectForm(p){
     ${f('client','Client')}${f('consultant','Consultant / engineer')}
     ${f('location','Site location')}${f('contractNo','Contract / LOA no.')}
     ${f('start','Start date','date')}${f('end','Completion date','date')}
+    <div class="fld"><label>Contract period</label><div class="autobox"><span id="pfDays">${esc(projDaysText(p.start, p.end))}</span><em>auto</em></div></div>
     ${f('pm','Project manager')}${f('insurance','Insurance policies',"text",1,"e.g. CAR, Workmen's Compensation")}
   </div></div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="saveproj" data-id="${esc(p.id||'')}">${p.id?'Save':'Create project'}</button></div></div>`);
+}
+function projDaysText(a, b){
+  if(!a || !b) return 'Enter the start and completion dates';
+  const n = dayDiff(a, b) + 1; if(n < 1) return '⚠ Completion date is before the start date';
+  const w = Math.floor(n / 7), r = n % 7;
+  return `${n} days (${w} week${w === 1 ? '' : 's'}${r ? ' ' + r + ' day' + (r === 1 ? '' : 's') : ''})` + (b ? ' · ' + (dayDiff(today(), b) >= 0 ? dayDiff(today(), b) + ' days remaining from today' : Math.abs(dayDiff(today(), b)) + ' days past completion') : '');
 }
 async function saveProject(id){
   const vals = {}; document.querySelectorAll('[data-pf]').forEach(i => vals[i.dataset.pf] = i.value.trim());
@@ -2010,6 +2136,9 @@ document.addEventListener('click', async e => {
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
     case 'typenames': typeNamesForm(); break;
+    case 'wa': waForm(id); break;
+    case 'wacopy': { const tx = $('#waText').value; try { await navigator.clipboard.writeText(tx); } catch(e){ $('#waText').select(); document.execCommand('copy'); } toast('Copied — paste it in the WhatsApp group'); break; }
+    case 'wasend': { const tx = $('#waText').value; if(navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)){ try { await navigator.share({text: tx}); } catch(e){} } else window.open('https://wa.me/?text=' + encodeURIComponent(tx), '_blank', 'noopener'); break; }
     case 'scraprep': scrapReportForm(el.dataset.p); break;
     case 'scraprepgo': makeScrapReport(el); break;
     case 'typenamessave': typeNamesSave(el); break;
@@ -2067,6 +2196,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if(t.matches('[data-filter]')) return applyRegFilter();
+  if(t.dataset.pf === 'start' || t.dataset.pf === 'end'){ const el = $('#pfDays'); if(el) el.textContent = projDaysText($('[data-pf=start]').value, $('[data-pf=end]').value); }
   if(t.id === 'fileq'){ S.fileQ = t.value; const pos = t.selectionStart; render(); const n = $('#fileq'); if(n){ n.focus(); n.setSelectionRange(pos, pos); } return; }
   if(t.id === 'vtext'){ if(S.voice) S.voice.text = t.value; syncVoiceBtn(); return; }
   if(!S.draft || S.view.name !== 'edit') return;
@@ -2076,13 +2206,16 @@ document.addEventListener('input', e => {
       S.draft.data.to = e.getFullYear() + '-' + pad2(e.getMonth() + 1) + '-' + pad2(e.getDate());
       const toEl = document.querySelector('[data-f="to"]'); if(toEl) toEl.value = S.draft.data.to;
     }
+    if(S.draft.type === 'MM' && t.dataset.f === 'from' && S.draft.data.from){ S.draft.data.to = monthEnd(S.draft.data.from); const te = document.querySelector('[data-f="to"]'); if(te) te.value = S.draft.data.to; }
+    if(S.draft.type === 'RFI' && t.dataset.f === 'requiredBy') S.draft._reqSet = true;
+    if(S.draft.type === 'RFI' && t.dataset.f === 'issued' && S.draft.data.issued && !S.draft._reqSet){ S.draft.data.requiredBy = addDays(S.draft.data.issued, 7); const te = document.querySelector('[data-f="requiredBy"]'); if(te) te.value = S.draft.data.requiredBy; }
+    refreshAutos();
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
-    const fd = TYPES[S.draft.type].fields.find(x => x.k === t.dataset.tbl);
-    if(fd && fd.cols.some(c => c.mul)){ calcRow(fd, rows[i]); t.closest('tr').querySelectorAll('[data-calc]').forEach(o => o.value = rows[i][o.dataset.col] || ''); } }
+    refreshAutos(); }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
 });
-document.addEventListener('change', e => { const t = e.target; if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; } });
+document.addEventListener('change', e => { const t = e.target; if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; refreshAutos(); } });
 document.addEventListener('submit', e => { if(e.target.id === 'authForm'){ e.preventDefault(); emailAuth(e.target); } });
 document.addEventListener('change', async e => {
   const t = e.target;
