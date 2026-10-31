@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2a2e33">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Sadhana Site Records</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --ink:#1a1c1e; --steel:#2a2e33; --steel2:#3a3f45; --concrete:#f1efea; --paper:#fff;
+  --line:#dcd7cd; --line2:#e9e5dd; --muted:#6a6e73; --hazard:#e8590c; --hazard-d:#c04608; --hazard-l:#fff1e8;
+  --ok:#2e7a4c; --ok-l:#e6f3ea; --warn:#a86a10; --warn-l:#fdf3e1; --bad:#b3261e; --ink-blue:#0d2b63;
+  --r:10px; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--concrete);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+h1,h2,h3,h4{font-family:Archivo,sans-serif;margin:0;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:"IBM Plex Mono",monospace}
+/* top bar */
+.top{position:sticky;top:0;z-index:20;background:var(--steel);color:#fff;border-bottom:3px solid var(--hazard)}
+.top-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:10px;cursor:pointer;min-width:0}
+.mark{width:36px;height:36px;border-radius:7px;background:var(--hazard);display:grid;place-items:center;font:800 14px Archivo;letter-spacing:.02em;flex:none;overflow:hidden}
+.mark img{width:100%;height:100%;object-fit:contain;background:#fff}
+.brand b{font:700 15px Archivo;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand small{display:block;font-size:11.5px;opacity:.7;letter-spacing:.06em;text-transform:uppercase}
+.nav{margin-left:auto;display:flex;gap:4px}
+.nav button{background:none;border:0;color:#cfd3d8;padding:8px 12px;border-radius:7px;cursor:pointer;font-weight:500}
+.nav button.on,.nav button:hover{background:var(--steel2);color:#fff}
+.bnav{display:none}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
+/* generic */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:#fff;padding:9px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;white-space:nowrap;text-decoration:none}
+.btn:hover{border-color:#bdb6a8}
+.btn.pri{background:var(--hazard);border-color:var(--hazard);color:#fff}
+.btn.pri:hover{background:var(--hazard-d)}
+.btn.dark{background:var(--steel);border-color:var(--steel);color:#fff}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sp{flex:1}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:16px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.eyebrow{font:600 11.5px "IBM Plex Sans";letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.pagehead{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:4px 0 18px}
+.pagehead h1{font-size:26px;font-weight:800}
+.crumb{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font-size:13px;margin-bottom:4px}
+.crumb:hover{color:var(--hazard)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.draft{background:#eceae5;color:#55595e}
+.pill.pending{background:var(--warn-l);color:var(--warn)}
+.pill.done{background:var(--ok-l);color:var(--ok)}
+.pill.type{background:var(--steel);color:#fff;font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.04em}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.empty{text-align:center;padding:36px 16px;color:var(--muted)}
+/* dashboard */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi{padding:14px 16px}
+.kpi b{display:block;font:800 28px Archivo;line-height:1.1}
+.kpi.alert b{color:var(--hazard)}
+.grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:start}
+.sechead{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line2)}
+.sechead h3{font-size:16px}
+.list .it{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line2);cursor:pointer}
+.list .it:last-child{border-bottom:0}
+.list .it:hover{background:#faf9f6}
+.it .t{min-width:0;flex:1}
+.it .t b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it .t span{font-size:12.5px;color:var(--muted)}
+.today .it{cursor:default}
+.tick{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:13px}
+.tick.y{background:var(--ok-l);color:var(--ok)}
+.tick.n{background:var(--hazard-l);color:var(--hazard)}
+.projgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.proj{padding:16px;cursor:pointer;position:relative;overflow:hidden;transition:transform .12s}
+.proj:hover{transform:translateY(-2px)}
+.proj::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--hazard)}
+.proj.Completed::before{background:var(--ok)} .proj.On.hold::before,.proj[data-s="On hold"]::before{background:#9aa0a6}
+.proj h3{font-size:17px;margin:6px 0 2px}
+.proj .meta{font-size:13px;color:var(--muted)}
+.proj .counts{display:flex;gap:14px;margin-top:12px;font-size:12.5px;color:var(--muted)}
+.proj .counts b{color:var(--ink);font-size:15px;display:block}
+/* project page */
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:14px;scrollbar-width:none}
+.tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 13px;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--steel);color:#fff;border-color:var(--steel)}
+.tabs button i{font-style:normal;opacity:.6;margin-left:4px}
+.newgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:18px}
+.newbtn{border:1px dashed #c9c2b4;background:#fffdf9;border-radius:9px;padding:12px;text-align:left;cursor:pointer}
+.newbtn:hover{border-color:var(--hazard);background:var(--hazard-l)}
+.newbtn b{display:block;font-size:14px}
+.newbtn span{font-size:12px;color:var(--muted)}
+.projinfo{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 18px;padding:14px 16px;margin-bottom:16px}
+.projinfo div span{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+table.reg{width:100%;border-collapse:collapse;font-size:14px}
+table.reg th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line)}
+table.reg td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:middle}
+table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f6}
+.filters{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line2)}
+.filters input,.filters select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;font-size:14px}
+.filters input{flex:1;min-width:160px}
+/* forms */
+.form{max-width:860px}
+.fsec{margin:22px 0 10px;display:flex;align-items:center;gap:10px}
+.fsec h3{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--steel)}
+.fsec::after{content:"";flex:1;height:1px;background:var(--line)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.fld{grid-column:1/-1;min-width:0}
+.fld.half{grid-column:auto}
+.fld label{display:block;font-weight:600;font-size:13px;margin-bottom:5px}
+.fld label em{color:var(--hazard);font-style:normal}
+.fld .hint{font-size:12px;color:var(--muted);margin-top:4px}
+.inp,.fld input:not([type=checkbox]):not([type=file]),.fld select,.fld textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 11px;background:#fff;font-size:15px}
+.fld textarea{min-height:96px;resize:vertical}
+.fld input:focus,.fld select:focus,.fld textarea:focus,.inp:focus{outline:2px solid var(--hazard);outline-offset:-1px;border-color:transparent}
+.fld.err input,.fld.err textarea,.fld.err select{border-color:var(--bad);background:#fff7f6}
+.ftbl{border:1px solid var(--line);border-radius:8px;overflow:auto;background:#fff}
+.ftbl table{width:100%;border-collapse:collapse;min-width:520px}
+.ftbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:7px 8px;background:#faf8f4;border-bottom:1px solid var(--line)}
+.ftbl td{padding:4px;border-bottom:1px solid var(--line2)}
+.ftbl td input{border:1px solid transparent!important;border-radius:6px!important;padding:7px!important;font-size:14px!important;background:transparent!important}
+.ftbl td input:focus{background:#fff!important;outline:2px solid var(--hazard)!important}
+.ftbl td.x{width:34px;text-align:center}
+.xbtn{border:0;background:none;color:#a29a8c;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:6px}
+.xbtn:hover{color:var(--bad);background:#fbeeed}
+.addrow{border:0;background:none;color:var(--hazard-d);font-weight:600;padding:8px 10px;cursor:pointer;font-size:13.5px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff}
+.checks label{display:flex;gap:9px;align-items:flex-start;font-weight:400;font-size:14px;margin:0;cursor:pointer}
+.checks input{width:18px;height:18px;accent-color:var(--hazard);margin-top:2px;flex:none}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.ph{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;position:relative}
+.ph img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#eee}
+.ph input{border:0!important;border-top:1px solid var(--line2)!important;border-radius:0!important;font-size:13px!important;padding:7px 8px!important}
+.ph .xbtn{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;font-size:15px}
+.phadd{border:1.5px dashed #c9c2b4;border-radius:8px;display:grid;place-items:center;aspect-ratio:4/3;cursor:pointer;color:var(--muted);text-align:center;font-size:13px;background:#fffdf9;padding:8px}
+.phadd:hover{border-color:var(--hazard);color:var(--hazard)}
+.phadd b{display:block;font-size:26px;line-height:1;font-weight:400}
+.phadd input{display:none}
+.uploading{display:grid;place-items:center;aspect-ratio:4/3;font-size:12.5px;color:var(--muted);background:repeating-linear-gradient(45deg,#f6f3ee,#f6f3ee 8px,#efebe4 8px,#efebe4 16px)}
+.actbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);z-index:15;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.actbar .in{max-width:1180px;margin:0 auto;display:flex;gap:10px;align-items:center}
+/* document sheet */
+.docwrap{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;align-items:start}
+.sheet{background:#fff;border:1px solid var(--line);box-shadow:0 2px 18px rgba(0,0,0,.07);padding:34px 38px;border-radius:4px;max-width:860px}
+.lh{display:flex;gap:14px;align-items:flex-start;padding-bottom:12px;border-bottom:3px solid var(--hazard)}
+.lh .mark{width:52px;height:52px;font-size:18px;color:#fff}
+.lh .co b{font:800 17px Archivo;display:block}
+.lh .co div{font-size:12px;color:var(--muted);line-height:1.45}
+.lh .dt{margin-left:auto;text-align:right}
+.lh .dt h2{font-size:17px;text-transform:uppercase;letter-spacing:.03em}
+.lh .dt .mono{font-size:13px;color:var(--hazard-d)}
+.metat{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:13.5px}
+.metat td{border:1px solid var(--line);padding:6px 9px;vertical-align:top}
+.metat td.k{background:#faf8f4;font-weight:600;width:19%;font-size:12.5px;color:#4a4e53}
+.dsec{margin-top:18px}
+.dsec h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;background:var(--steel);color:#fff;padding:5px 9px;margin-bottom:0;border-radius:2px}
+.dsec .body{border:1px solid var(--line);border-top:0;padding:9px 11px;white-space:pre-wrap;font-size:14px;min-height:20px}
+.dsec table{width:100%;border-collapse:collapse;font-size:13.5px}
+.dsec table th{background:#faf8f4;font-size:12px;text-align:left;padding:6px 8px;border:1px solid var(--line)}
+.dsec table td{padding:6px 8px;border:1px solid var(--line)}
+.kv{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--line);border-top:0}
+.kv div{padding:7px 10px;border-bottom:1px solid var(--line2);font-size:14px}
+.kv div:nth-child(odd){border-right:1px solid var(--line2)}
+.kv span{display:block;font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.dphotos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border:1px solid var(--line);border-top:0;padding:8px}
+.dphotos figure{margin:0}
+.dphotos img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;border-radius:3px;cursor:zoom-in}
+.dphotos figcaption{font-size:12px;color:var(--muted);padding-top:3px}
+.sigs{display:grid;gap:10px;margin-top:22px}
+.sig{border:1px solid var(--line);border-radius:4px;padding:9px 11px;min-height:150px;display:flex;flex-direction:column}
+.sig .role{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#4a4e53}
+.sig .img{flex:1;display:grid;place-items:center;min-height:70px;border-bottom:1px solid #999;margin:6px 0}
+.sig .img img{max-height:70px;max-width:100%}
+.sig .nm{font-weight:600;font-size:13.5px}
+.sig .ds,.sig .when{font-size:12px;color:var(--muted)}
+.sig.wait .img{color:#b9b2a5;font-size:12.5px}
+.sig.next{border-color:var(--hazard);background:var(--hazard-l)}
+.prog{height:12px;border-radius:99px;background:#ece8e1;position:relative;overflow:hidden}
+.prog i{position:absolute;left:0;top:0;bottom:0;background:var(--hazard);border-radius:99px}
+.prog s{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--steel)}
+.side{position:sticky;top:76px;display:grid;gap:12px}
+.side .card{padding:14px}
+.side .btn{width:100%}
+.trail{font-size:12.5px;display:grid;gap:8px}
+.trail div{display:flex;gap:8px}
+.trail i{width:8px;height:8px;border-radius:50%;background:var(--ok);margin-top:6px;flex:none}
+.trail i.o{background:#c9c2b4}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(20,22,24,.55);z-index:50;display:grid;place-items:center;padding:14px;overflow:auto}
+.modal .box{background:#fff;border-radius:12px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:calc(100vh - 28px);overflow:auto}
+.modal .box.wide{max-width:900px}
+.modal .mh{padding:16px 18px;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:10px}
+.modal .mh h3{font-size:18px}
+.modal .mb{padding:16px 18px}
+.modal .mf{padding:12px 18px;border-top:1px solid var(--line2);display:flex;gap:10px;justify-content:flex-end}
+.padbox{border:1.5px dashed #b9b2a5;border-radius:8px;background:#fcfbf8;position:relative;touch-action:none}
+.padbox canvas{display:block;width:100%;height:190px;cursor:crosshair}
+.padbox .line{position:absolute;left:24px;right:24px;bottom:42px;border-bottom:1px solid #c9c2b4;pointer-events:none}
+.padbox .x{position:absolute;left:12px;bottom:44px;color:#b9b2a5;font-size:18px;pointer-events:none}
+.declare{font-size:12.5px;color:var(--muted);background:#faf8f4;border-radius:7px;padding:9px 11px;margin-top:10px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--steel);color:#fff;padding:10px 16px;border-radius:9px;z-index:80;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:90vw}
+.toast.bad{background:var(--bad)}
+.aibtn{border:1px solid #cdd6e4;background:#f3f6fb;color:#1f3f75;border-radius:7px;padding:4px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
+.aibtn:hover{background:#e6edf8}.aibtn:disabled{opacity:.6;cursor:wait}
+.fixrow{display:flex;gap:8px;justify-content:flex-end;margin-top:5px;align-items:center}
+.fixrow .undo{background:none;border:0;color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer}
+.btn.voice{background:#1f3f75;border-color:#1f3f75;color:#fff}
+.vbox{width:100%;min-height:150px;font-size:16px;line-height:1.5;border:1.5px solid #cdd6e4;border-radius:10px;padding:12px;background:#fbfcfe;resize:vertical}
+.vhint{display:flex;gap:10px;background:#f3f6fb;border-radius:9px;padding:10px 12px;font-size:13px;color:#2c3e5c;margin-bottom:10px}
+.vhint>b{font-size:20px;line-height:1}
+.vchg{border:1px solid var(--line);border-radius:8px;margin-top:8px;overflow:hidden}
+.vchg .h{background:#faf8f4;padding:6px 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4a4e53}
+.vchg .b{padding:8px 10px;white-space:pre-wrap;font-size:14px}
+.vchg table{width:100%;border-collapse:collapse;font-size:13px}.vchg td,.vchg th{border-top:1px solid var(--line2);padding:4px 8px;text-align:left}
+.vsum{margin:0;padding-left:18px;font-size:14px}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:62px;height:62px;border-radius:50%;border:0;background:#1f9d55;color:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.28);z-index:16;cursor:pointer}
+.fab:active{transform:scale(.94)}
+.fab span{position:absolute;right:70px;background:var(--steel);color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap;padding:5px 10px;border-radius:99px;pointer-events:none}
+.composer{display:flex;gap:10px;align-items:flex-end}
+.composer .vbox{flex:1;border-radius:22px;padding:12px 16px;min-height:120px;max-height:40vh}
+.micbtn{width:56px;height:56px;flex:none;border-radius:50%;border:0;background:#1f9d55;color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 10px rgba(31,157,85,.35);transition:transform .1s}
+.micbtn:active{transform:scale(.92)}
+.micbtn.send{background:var(--hazard);box-shadow:0 3px 10px rgba(232,89,12,.35)}
+.vtip{margin-top:8px;font-size:13px;color:#1f6b3f;background:#e9f6ee;border-radius:8px;padding:8px 10px;display:none}
+.vtip.on{display:block;animation:pulse 1.6s ease-in-out 2}
+@keyframes pulse{50%{background:#cdeedb}}
+.micbtn.live{background:var(--bad);animation:livepulse 1.2s ease-in-out infinite}
+@keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(179,38,30,.5)}70%{box-shadow:0 0 0 16px rgba(179,38,30,0)}100%{box-shadow:0 0 0 0 rgba(179,38,30,0)}}
+.langsw{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.langsw button{border:0;background:#fff;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+.langsw button.on{background:var(--steel);color:#fff}
+.dict{position:relative}
+.dict textarea,.dict input{padding-right:52px!important}
+.fmic{position:absolute;right:6px;top:6px;width:40px;height:40px;border-radius:50%;border:0;background:#1f9d55;color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 6px rgba(31,157,85,.35)}
+.dict input + .fmic{top:50%;transform:translateY(-50%);width:36px;height:36px}
+.fmic.live{background:var(--bad);animation:livepulse 1.2s ease-in-out infinite}
+.loading{display:grid;place-items:center;min-height:50vh;color:var(--muted);text-align:center}
+.spin{width:30px;height:30px;border:3px solid #ddd6ca;border-top-color:var(--hazard);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.lightbox img{max-width:100%;max-height:80vh;display:block;margin:0 auto}
+@media (max-width:860px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .grid2,.docwrap{grid-template-columns:1fr}
+  .side{position:static;order:-1}
+  .side .acts{display:flex;flex-wrap:wrap;gap:8px}.side .acts .btn{width:auto;flex:1}
+  .sheet{padding:18px 14px}
+  .lh{flex-wrap:wrap}.lh .dt{margin-left:0;text-align:left;width:100%}
+  .dphotos{grid-template-columns:1fr 1fr}
+  .kv{grid-template-columns:1fr}.kv div:nth-child(odd){border-right:0}
+  .metat td.k{width:34%}
+}
+@media (max-width:640px){
+  .nav{display:none}
+  .bnav{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--steel);z-index:14;padding-bottom:env(safe-area-inset-bottom)}
+  .bnav button{flex:1;background:none;border:0;color:#aeb4ba;padding:10px 4px 9px;font-size:12px;font-weight:600}
+  .bnav button.on{color:#fff;box-shadow:inset 0 3px 0 var(--hazard)}
+  body.editing .bnav{display:none}
+  .fgrid{grid-template-columns:1fr}
+  .checks{grid-template-columns:1fr}
+  .pagehead h1{font-size:22px}
+  table.reg .hm{display:none}
+  .sigs{grid-template-columns:1fr!important}
+}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="brand" data-act="nav" data-v="home"><div class="mark" id="logoMark">SDE</div><div style="min-width:0"><b id="coName">Sadhana Demolition &amp; Engineering</b><small>Site Records</small></div></div>
+  <nav class="nav" id="nav">
+    <button data-act="nav" data-v="home">Projects</button>
+    <button data-act="nav" data-v="register">Document register</button>
+    <button data-act="nav" data-v="team" class="adminonly">Team</button>
+    <button data-act="nav" data-v="settings">Settings</button>
+  </nav>
+</div></header>
+<main id="main"><div class="loading"><div><div class="spin"></div>Loading site records…</div></div></main>
+<nav class="bnav" id="bnav">
+  <button data-act="nav" data-v="home">Projects</button>
+  <button data-act="nav" data-v="register">Register</button>
+  <button data-act="nav" data-v="team" class="adminonly">Team</button>
+  <button data-act="nav" data-v="settings">Settings</button>
+</nav>
+<div id="modal"></div>
+<script>
+/* ===== SETTINGS: Claude fills in your Firebase settings here ===== */
+window.APP_CONFIG = {
+  firebase: {
+    apiKey: "AIzaSyDTkytTSM2L4yFKg2JcD6kPwJeyOpRQdeU",
+    authDomain: "demolition-crew-8a675.firebaseapp.com",
+    projectId: "demolition-crew-8a675",
+    storageBucket: "demolition-crew-8a675.firebasestorage.app",
+    messagingSenderId: "200778512138",
+    appId: "1:200778512138:web:3095bcc947f4bd5358ecf3"
+  },
+  aiEndpoint: ''   // optional, for automatic English correction later
+};
+/* ================================================================= */
+</script>
+<script>
+/* ============================================================
+   Sadhana Demolition & Engineering — Site Records
+   ============================================================ */
+const COMPANY_DEFAULT = {
+  name: 'Sadhana Demolition & Engineering Sdn Bhd',
+  regNo: '', address: '', phone: '', email: '', logoId: ''
+};
+
+/* ---------- Document type definitions ---------- */
+const WEATHER = ['Sunny','Cloudy','Light rain','Heavy rain','Thunderstorm','No work (weather)'];
+const TYPES = {
+  DSR: {
+    name: 'Daily Site Report', code: 'DSR', blurb: 'Manpower, machinery, work done, photos',
+    sigs: [
+      {role:'Prepared by', hint:'Site Supervisor'},
+      {role:'Checked by', hint:'Project Manager'},
+      {role:'Acknowledged by', hint:'Client / Consultant'}
+    ],
+    done: 'Acknowledged',
+    title: d => 'Daily Site Report — ' + fmtDate(d.date),
+    dateField: 'date',
+    fields: [
+      {sec:'General'},
+      {k:'date', l:'Report date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'hours', l:'Working hours', t:'text', w:'half', def:'8:00am – 6:00pm'},
+      {k:'weatherAM', l:'Weather (morning)', t:'select', o:WEATHER, w:'half', def:'Sunny'},
+      {k:'weatherPM', l:'Weather (afternoon)', t:'select', o:WEATHER, w:'half', def:'Sunny'},
+      {sec:'Resources on site'},
+      {k:'manpower', l:'Manpower', t:'table', cols:[{k:'trade',l:'Trade / category'},{k:'qty',l:'No.',n:1,w:70},{k:'remarks',l:'Remarks'}],
+        def: () => [{trade:'Site supervisor',qty:'1'},{trade:'Safety officer / SSS',qty:'1'},{trade:'Machine operator',qty:''},{trade:'General worker',qty:''},{trade:'Gas cutter',qty:''}]},
+      {k:'machinery', l:'Plant & machinery', t:'table', cols:[{k:'item',l:'Equipment'},{k:'qty',l:'Qty',n:1,w:60},{k:'hrs',l:'Hours',n:1,w:70},{k:'remarks',l:'Remarks / condition'}],
+        def: () => [{item:'Excavator c/w hydraulic breaker'},{item:'Excavator c/w crusher / shear'},{item:'Tipper lorry'}]},
+      {sec:'Work progress'},
+      {k:'activities', l:'Work carried out today', t:'textarea', req:1, ph:'e.g. Demolished level 3 slab grid A–C, gas cutting of steel beams at roof level…'},
+      {k:'disposal', l:'Waste disposal / scrap removed', t:'table', cols:[{k:'material',l:'Material'},{k:'loads',l:'Trips',n:1,w:70},{k:'tonnes',l:'Tonnes',n:1,w:80},{k:'dest',l:'Destination / dumpsite'}],
+        def: () => [{material:'Concrete debris'},{material:'Scrap steel'}]},
+      {sec:'Safety & issues'},
+      {k:'safety', l:'Safety (toolbox talk, incidents, near-misses)', t:'textarea', ph:'Toolbox talk topic, any incident / near-miss, PPE compliance…'},
+      {k:'issues', l:'Issues / delays / instructions received', t:'textarea'},
+      {k:'tomorrow', l:'Plan for tomorrow', t:'textarea'}
+    ]
+  },
+  PR: {
+    name: 'Progress Report', code: 'PR', blurb: 'Weekly / monthly progress vs plan',
+    sigs: [
+      {role:'Prepared by', hint:'Site Engineer'},
+      {role:'Reviewed by', hint:'Project Manager'},
+      {role:'Acknowledged by', hint:'Client / Consultant'}
+    ],
+    done: 'Acknowledged',
+    title: d => (d.period || 'Progress') + ' Progress Report — ' + fmtDate(d.to),
+    dateField: 'to',
+    fields: [
+      {sec:'Reporting period'},
+      {k:'period', l:'Report type', t:'select', o:['Weekly','Fortnightly','Monthly'], w:'half', def:'Weekly'},
+      {k:'from', l:'Period from', t:'date', req:1, w:'half'},
+      {k:'to', l:'Period to', t:'date', req:1, w:'half', def: () => today()},
+      {k:'planned', l:'Overall planned progress (%)', t:'number', w:'half'},
+      {k:'actual', l:'Overall actual progress (%)', t:'number', req:1, w:'half'},
+      {sec:'Progress by work item'},
+      {k:'items', l:'Work items', t:'table', cols:[{k:'item',l:'Work item'},{k:'planned',l:'Plan %',n:1,w:80},{k:'actual',l:'Actual %',n:1,w:80},{k:'remarks',l:'Remarks'}],
+        def: () => ['Site possession, hoarding & signage','Soft strip & hazardous material removal','Disconnection of services','Structural demolition','Crushing, sorting & recycling','Debris & scrap disposal','Site clearance & handover'].map(item=>({item}))},
+      {sec:'Commentary'},
+      {k:'summary', l:'Key works completed this period', t:'textarea', req:1},
+      {k:'issues', l:'Issues, delays & mitigation', t:'textarea'},
+      {k:'safety', l:'Safety & environmental summary', t:'textarea', ph:'Man-hours, incidents, LTI, complaints, dust/noise monitoring…'},
+      {k:'lookahead', l:'Look-ahead (next period)', t:'textarea'},
+      {sec:'Progress photos'},
+      {k:'photosBefore', l:'Before', t:'photos', hint:'Condition at the start of this period'},
+      {k:'photosAfter', l:'After', t:'photos', hint:'Condition at the end of this period'}
+    ]
+  },
+  RFI: {
+    name: 'Request for Information', code: 'RFI', blurb: 'Questions to client / consultant',
+    sigs: [
+      {role:'Raised by', hint:'Sadhana — Engineer / Supervisor'},
+      {role:'Approved for issue by', hint:'Project Manager'},
+      {role:'Responded by', hint:'Consultant / Client', needsResponse:1, wait:'Pending response'}
+    ],
+    done: 'Closed',
+    title: d => d.subject || 'RFI',
+    dateField: 'issued',
+    fields: [
+      {sec:'Addressed to'},
+      {k:'to', l:'To (company)', t:'text', req:1, w:'half'},
+      {k:'attn', l:'Attention', t:'text', w:'half'},
+      {k:'issued', l:'Date issued', t:'date', req:1, w:'half', def: () => today()},
+      {k:'requiredBy', l:'Response required by', t:'date', w:'half'},
+      {sec:'Request'},
+      {k:'subject', l:'Subject', t:'text', req:1},
+      {k:'discipline', l:'Discipline', t:'select', o:['Structural','Civil','Architectural','M&E / Services','Safety / Authority','Contractual','Others'], w:'half', def:'Structural'},
+      {k:'reference', l:'Drawing / spec reference', t:'text', w:'half'},
+      {k:'question', l:'Information requested', t:'textarea', req:1},
+      {k:'proposal', l:'Contractor\'s proposed solution (if any)', t:'textarea'},
+      {k:'impact', l:'Potential impact', t:'select', o:['None','Time','Cost','Time & cost','Safety'], w:'half', def:'None'},
+      {sec:'Response', phase:'response'},
+      {k:'response', l:'Response', t:'textarea', phase:'response', req:1},
+      {k:'respDate', l:'Response date', t:'date', phase:'response', w:'half', def: () => today()},
+      {k:'respAction', l:'Action', t:'select', phase:'response', o:['Proceed as proposed','Proceed with comments','Revised drawing to follow','Site instruction to follow','For information only'], w:'half'}
+    ]
+  },
+  TR: {
+    name: 'Transmittal', code: 'TR', blurb: 'Documents & drawings sent out',
+    sigs: [
+      {role:'Sent by', hint:'Sadhana'},
+      {role:'Received by', hint:'Recipient'}
+    ],
+    done: 'Received',
+    title: d => 'Transmittal to ' + (d.to || '—'),
+    dateField: 'date',
+    fields: [
+      {sec:'Recipient'},
+      {k:'to', l:'To (company)', t:'text', req:1, w:'half'},
+      {k:'attn', l:'Attention', t:'text', w:'half'},
+      {k:'cc', l:'CC', t:'text', w:'half'},
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'purpose', l:'Purpose', t:'select', o:['For approval','For information','For review & comment','For construction','For record','As requested'], w:'half', def:'For approval'},
+      {k:'via', l:'Sent via', t:'select', o:['Email','By hand','Courier','Registered post','Online portal'], w:'half', def:'Email'},
+      {sec:'Items transmitted'},
+      {k:'items', l:'Documents / drawings', t:'table', req:1, cols:[{k:'docNo',l:'Doc / drawing no.'},{k:'title',l:'Title / description'},{k:'rev',l:'Rev',w:60},{k:'copies',l:'Copies',n:1,w:70}],
+        def: () => [{copies:'1'}]},
+      {k:'remarks', l:'Remarks', t:'textarea'}
+    ]
+  },
+  TBT: {
+    name: 'Toolbox Talk', code: 'TBT', blurb: 'Safety briefing & attendance',
+    sigs: [
+      {role:'Conducted by', hint:'Supervisor / Safety Officer'},
+      {role:'Verified by', hint:'Safety & Health Officer'}
+    ],
+    done: 'Verified',
+    title: d => 'Toolbox Talk — ' + (d.topic || fmtDate(d.date)),
+    dateField: 'date',
+    fields: [
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'time', l:'Time', t:'text', w:'half', def:'8:00am'},
+      {k:'topic', l:'Topic', t:'text', req:1, ph:'e.g. Working near demolition edge / Hot work safety'},
+      {k:'location', l:'Location on site', t:'text', w:'half'},
+      {k:'duration', l:'Duration', t:'text', w:'half', def:'15 min'},
+      {k:'points', l:'Key points discussed', t:'textarea', req:1},
+      {k:'attendees', l:'Attendance', t:'table', cols:[{k:'name',l:'Name'},{k:'company',l:'Company / trade'},{k:'id',l:'IC / passport no.'}],
+        def: () => [{},{},{},{}]}
+    ]
+  },
+  PTW: {
+    name: 'Permit to Work', code: 'PTW', blurb: 'Hot work, height, lifting & more',
+    sigs: [
+      {role:'Applied by', hint:'Supervisor in charge'},
+      {role:'Verified by', hint:'Safety Officer'},
+      {role:'Approved by', hint:'Project Manager'},
+      {role:'Closed out by', hint:'Supervisor — work done, area safe', needsResponse:1, wait:'Pending close-out'}
+    ],
+    done: 'Closed',
+    title: d => (d.ptype || 'Permit') + ' — ' + (d.location || ''),
+    dateField: 'from',
+    fields: [
+      {sec:'Permit details'},
+      {k:'ptype', l:'Permit type', t:'select', req:1, o:['Hot work (gas cutting / welding)','Work at height','Lifting operation','Confined space','Excavation','Electrical isolation','General demolition'], def:'Hot work (gas cutting / welding)'},
+      {k:'location', l:'Exact location', t:'text', req:1},
+      {k:'from', l:'Valid from', t:'datetime', req:1, w:'half'},
+      {k:'until', l:'Valid until', t:'datetime', req:1, w:'half'},
+      {k:'desc', l:'Description of work', t:'textarea', req:1},
+      {k:'workers', l:'Workers involved', t:'table', cols:[{k:'name',l:'Name'},{k:'id',l:'IC / passport'},{k:'role',l:'Role'}], def: () => [{},{}]},
+      {sec:'Precautions'},
+      {k:'checks', l:'Precautions in place', t:'checks', o:['Fire extinguisher at work area','Fire watch assigned','Combustibles removed / covered','Gas cylinders secured, flashback arrestors fitted','Full body harness & lifeline','Edge protection / barricade','Signage & exclusion zone','Gas test carried out','Services isolated (LOTO)','Lifting plan & rigger appointed','PPE checked','Emergency rescue plan briefed']},
+      {k:'other', l:'Other precautions / hazards', t:'textarea'},
+      {sec:'Close-out', phase:'response'},
+      {k:'closeNote', l:'Close-out remarks (work completed, area inspected & safe)', t:'textarea', phase:'response', req:1},
+      {k:'closeTime', l:'Closed at', t:'datetime', phase:'response'}
+    ]
+  }
+};
+const TYPE_KEYS = Object.keys(TYPES);
+
+/* ---------- utils ---------- */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad2 = n => String(n).padStart(2,'0');
+const today = () => { const d = new Date(); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); };
+function fmtDate(s){ if(!s) return '—'; const d = new Date(String(s).length===10 ? s+'T00:00:00' : s); if(isNaN(d)) return String(s); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+function fmtDT(s){ if(!s) return '—'; const d = new Date(s); if(isNaN(d)) return String(s); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+', '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+const clone = o => JSON.parse(JSON.stringify(o));
+const blobUrl = id => (S.photoCache && S.photoCache[id]) || PHOTO_PLACEHOLDER_SAFE;
+const PHOTO_PLACEHOLDER_SAFE = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+const photoAttr = id => `src="${blobUrl(id)}" data-pid="${esc(id)}"`;
+const isEmpty = v => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
+function toast(msg, bad){ const t = document.createElement('div'); t.className = 'toast' + (bad?' bad':''); t.textContent = msg; document.body.appendChild(t); setTimeout(()=>t.remove(), bad?4500:2600); }
+
+/* ---------- state ---------- */
+const S = {
+  sample:null, voice:null, fixUndo:{}, db:null, user:null, assets:null, dl:null, me:null, canWrite:true, canEdit:false,
+  projects:[], docs:[], company:{...COMPANY_DEFAULT}, names:{}, loaded:{p:0,d:0},
+  view:{name:'home'}, draft:null, respMode:false, uploads:{}, modalOpen:false, dirty:false
+};
+const projById = id => S.projects.find(p => p.id === id);
+const docById = id => S.docs.find(d => d.id === id);
+const company = () => ({...COMPANY_DEFAULT, ...S.company});
+
+function nextSigIndex(d){ const T = TYPES[d.type]; const s = d.signatures || []; for(let i=0;i<T.sigs.length;i++) if(!s[i]) return i; return -1; }
+function statusOf(d){
+  const T = TYPES[d.type]; const n = nextSigIndex(d);
+  if(n === 0) return {label:'Draft', cls:'draft', next:0};
+  if(n === -1) return {label:T.done, cls:'done', next:-1};
+  return {label: T.sigs[n].wait || ('Pending ' + T.sigs[n].hint.split(/ — | \/ /)[0]), full:'Awaiting: '+T.sigs[n].role+' ('+T.sigs[n].hint+')', cls:'pending', next:n};
+}
+const pill = d => { const s = statusOf(d); return `<span class="pill ${s.cls}"><span class="dot"></span>${esc(s.label)}</span>`; };
+const docDate = d => d.data?.[TYPES[d.type].dateField] || d.createdAt;
+const docTitle = d => { try { return TYPES[d.type].title(d.data || {}); } catch(e){ return TYPES[d.type].name; } };
+const nameOf = id => (id && S.names[id]) || 'Team member';
+
+async function resolveNames(ids){
+  if(!S.user || !S.user.profiles) return;
+  const need = [...new Set(ids.filter(id => id && !(id in S.names)))];
+  if(!need.length) return;
+  need.forEach(id => S.names[id] = '');
+  try {
+    const ps = await S.user.profiles(need);
+    let changed = false;
+    need.forEach(id => { const n = ps?.[id]?.name || ''; if(n){ S.names[id] = n; changed = true; } });
+    if(changed) softRender();
+  } catch(e){}
+}
+
+/* ---------- routing / render ---------- */
+function go(name, params={}){
+  if(typeof stopDictation === 'function') stopDictation();
+  if(S.view.name === 'edit' && S.dirty && name !== 'edit'){
+    return confirmBox('Leave without saving?', 'Your changes to this document have not been saved.', 'Leave', () => { S.dirty = false; go(name, params); });
+  }
+  S.view = {name, ...params}; S.dirty = false;
+  render(); window.scrollTo(0,0);
+}
+function softRender(){ if(S.view.name === 'edit' || S.modalOpen) return; render(); }
+function render(){
+  const v = S.view, m = $('#main');
+  document.body.classList.toggle('editing', v.name === 'edit');
+  document.querySelectorAll('[data-act=nav]').forEach(b => b.classList.toggle('on', b.dataset.v === (v.name==='project'||v.name==='doc'||v.name==='edit' ? 'home' : v.name)));
+  if(window.innerWidth <= 640){ const bn = $('#bnav'); if(bn) bn.querySelectorAll('button').forEach(x=>x.style.flex='1'); }
+  const c = company();
+  $('#coName').textContent = c.name.replace(/\s+Sdn\.? Bhd\.?$/i,'');
+  $('#logoMark').innerHTML = c.logoId ? `<img ${photoAttr(c.logoId)} alt="">` : 'SDE';
+  document.querySelectorAll('.adminonly').forEach(b => b.style.display = S.canEdit ? '' : 'none');
+  const signedIn = S.authState === 'in';
+  $('#nav').style.visibility = signedIn ? '' : 'hidden'; $('#bnav').style.display = signedIn ? '' : 'none';
+  if(S.authState === 'nosetup'){ m.innerHTML = setupNeededView(); return; }
+  if(S.authState === 'out'){ m.innerHTML = loginView(S.authMode); return; }
+  if(S.authState === 'pending'){ m.innerHTML = pendingView(); return; }
+  if(S.authState !== 'in' || !S.db){ m.innerHTML = '<div class="loading"><div><div class="spin"></div>Loading…</div></div>'; return; }
+  if(!S.loaded.p || !S.loaded.d){ m.innerHTML = '<div class="loading"><div><div class="spin"></div>Loading site records…</div></div>'; return; }
+  let html = '';
+  try {
+    switch(v.name){
+      case 'project': html = projectView(v.id, v.tab); break;
+      case 'doc': html = docView(v.id); break;
+      case 'edit': html = editView(); break;
+      case 'register': html = registerView(); break;
+      case 'settings': html = settingsView(); break;
+      case 'team': html = teamView(); break;
+      default: html = homeView();
+    }
+  } catch(e){ console.error(e); html = `<div class="card pad">Something went wrong showing this page. <button class="btn sm" data-act="nav" data-v="home">Back to projects</button></div>`; }
+  m.innerHTML = html;
+  if(v.name === 'register') applyRegFilter();
+}
+function noDbView(){
+  return `<div class="card pad" style="max-width:560px;margin:40px auto;text-align:center">
+    <h2 style="margin-bottom:8px">Sign in to use Site Records</h2>
+    <p class="muted">This app keeps your project records in a shared database. Open it while signed in to Claude, from a link the owner has shared with you.</p></div>`;
+}
+
+/* ---------- HOME ---------- */
+function homeView(){
+  const t = today();
+  const active = S.projects.filter(p => (p.status||'Active') === 'Active').sort((a,b)=>a.name.localeCompare(b.name));
+  const others = S.projects.filter(p => (p.status||'Active') !== 'Active').sort((a,b)=>a.name.localeCompare(b.name));
+  const pending = S.docs.filter(d => statusOf(d).cls === 'pending' && projById(d.projectId));
+  const drafts = S.docs.filter(d => statusOf(d).cls === 'draft' && projById(d.projectId));
+  const todayDone = active.filter(p => S.docs.some(d => d.projectId===p.id && d.type==='DSR' && d.data?.date===t && nextSigIndex(d)!==0));
+  const monthKey = t.slice(0,7);
+  const monthDocs = S.docs.filter(d => (d.createdAt||'').slice(0,7) === monthKey).length;
+
+  const todayList = active.length ? active.map(p => {
+    const dsr = S.docs.find(d => d.projectId===p.id && d.type==='DSR' && d.data?.date===t);
+    const ok = dsr && nextSigIndex(dsr) !== 0;
+    return `<div class="it"><div class="tick ${ok?'y':'n'}">${ok?'✓':'!'}</div>
+      <div class="t"><b>${esc(p.name)}</b><span>${ok ? 'Submitted — '+esc(statusOf(dsr).label) : dsr ? 'Draft started, not yet signed' : 'No daily report yet'}</span></div>
+      ${ok ? `<button class="btn sm" data-act="open" data-id="${esc(dsr.id)}">View</button>` : dsr ? `<button class="btn sm pri" data-act="edit" data-id="${esc(dsr.id)}">Continue</button>` : S.canWrite ? `<button class="btn sm pri" data-act="new" data-p="${esc(p.id)}" data-t="DSR">Start</button>` : ''}
+    </div>`;
+  }).join('') : `<div class="empty">No active projects yet.</div>`;
+
+  const pendList = pending.length ? pending.slice(0,8).map(d => docRow(d, true)).join('') : `<div class="empty small">Nothing waiting for signature.</div>`;
+
+  return `
+  <div class="pagehead"><div><div class="eyebrow">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><h1>Projects</h1></div><div class="sp"></div>
+    ${S.canWrite ? `<button class="btn pri" data-act="newproj">+ New project</button>` : ''}</div>
+  ${installBanner()}
+  <div class="kpis">
+    <div class="card kpi"><span class="eyebrow">Active projects</span><b>${active.length}</b></div>
+    <div class="card kpi ${todayDone.length<active.length?'alert':''}"><span class="eyebrow">Daily reports today</span><b>${todayDone.length}/${active.length}</b></div>
+    <div class="card kpi ${pending.length?'alert':''}"><span class="eyebrow">Awaiting signature</span><b>${pending.length}</b></div>
+    <div class="card kpi"><span class="eyebrow">Documents this month</span><b>${monthDocs}</b></div>
+  </div>
+  <div class="grid2" style="margin-bottom:22px">
+    <div class="card today"><div class="sechead"><h3>Today's daily site reports</h3><div class="sp"></div><span class="small muted">${fmtDate(t)}</span></div><div class="list">${todayList}</div></div>
+    <div class="card"><div class="sechead"><h3>Awaiting signature</h3><div class="sp"></div>${drafts.length?`<span class="small muted">${drafts.length} draft${drafts.length>1?'s':''}</span>`:''}</div><div class="list">${pendList}</div></div>
+  </div>
+  ${S.projects.length ? `
+    <h3 style="margin:0 0 10px;font-size:16px">Active</h3>
+    <div class="projgrid">${active.map(projCard).join('') || '<div class="muted small">None</div>'}</div>
+    ${others.length ? `<h3 style="margin:24px 0 10px;font-size:16px">Completed & on hold</h3><div class="projgrid">${others.map(projCard).join('')}</div>`:''}
+  ` : `<div class="card empty"><h3 style="color:var(--ink);margin-bottom:6px">Set up your first project</h3><p>Each project keeps its own daily reports, progress reports, RFIs, transmittals, toolbox talks and permits — signed and filed.</p>${S.canWrite?'<button class="btn pri" data-act="newproj">+ New project</button>':''}</div>`}`;
+}
+function projCard(p){
+  const ds = S.docs.filter(d => d.projectId === p.id);
+  const c = k => ds.filter(d => d.type === k).length;
+  return `<div class="card proj" data-s="${esc(p.status||'Active')}" data-act="proj" data-id="${esc(p.id)}">
+    <span class="pill type">${esc(p.code)}</span>${(p.status&&p.status!=='Active')?` <span class="pill draft">${esc(p.status)}</span>`:''}
+    <h3>${esc(p.name)}</h3>
+    <div class="meta">${esc(p.client||'—')}${p.location?' · '+esc(p.location):''}</div>
+    <div class="counts"><div><b>${c('DSR')}</b>Daily</div><div><b>${c('PR')}</b>Progress</div><div><b>${c('RFI')}</b>RFI</div><div><b>${ds.length}</b>Total</div></div>
+  </div>`;
+}
+function docRow(d, showProj){
+  const p = projById(d.projectId);
+  return `<div class="it" data-act="open" data-id="${esc(d.id)}">
+    <span class="pill type">${esc(d.type)}</span>
+    <div class="t"><b>${esc(docTitle(d))}</b><span><span class="mono">${esc(d.number)}</span>${showProj&&p?' · '+esc(p.name):''}</span></div>${pill(d)}</div>`;
+}
+
+/* ---------- PROJECT ---------- */
+function projectView(id, tab){
+  const p = projById(id);
+  loadProjectDocs(id);
+  if(!p) return `<div class="card empty">Project not found. <button class="btn sm" data-act="nav" data-v="home">Back</button></div>`;
+  tab = tab || 'ALL';
+  const all = S.docs.filter(d => d.projectId === id);
+  const ds = (tab === 'ALL' ? all : all.filter(d => d.type === tab)).sort((a,b) => String(docDate(b)).localeCompare(String(docDate(a))) || String(b.number).localeCompare(String(a.number)));
+  const tabs = ['ALL', ...TYPE_KEYS].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
+  return `
+  <button class="crumb" data-act="nav" data-v="home">← All projects</button>
+  <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
+  ${S.canWrite?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
+  <div class="card projinfo">
+    <div><span>Client</span>${esc(p.client||'—')}</div><div><span>Consultant</span>${esc(p.consultant||'—')}</div>
+    <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
+    <div><span>Period</span>${fmtDate(p.start)} – ${fmtDate(p.end)}</div><div><span>Project manager</span>${esc(p.pm||'—')}</div>
+  </div>
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="eyebrow" style="margin-bottom:8px">Create new</div><div class="newgrid">${TYPE_KEYS.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  <div class="tabs">${tabs}</div>
+  <div class="card">${ds.length ? `<table class="reg"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
+    ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
+  </tbody></table>` : `<div class="empty">No ${tab==='ALL'?'documents':TYPES[tab].name.toLowerCase()+'s'} yet.</div>`}</div>`;
+}
+
+/* ---------- REGISTER ---------- */
+function registerView(){
+  const rows = [...S.docs].filter(d => projById(d.projectId)).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return `<div class="pagehead"><div><div class="eyebrow">All projects</div><h1>Document register</h1></div><div class="sp"></div>${S.dl?'<button class="btn" data-act="csv">Export CSV</button>':''}</div>
+  <div class="card">
+    <div class="filters">
+      <input id="fq" placeholder="Search number, title, project…" data-filter>
+      <select id="fp" data-filter><option value="">All projects</option>${S.projects.map(p=>`<option value="${esc(p.id)}">${esc(p.code)} — ${esc(p.name)}</option>`).join('')}</select>
+      <select id="ft" data-filter><option value="">All types</option>${TYPE_KEYS.map(k=>`<option value="${k}">${TYPES[k].name}</option>`).join('')}</select>
+      <select id="fs" data-filter><option value="">Any status</option><option value="draft">Draft</option><option value="pending">Awaiting signature</option><option value="done">Completed</option></select>
+    </div>
+    ${rows.length ? `<table class="reg"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Project</th><th class="hm">Date</th><th>Status</th></tr></thead><tbody id="regbody">
+      ${rows.map(d => { const p = projById(d.projectId); const s = statusOf(d);
+        return `<tr class="click" data-act="open" data-id="${esc(d.id)}" data-p="${esc(d.projectId)}" data-t="${d.type}" data-s="${s.cls}" data-q="${esc((d.number+' '+docTitle(d)+' '+p.name+' '+p.code).toLowerCase())}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm">${esc(p.code)}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td>${pill(d)}</td></tr>`; }).join('')}
+    </tbody></table><div id="regnone" class="empty" style="display:none">No matching documents.</div>` : '<div class="empty">No documents yet.</div>'}
+  </div>
+  ${S.recentFull && !S.allLoaded ? `<div style="text-align:center;margin-top:12px"><button class="btn" data-act="loadall">Load older documents</button><div class="small muted" style="margin-top:4px">Showing the latest ${RECENT_LIMIT}. Open a project to see all of its documents.</div></div>` : ''}`;
+}
+function applyRegFilter(){
+  const q = ($('#fq')?.value||'').toLowerCase().trim(), p = $('#fp')?.value, t = $('#ft')?.value, s = $('#fs')?.value;
+  let n = 0;
+  document.querySelectorAll('#regbody tr').forEach(tr => {
+    const ok = (!q || tr.dataset.q.includes(q)) && (!p || tr.dataset.p===p) && (!t || tr.dataset.t===t) && (!s || tr.dataset.s===s);
+    tr.style.display = ok ? '' : 'none'; if(ok) n++;
+  });
+  const none = $('#regnone'); if(none) none.style.display = n ? 'none' : '';
+}
+async function exportCSV(){
+  const q = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+  const lines = [['Doc no.','Type','Title','Project code','Project','Date','Status','Prepared by','Created'].map(q).join(',')];
+  [...S.docs].filter(d=>projById(d.projectId)).sort((a,b)=>String(a.number).localeCompare(String(b.number))).forEach(d => {
+    const p = projById(d.projectId);
+    lines.push([d.number, TYPES[d.type].name, docTitle(d), p.code, p.name, docDate(d), statusOf(d).label, d.signatures?.[0]?.name||'', d.createdAt].map(q).join(','));
+  });
+  try { await S.dl.save({filename:'Sadhana-document-register-'+today()+'.csv', data:'﻿'+lines.join('\r\n')}); }
+  catch(e){ if(e?.code !== 'declined') toast('Could not save the file.', true); }
+}
+
+/* ---------- SETTINGS ---------- */
+function settingsView(){
+  const c = company(), ed = S.canEdit;
+  const f = (k,l,ph='') => `<div class="fld ${k==='address'?'':'half'}"><label>${l}</label>${k==='address'?`<textarea data-set="${k}" ${ed?'':'disabled'} style="min-height:70px">${esc(c[k])}</textarea>`:`<input data-set="${k}" value="${esc(c[k])}" placeholder="${esc(ph)}" ${ed?'':'disabled'}>`}</div>`;
+  return `<div class="pagehead"><div><div class="eyebrow">Letterhead & company details</div><h1>Settings</h1></div></div>
+  <div class="card pad form">
+    ${ed?'':'<p class="muted small" style="margin-top:0">Only admins can change company details.</p>'}
+    <div class="fgrid">
+      ${f('name','Company name')}${f('regNo','Company registration no.','e.g. 201901012345 (1234567-X)')}
+      ${f('address','Address')}
+      ${f('phone','Phone')}${f('email','Email')}
+      <div class="fld"><label>Logo (shown on every report & PDF)</label>
+        <div class="row">${c.logoId?`<img ${photoAttr(c.logoId)} style="height:56px;border:1px solid var(--line);border-radius:6px;padding:4px;background:#fff">`:'<span class="muted small">No logo uploaded — the "SDE" mark is used.</span>'}
+        ${ed && S.assets ? `<label class="btn sm" style="margin:0">Upload logo<input type="file" accept="image/*" data-logo hidden></label>${c.logoId?'<button class="btn sm ghost danger" data-act="rmlogo">Remove</button>':''}`:''}</div></div>
+    </div>
+    ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
+  </div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div>
+    <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
+  <div class="card pad form" style="margin-top:16px">
+    <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
+    <ul class="small" style="margin:0;padding-left:18px;color:#45494e">
+      <li>Every document is numbered automatically per project, e.g. <span class="mono">${esc(S.projects[0]?.code||'PRJ01')}-DSR-001</span>.</li>
+      <li>A document can be edited only while it's a draft. Once the first person signs, it is locked and moves through the signing chain.</li>
+      <li>Each signature records the signer's name, designation, drawn signature, and the date and time.</li>
+      <li>${ed?'As an admin you':'Admins'} can return a signed document to draft (this clears its signatures) or delete it.</li>
+      <li>Any document can be downloaded as a PDF with your letterhead, photos and signatures.</li>
+    </ul>
+  </div>`;
+}
+
+/* ---------- DOC VIEW ---------- */
+function valueText(f, v){
+  if(f.t === 'date') return fmtDate(v);
+  if(f.t === 'datetime') return fmtDT(v);
+  if(f.t === 'checks') return (v||[]).join(', ');
+  return v ?? '';
+}
+function cleanRows(f, rows){ return (rows||[]).filter(r => f.cols.some(c => !isEmpty(r?.[c.k]))); }
+function docBodyHTML(d){
+  const T = TYPES[d.type], data = d.data || {};
+  const st = statusOf(d);
+  const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase==='response' && !isEmpty(data[f.k]));
+  let out = '', kv = [];
+  const flushKV = () => { if(kv.length){ out += `<div class="kv">${kv.join('')}${kv.length%2?'<div></div>':''}</div>`; kv = []; } };
+  let secOpen = false;
+  const openSec = (title) => { flushKV(); out += `<div class="dsec"><h4>${esc(title)}</h4>`; secOpen = true; };
+  const closeSec = () => { flushKV(); if(secOpen) out += `</div>`; secOpen = false; };
+  for(const f of T.fields){
+    if(f.phase === 'response' && !showResp) continue;
+    if(f.sec){ closeSec(); openSec(f.sec); continue; }
+    if(['date','datetime','select','text','number'].includes(f.t)){
+      if(d.type==='PR' && (f.k==='planned'||f.k==='actual')) continue;
+      if(!secOpen) openSec('Details');
+      kv.push(`<div><span>${esc(f.l)}</span>${esc(valueText(f, data[f.k])) || '—'}</div>`);
+      continue;
+    }
+    flushKV();
+    const wrapStart = secOpen ? '' : '<div class="dsec">';
+    const wrapEnd = secOpen ? '' : '</div>';
+    const head = `<h4 style="${secOpen?'background:#faf8f4;color:#3a3f45;border:1px solid var(--line);border-top:0':''}">${esc(f.l)}</h4>`;
+    if(f.t === 'textarea' || f.t === 'checks'){
+      out += wrapStart + head + `<div class="body">${esc(valueText(f, data[f.k])) || '<span class="muted">—</span>'}</div>` + wrapEnd;
+    } else if(f.t === 'table'){
+      const rows = cleanRows(f, data[f.k]);
+      out += wrapStart + head + (rows.length ? `<table><thead><tr>${f.cols.map(c=>`<th>${esc(c.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${f.cols.map(c=>`<td>${esc(r[c.k])}</td>`).join('')}</tr>`).join('')}${tableTotals(f, rows)}</tbody></table>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
+    } else if(f.t === 'photos'){
+      const ph = data[f.k] || [];
+      out += wrapStart + head + (ph.length ? `<div class="dphotos">${ph.map((p,i)=>`<figure><img ${photoAttr(p.id)} data-act="zoom" data-zid="${esc(p.id)}" data-cap="${esc(p.caption||'')}" alt=""><figcaption>${i+1}. ${esc(p.caption||'')}</figcaption></figure>`).join('')}</div>` : `<div class="body"><span class="muted">No photos</span></div>`) + wrapEnd;
+    }
+    if(d.type==='PR' && f.k==='to'){}
+  }
+  closeSec();
+  if(d.type === 'PR'){
+    const a = +data.actual || 0, pl = +data.planned || 0, varc = a - pl;
+    out = `<div class="dsec"><h4>Overall progress</h4><div class="body" style="white-space:normal">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px"><span><b style="font:800 22px Archivo">${a}%</b> actual</span><span class="muted">Planned ${pl||'—'}${pl?'%':''}${pl?` · <b style="color:${varc<0?'var(--bad)':'var(--ok)'}">${varc>0?'+':''}${varc.toFixed(1).replace(/\.0$/,'')}%</b> ${varc<0?'behind':'ahead'}`:''}</span></div>
+      <div class="prog"><i style="width:${Math.min(100,a)}%"></i>${pl?`<s style="left:${Math.min(100,pl)}%"></s>`:''}</div></div></div>` + out;
+  }
+  return out;
+}
+function tableTotals(f, rows){
+  const numCols = f.cols.filter(c => c.n && !/%/.test(c.l));
+  if(!numCols.length || rows.length < 2) return '';
+  return `<tr style="font-weight:700;background:#faf8f4">${f.cols.map((c,i) => { if(i===0) return '<td>Total</td>'; if(numCols.includes(c) && rows.some(r=>!isEmpty(r[c.k]))){ const s = rows.reduce((a,r)=>a+(parseFloat(r[c.k])||0),0); return `<td>${+s.toFixed(2)}</td>`; } return '<td></td>'; }).join('')}</tr>`;
+}
+function letterheadHTML(d){
+  const c = company(), T = TYPES[d.type];
+  return `<div class="lh"><div class="mark">${c.logoId?`<img ${photoAttr(c.logoId)} alt="">`:'SDE'}</div>
+    <div class="co"><b>${esc(c.name)}</b><div>${c.regNo?esc(c.regNo)+'<br>':''}${esc(c.address).replace(/\n/g,'<br>')}${(c.phone||c.email)?'<br>'+[c.phone&&'Tel: '+esc(c.phone), c.email&&esc(c.email)].filter(Boolean).join(' · '):''}</div></div>
+    <div class="dt"><h2>${esc(T.name)}</h2><div class="mono">${esc(d.number)}</div></div></div>`;
+}
+function docView(id){
+  const d = docById(id);
+  if(!d) return `<div class="card empty">Document not found — it may have been deleted. <button class="btn sm" data-act="nav" data-v="home">Back</button></div>`;
+  const T = TYPES[d.type], p = projById(d.projectId) || {}, st = statusOf(d), sigs = d.signatures || [];
+  const needResp = st.next >= 0 && T.sigs[st.next].needsResponse;
+  const respFilled = T.fields.filter(f => f.phase==='response' && f.req).every(f => !isEmpty(d.data?.[f.k]));
+  const cols = Math.min(T.sigs.length, 4);
+  const sigHTML = T.sigs.map((s,i) => {
+    const g = sigs[i];
+    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div><div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div><div class="nm">${esc(g.name)}</div><div class="ds">${esc(g.designation||'')}</div><div class="when">${fmtDT(g.at)}</div></div>`;
+    const isNext = i === st.next;
+    const blocked = isNext && s.needsResponse && !respFilled;
+    return `<div class="sig wait ${isNext?'next':''}"><div class="role">${esc(s.role)}</div><div class="img">${isNext && S.canWrite ? (blocked ? `<span>Add the ${T.code==='PTW'?'close-out remarks':'response'} first</span>` : `<button class="btn pri sm" data-act="sign" data-id="${esc(d.id)}" data-i="${i}">✍ Sign here</button>`) : `<span>${isNext?'Awaiting signature':'Pending'}</span>`}</div><div class="ds">${esc(s.hint)}</div></div>`;
+  }).join('');
+  const trail = [`<div><i></i><span>Created ${fmtDT(d.createdAt)}<br><span class="muted">by ${esc(nameOf(d.createdBy))}</span></span></div>`]
+    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b><br><span class="muted">${fmtDT(sigs[i].at)}</span></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('');
+  return `
+  <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
+  <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
+  <div class="docwrap">
+    <div class="sheet" id="sheet">
+      ${letterheadHTML(d)}
+      <table class="metat"><tr><td class="k">Project</td><td>${esc(p.name)}</td><td class="k">Doc no.</td><td class="mono">${esc(d.number)}</td></tr>
+        <tr><td class="k">Client</td><td>${esc(p.client||'—')}</td><td class="k">Date</td><td>${T.fields.find(f=>f.k===T.dateField)?.t==='datetime'?fmtDT(docDate(d)):fmtDate(docDate(d))}</td></tr>
+        <tr><td class="k">Location</td><td>${esc(p.location||'—')}</td><td class="k">Contract no.</td><td>${esc(p.contractNo||'—')}</td></tr></table>
+      ${docBodyHTML(d)}
+      <div class="sigs" style="grid-template-columns:repeat(${cols},1fr)">${sigHTML}</div>
+    </div>
+    <aside class="side">
+      <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
+        ${st.next===0 && S.canWrite ? `<button class="btn pri" data-act="edit" data-id="${esc(d.id)}">Edit draft</button>`:''}
+        ${needResp && S.canWrite ? `<button class="btn ${respFilled?'':'pri'}" data-act="respond" data-id="${esc(d.id)}">${respFilled?'Edit':'Add'} ${T.code==='PTW'?'close-out':'response'}</button>`:''}
+        ${st.next>0 && S.canWrite && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
+        <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF</button>
+        ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
+        ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
+        ${(S.canEdit || (st.next===0 && d.createdBy===S.me)) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">Delete</button>`:''}
+      </div></div>
+      <div class="card"><div class="eyebrow" style="margin-bottom:8px">Record trail</div><div class="trail">${trail}</div></div>
+    </aside>
+  </div>`;
+}
+
+/* ---------- EDITOR ---------- */
+function newDraft(pid, type){
+  const T = TYPES[type], data = {};
+  T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
+  if(type === 'PR'){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); }
+  if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); data.until = iso(u); }
+  return {projectId:pid, type, data, signatures:[]};
+}
+const MIC_SMALL = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg>';
+function micBtn(k){ return (!S.sample && SR) ? `<button type="button" class="fmic" data-act="dictate" data-k="${k}" aria-label="Speak into this box">${MIC_SMALL}</button>` : ''; }
+/* Speak straight into one box (no AI): the phone's own speech recognition, Malay or English. */
+const DICT = {rec:null, k:null};
+function stopDictation(){
+  const r = DICT.rec; DICT.rec = null;
+  if(r){ try { r.stop(); } catch(e){} }
+  document.querySelectorAll('.fmic.live').forEach(b => b.classList.remove('live'));
+  DICT.k = null;
+}
+function startDictation(k, btn){
+  if(DICT.k === k){ stopDictation(); return; }
+  stopDictation();
+  const el = document.querySelector(`[data-f="${k}"]`); if(!el) return;
+  let rec; try { rec = new SR(); } catch(e){ toast('Voice typing isn\'t supported in this browser — use Chrome.', true); return; }
+  rec.lang = S.voiceLang || 'ms-MY'; rec.continuous = true; rec.interimResults = true;
+  const base = el.value.replace(/\s+$/,''); let finals = '';
+  const cap = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+  rec.onresult = ev => {
+    let interim = '';
+    for(let i = ev.resultIndex; i < ev.results.length; i++){ const r = ev.results[i]; if(r.isFinal) finals += r[0].transcript.trim() + ' '; else interim += r[0].transcript; }
+    const said = cap((finals + interim).replace(/\s+/g,' ').trim());
+    const sep = !base ? '' : (el.tagName === 'TEXTAREA' && /[.!?]$/.test(base) ? '\n' : (/[.!?,]$/.test(base) ? ' ' : '. '));
+    el.value = base + (said ? sep + said : '');
+    S.draft.data[k] = el.value; S.dirty = true; el.closest('.fld')?.classList.remove('err');
+  };
+  rec.onerror = ev => {
+    if(['not-allowed','service-not-allowed','audio-capture'].includes(ev.error)){ toast('Microphone is blocked — tap the icon beside the web address → Permissions → allow Microphone.', true); stopDictation(); }
+    else if(ev.error !== 'no-speech' && ev.error !== 'aborted'){ toast('Voice stopped (' + ev.error + ').', true); stopDictation(); }
+  };
+  rec.onend = () => { if(DICT.rec === rec){ try { rec.start(); } catch(e){ stopDictation(); } } };
+  try { rec.start(); } catch(e){ toast('Could not start the microphone.', true); return; }
+  DICT.rec = rec; DICT.k = k; btn.classList.add('live');
+}
+function fieldInput(f, v){
+  const dk = `data-f="${f.k}"`;
+  switch(f.t){
+    case 'textarea': return `<div class="dict"><textarea ${dk} placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>${micBtn(f.k)}</div>${S.sample?`<div class="fixrow">${f.k in S.fixUndo?`<button class="undo" data-act="undofix" data-k="${f.k}">Undo</button>`:''}<button class="aibtn" data-act="fixen" data-k="${f.k}">✨ Fix English</button></div>`:''}`;
+    case 'date': return `<input type="date" ${dk} value="${esc(v)}">`;
+    case 'datetime': return `<input type="datetime-local" ${dk} value="${esc(v)}">`;
+    case 'number': return `<input type="number" inputmode="decimal" step="any" ${dk} value="${esc(v)}">`;
+    case 'select': return `<select ${dk}><option value=""></option>${f.o.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+    case 'checks': return `<div class="checks">${f.o.map(o=>`<label><input type="checkbox" data-chk="${f.k}" value="${esc(o)}" ${(v||[]).includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>`;
+    case 'table': {
+      const rows = v && v.length ? v : [{}];
+      return `<div class="ftbl"><table><thead><tr>${f.cols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.l)}</th>`).join('')}<th></th></tr></thead><tbody>
+        ${rows.map((r,i)=>`<tr>${f.cols.map(c=>`<td><input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}"></td>`).join('')}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      </tbody></table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button></div>`;
+    }
+    case 'photos': {
+      const ph = v || [];
+      return `<div class="photos">${ph.map((p,i)=>`<div class="ph"><img ${photoAttr(p.id)} alt=""><button class="xbtn" data-act="delph" data-k="${f.k}" data-i="${i}" title="Remove">×</button><input placeholder="Caption" data-ph="${f.k}" data-i="${i}" value="${esc(p.caption)}"></div>`).join('')}
+        ${Array.from({length:S.uploads[f.k]||0}).map(()=>'<div class="ph"><div class="uploading">Uploading…</div></div>').join('')}
+        ${S.assets ? `<label class="phadd"><span><b>+</b>Take or add photos</span><input type="file" accept="image/*" multiple data-photos="${f.k}"></label>` : `<div class="phadd" style="cursor:default"><span>Photo upload isn't available with your access level</span></div>`}</div>`;
+    }
+    default: return `<div class="dict"><input ${dk} value="${esc(v)}" placeholder="${esc(f.ph||'')}">${micBtn(f.k)}</div>`;
+  }
+}
+function editView(){
+  const d = S.draft; if(!d) return '';
+  if(S.fixDoc !== d){ S.fixUndo = {}; S.fixDoc = d; }
+  const T = TYPES[d.type], p = projById(d.projectId) || {}, resp = S.respMode;
+  let html = '', open = false;
+  const fields = T.fields.filter(f => resp ? f.phase === 'response' : f.phase !== 'response');
+  for(const f of fields){
+    if(f.sec){ if(open) html += '</div>'; html += `<div class="fsec"><h3>${esc(f.sec)}</h3></div><div class="fgrid">`; open = true; continue; }
+    if(!open){ html += '<div class="fgrid" style="margin-top:14px">'; open = true; }
+    html += `<div class="fld ${f.w==='half'?'half':''}" id="fld_${f.k}"><label>${esc(f.l)}${f.req?' <em>*</em>':''}</label>${fieldInput(f, d.data[f.k])}${f.hint?`<div class="hint">${esc(f.hint)}</div>`:''}</div>`;
+  }
+  if(open) html += '</div>';
+  return `
+  <button class="crumb" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">← ${d.id?'Back to document':esc(p.name)}</button>
+  <div class="pagehead"><div><span class="pill type">${esc(T.code)}</span> <span class="mono small muted">${esc(d.number || 'New — number assigned on save')}</span><h1 style="margin-top:6px">${resp?(T.code==='PTW'?'Close-out':'Response')+' — ':''}${esc(T.name)}</h1><div class="muted small">${esc(p.name)}</div></div></div>
+  ${!S.sample && SR ? `<div class="vhint form" style="margin-bottom:4px;align-items:center;flex-wrap:wrap"><b>🎤</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Speak instead of typing</b><br>Tap the green 🎤 beside any box and talk. Tap again to stop.</span><div class="langsw" style="margin:0"><button data-act="vlang" data-l="ms-MY" class="${(S.voiceLang||'ms-MY')==='ms-MY'?'on':''}">Bahasa Melayu</button><button data-act="vlang" data-l="en-MY" class="${S.voiceLang==='en-MY'?'on':''}">English</button></div></div>` : ''}
+  ${S.sample ? `<div class="vhint form" style="cursor:pointer;margin-bottom:4px" data-act="voice"><b>🎤</b><span><b style="font-size:14px">Speak instead of typing</b><br>Tap the green <b style="font-size:13px">🎤</b> button and just speak. Talk in Bahasa Melayu or English — it's written up in proper English and filled into this form for you.</span></div>` : ''}
+  <div class="form">${html}</div>
+  ${S.sample ? '' : '<!--'}<button class="fab" data-act="voice" aria-label="Speak (voice note)"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg><span>Tap to speak</span></button>${S.sample ? '' : '-->'}
+  <div class="actbar"><div class="in">
+    <button class="btn ghost" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">Cancel</button><div class="sp"></div>
+    ${S.sample ? `<button class="btn voice" data-act="voice">🎤 Voice</button>` : ''}
+    ${resp ? `<button class="btn pri" data-act="saveresp">Save ${T.code==='PTW'?'close-out':'response'}</button>` :
+      `<button class="btn" data-act="save">Save draft</button><button class="btn pri" data-act="savesign">✍ Sign & submit</button>`}
+  </div></div>`;
+}
+function missingRequired(d, phase){
+  const T = TYPES[d.type];
+  return T.fields.filter(f => f.k && f.req && (phase==='response' ? f.phase==='response' : f.phase!=='response'))
+    .filter(f => f.t==='table' ? !cleanRows(f, d.data[f.k]).length : isEmpty(d.data[f.k]));
+}
+function flagMissing(list){
+  document.querySelectorAll('.fld.err').forEach(e => e.classList.remove('err'));
+  list.forEach(f => $('#fld_'+f.k)?.classList.add('err'));
+  if(list.length){ $('#fld_'+list[0].k)?.scrollIntoView({behavior:'smooth', block:'center'}); toast('Please fill in: ' + list.map(f=>f.l).join(', '), true); }
+}
+function nextSeq(pid, type){ return S.docs.filter(x => x.projectId===pid && x.type===type).reduce((m,x) => Math.max(m, x.seq||0), 0) + 1; }
+async function saveDraft(){
+  stopDictation();
+  const d = S.draft; const now = new Date().toISOString();
+  if(Object.values(S.uploads).some(n=>n>0)) { toast('Wait for photos to finish uploading.', true); return false; }
+  // tidy empty table rows
+  const T = TYPES[d.type];
+  const data = clone(d.data);
+  T.fields.forEach(f => { if(f.t==='table'){ const r = cleanRows(f, data[f.k]); data[f.k] = r; } });
+  if(!d.id){
+    const p = projById(d.projectId);
+    if(!navigator.onLine){ toast('No internet — a new report needs a connection to get its number. Try again when you have signal.', true); return false; }
+    const seq = await allocateSeq(d.projectId, d.type);
+    d.seq = seq; d.number = `${p.code}-${T.code}-${String(seq).padStart(3,'0')}`;
+    d.createdBy = S.me || null; d.createdAt = now;
+    d.id = S.db.collection('docs').doc().id;
+  } else {
+    // make sure it's still a draft
+    const cur = await S.db.doc('docs/'+d.id).get();
+    if(cur.exists && (cur.data().signatures||[]).some(Boolean)){ toast('This document has already been signed and is locked.', true); go('doc',{id:d.id}); return false; }
+  }
+  const body = {projectId:d.projectId, type:d.type, seq:d.seq, number:d.number, data, signatures:[], createdBy:d.createdBy, createdAt:d.createdAt, updatedAt:now, updatedBy:S.me||null};
+  await S.db.doc('docs/'+d.id).set(body);
+  S.dirty = false;
+  return true;
+}
+async function saveResponse(){
+  const d = S.draft, T = TYPES[d.type];
+  const miss = missingRequired(d, 'response'); if(miss.length){ flagMissing(miss); return; }
+  const upd = {}; T.fields.filter(f => f.phase==='response' && f.k).forEach(f => upd['data.'+f.k] = d.data[f.k] ?? '');
+  try { await S.db.doc('docs/'+d.id).update({...upd, updatedAt:new Date().toISOString(), updatedBy:S.me||null}); S.dirty=false; toast('Saved'); go('doc',{id:d.id}); }
+  catch(e){ dbErr(e); }
+}
+function dbErr(e){
+  console.error(e);
+  const c = e?.code;
+  toast(c==='permission-denied'||c==='invalid_argument' ? 'You don\'t have permission to do this — ask an admin.' : c==='too_large' ? 'That photo is too large — try another.' : c==='quota_exceeded' ? 'Storage is full — delete old drafts or contact the owner.' : 'Could not save — check your connection and try again.', true);
+}
+
+/* ---------- images ---------- */
+function loadImg(src){ return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+async function compress(file, max=1280, q=0.72){
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await loadImg(url);
+    const r = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth*r); c.height = Math.round(im.naturalHeight*r);
+    const g = c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(im,0,0,c.width,c.height);
+    return await new Promise(res => c.toBlob(res, 'image/jpeg', q));
+  } finally { URL.revokeObjectURL(url); }
+}
+async function uploadPhotos(k, files){
+  const list = [...files].slice(0, 20);
+  S.uploads[k] = (S.uploads[k]||0) + list.length; rerenderEditorField(k);
+  for(const file of list){
+    try {
+      const blob = await compress(file);
+      const r = await S.assets.upload(blob);
+      (S.draft.data[k] = S.draft.data[k] || []).push({id:r.id, caption:''});
+      S.dirty = true;
+    } catch(e){ console.error(e); toast('A photo failed to upload.', true); }
+    S.uploads[k]--; rerenderEditorField(k);
+  }
+}
+function rerenderEditorField(k){
+  if(S.view.name !== 'edit') return;
+  const T = TYPES[S.draft.type], f = T.fields.find(x => x.k === k), el = $('#fld_'+k);
+  if(!f || !el) return;
+  el.innerHTML = `<label>${esc(f.l)}${f.req?' <em>*</em>':''}</label>${fieldInput(f, S.draft.data[k])}${f.hint?`<div class="hint">${esc(f.hint)}</div>`:''}`;
+}
+
+/* ---------- signatures ---------- */
+function openSign(docId, idx){
+  const d = docById(docId) || (S.draft && S.draft.id===docId ? S.draft : null); if(!d) return;
+  const T = TYPES[d.type], slot = T.sigs[idx];
+  const myName = S.names[S.me] || '';
+  showModal(`<div class="box"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>${esc(slot.role)}</h3></div></div>
+    <div class="mb">
+      <div class="fgrid">
+        <div class="fld half" id="fld_sn"><label>Full name <em>*</em></label><input id="sgName" value="${esc(idx===0?myName:'')}" autocomplete="name"></div>
+        <div class="fld half"><label>Designation</label><input id="sgDes" placeholder="${esc(slot.hint)}"></div>
+        <div class="fld"><label>Signature <em>*</em></label>
+          <div class="padbox"><canvas id="sgPad"></canvas><div class="line"></div><div class="x">✕</div></div>
+          <div class="row" style="margin-top:6px"><span class="small muted">Sign with your finger or mouse.</span><div class="sp"></div><button class="btn sm ghost" data-act="sgclear">Clear</button></div>
+        </div>
+      </div>
+      <div class="declare">By signing, I confirm the contents of <b>${esc(d.number)}</b> ${idx===0?'are true and accurate':'have been '+esc(slot.role.toLowerCase().replace(/ by$/,''))}. Once signed, the document is locked and the signature is recorded with today's date and time.</div>
+    </div>
+    <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="sgdo" data-id="${esc(docId)}" data-i="${idx}">Sign document</button></div></div>`);
+  initPad();
+  setTimeout(()=>$('#sgName')?.focus(), 50);
+}
+let PAD = null;
+function initPad(){
+  const c = $('#sgPad'); const dpr = window.devicePixelRatio || 1;
+  const r = c.getBoundingClientRect(); c.width = r.width*dpr; c.height = r.height*dpr;
+  const g = c.getContext('2d'); g.lineCap='round'; g.lineJoin='round'; g.strokeStyle='#0d2b63'; g.lineWidth=2.4*dpr;
+  PAD = {c, g, dpr, strokes:0, drawing:false, last:null, minX:1e9, minY:1e9, maxX:-1, maxY:-1};
+  const pos = e => { const b = c.getBoundingClientRect(); return {x:(e.clientX-b.left)*dpr, y:(e.clientY-b.top)*dpr}; };
+  const mark = p => { PAD.minX=Math.min(PAD.minX,p.x); PAD.minY=Math.min(PAD.minY,p.y); PAD.maxX=Math.max(PAD.maxX,p.x); PAD.maxY=Math.max(PAD.maxY,p.y); };
+  c.addEventListener('pointerdown', e => { e.preventDefault(); c.setPointerCapture(e.pointerId); PAD.drawing=true; PAD.last=pos(e); mark(PAD.last); g.beginPath(); g.arc(PAD.last.x,PAD.last.y,g.lineWidth/2,0,7); g.fillStyle='#0d2b63'; g.fill(); PAD.strokes++; });
+  c.addEventListener('pointermove', e => { if(!PAD.drawing) return; const p = pos(e); g.beginPath(); g.moveTo(PAD.last.x,PAD.last.y); g.lineTo(p.x,p.y); g.stroke(); PAD.last=p; mark(p); });
+  const end = () => { PAD.drawing=false; };
+  c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end); c.addEventListener('pointerleave', end);
+}
+function padImage(){
+  const {c, minX, minY, maxX, maxY, dpr} = PAD;
+  const m = 8*dpr, x = Math.max(0,minX-m), y = Math.max(0,minY-m), w = Math.min(c.width,maxX+m)-x, h = Math.min(c.height,maxY+m)-y;
+  const s = Math.min(1, 520/w, 180/h);
+  const o = document.createElement('canvas'); o.width = Math.max(1,Math.round(w*s)); o.height = Math.max(1,Math.round(h*s));
+  o.getContext('2d').drawImage(c, x, y, w, h, 0, 0, o.width, o.height);
+  return o.toDataURL('image/png');
+}
+async function doSign(docId, idx){
+  const name = $('#sgName').value.trim(), des = $('#sgDes').value.trim();
+  if(!name){ $('#fld_sn').classList.add('err'); toast('Enter the signer\'s full name.', true); return; }
+  if(!PAD || PAD.strokes === 0 || (PAD.maxX-PAD.minX) < 12*PAD.dpr){ toast('Please draw a signature.', true); return; }
+  const btn = document.querySelector('[data-act=sgdo]'); btn.disabled = true; btn.textContent = 'Signing…';
+  try {
+    const ref = S.db.doc('docs/'+docId); const snap = await ref.get();
+    if(!snap.exists) throw {code:'gone'};
+    const cur = snap.data(), T = TYPES[cur.type];
+    const sigs = [...(cur.signatures || [])];
+    if(sigs[idx]){ closeModal(); toast('Someone has already signed this slot.', true); return; }
+    for(let i=0;i<idx;i++) if(!sigs[i]){ closeModal(); toast('Earlier signatures are still missing.', true); return; }
+    if(T.sigs[idx].needsResponse && T.fields.some(f => f.phase==='response' && f.req && isEmpty(cur.data?.[f.k]))){ closeModal(); toast('Add the response first.', true); return; }
+    while(sigs.length < idx) sigs.push(null);
+    sigs[idx] = {name, designation:des, img:padImage(), at:new Date().toISOString(), uid:S.me||null};
+    await ref.update({signatures:sigs, updatedAt:new Date().toISOString(), updatedBy:S.me||null});
+    closeModal(); toast('Signed ✓'); go('doc',{id:docId});
+  } catch(e){ btn.disabled=false; btn.textContent='Sign document'; dbErr(e); }
+}
+
+/* ---------- PDF ---------- */
+const pt = s => String(s ?? '').replace(/[–—]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/[✓✔]/g,'').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g,'');
+async function imgData(src, max=1400, fmt='jpeg'){
+  const im = await loadImg(src);
+  const r = Math.min(1, max/Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth*r); c.height = Math.round(im.naturalHeight*r);
+  const g = c.getContext('2d'); if(fmt==='jpeg'){ g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); } g.drawImage(im,0,0,c.width,c.height);
+  return {url:c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png', .82), w:c.width, h:c.height};
+}
+async function makePDF(id){
+  const d = docById(id); if(!d) return;
+  if(!window.jspdf){ toast('PDF tools are still loading — try again in a moment.', true); return; }
+  if(!S.dl){ toast('Downloads aren\'t available in this view.', true); return; }
+  const btn = document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+  try {
+    const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4'});
+    const T = TYPES[d.type], p = projById(d.projectId) || {}, c = company(), data = d.data || {};
+    const W = 210, M = 14, CW = W - 2*M; const ORANGE = [232,89,12], STEEL = [42,46,51];
+    let y = M;
+    // letterhead
+    let lx = M;
+    if(c.logoId){ try { const L = await imgData(await photoData(c.logoId), 400, 'png'); const h = 16, w = Math.min(36, h*L.w/L.h); doc.addImage(L.url,'PNG',M,y,w,h); lx = M + w + 4; } catch(e){} }
+    else { doc.setFillColor(...ORANGE); doc.roundedRect(M,y,16,16,2,2,'F'); doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('SDE', M+8, y+9.5, {align:'center'}); lx = M + 20; }
+    doc.setTextColor(26,28,30); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(pt(c.name), lx, y+4.5);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.6); doc.setTextColor(100);
+    const coLines = [c.regNo, ...(c.address||'').split('\n'), [c.phone&&'Tel: '+c.phone, c.email].filter(Boolean).join('  |  ')].filter(Boolean).map(pt);
+    coLines.slice(0,4).forEach((l,i) => doc.text(l, lx, y+8.5+i*3.3, {maxWidth: 105}));
+    doc.setTextColor(26,28,30); doc.setFont('helvetica','bold'); doc.setFontSize(12.5); doc.text(pt(T.name.toUpperCase()), W-M, y+5, {align:'right'});
+    doc.setFont('courier','bold'); doc.setFontSize(10); doc.setTextColor(...ORANGE); doc.text(pt(d.number), W-M, y+10.5, {align:'right'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100); doc.text('Status: '+pt(statusOf(d).label), W-M, y+15, {align:'right'});
+    y += Math.max(18, 9 + coLines.slice(0,4).length*3.3) + 2;
+    doc.setDrawColor(...ORANGE); doc.setLineWidth(0.9); doc.line(M, y, W-M, y); y += 4;
+    const isDT = T.fields.find(f=>f.k===T.dateField)?.t === 'datetime';
+    const base = {margin:{left:M,right:M}, theme:'grid', styles:{font:'helvetica', fontSize:8.6, cellPadding:1.8, lineColor:[214,209,199], lineWidth:0.2, textColor:[26,28,30], overflow:'linebreak'}, headStyles:{fillColor:[248,246,241], textColor:[70,74,79], fontStyle:'bold', fontSize:8}};
+    doc.autoTable({...base, startY:y, body:[
+      ['Project', pt(p.name), 'Doc no.', pt(d.number)],
+      ['Client', pt(p.client||'-'), 'Date', pt(isDT?fmtDT(docDate(d)):fmtDate(docDate(d)))],
+      ['Location', pt(p.location||'-'), 'Contract no.', pt(p.contractNo||'-')]
+    ], columnStyles:{0:{fontStyle:'bold',fillColor:[248,246,241],cellWidth:24},2:{fontStyle:'bold',fillColor:[248,246,241],cellWidth:24}}});
+    y = doc.lastAutoTable.finalY + 4;
+    const st = statusOf(d);
+    const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase==='response' && !isEmpty(data[f.k]));
+    const secBar = title => { if(y > 245){ doc.addPage(); y = M; } doc.setFillColor(...STEEL); doc.rect(M, y, CW, 6, 'F'); doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.text(pt(title.toUpperCase()), M+2, y+4.1); y += 6; };
+    let kv = [];
+    const flush = () => { if(!kv.length) return; const rows = []; for(let i=0;i<kv.length;i+=2) rows.push([kv[i][0], kv[i][1], kv[i+1]?.[0]||'', kv[i+1]?.[1]||'']);
+      doc.autoTable({...base, startY:y, body:rows, columnStyles:{0:{fontStyle:'bold',textColor:[90,94,99],cellWidth:34},2:{fontStyle:'bold',textColor:[90,94,99],cellWidth:34}}}); y = doc.lastAutoTable.finalY; kv = []; };
+    let started = false;
+    if(d.type === 'PR'){
+      secBar('Overall progress');
+      const a = +data.actual||0, pl = +data.planned||0;
+      doc.autoTable({...base, startY:y, head:[['Planned','Actual','Variance']], body:[[pl?pl+'%':'-', a+'%', pl?((a-pl>0?'+':'')+(+(a-pl).toFixed(1))+'%'):'-']]});
+      y = doc.lastAutoTable.finalY + 3;
+    }
+    for(const f of T.fields){
+      if(f.phase === 'response' && !showResp) continue;
+      if(f.sec){ flush(); if(started) y += 3; secBar(f.sec); started = true; continue; }
+      if(!started){ secBar('Details'); started = true; }
+      if(d.type==='PR' && (f.k==='planned'||f.k==='actual')) continue;
+      if(['date','datetime','select','text','number'].includes(f.t)){ kv.push([pt(f.l), pt(valueText(f, data[f.k])) || '-']); continue; }
+      flush();
+      if(f.t === 'textarea' || f.t === 'checks'){
+        doc.autoTable({...base, startY:y, head:[[pt(f.l)]], body:[[pt(valueText(f, data[f.k])) || '-']]}); y = doc.lastAutoTable.finalY;
+      } else if(f.t === 'table'){
+        const rows = cleanRows(f, data[f.k]);
+        const body = rows.length ? rows.map(r => f.cols.map(cc => pt(r[cc.k]))) : [[{content:'-', colSpan:f.cols.length}]];
+        const numCols = f.cols.filter(cc => cc.n && !/%/.test(cc.l));
+        const foot = (numCols.length && rows.length > 1) ? [f.cols.map((cc,i) => i===0 ? 'Total' : numCols.includes(cc) && rows.some(r=>!isEmpty(r[cc.k])) ? String(+rows.reduce((a,r)=>a+(parseFloat(r[cc.k])||0),0).toFixed(2)) : '')] : undefined;
+        doc.autoTable({...base, startY:y, head:[[{content:pt(f.l), colSpan:f.cols.length, styles:{fillColor:[238,235,228]}}], f.cols.map(cc=>pt(cc.l))], body, foot, footStyles:{fillColor:[248,246,241], textColor:[26,28,30], fontStyle:'bold'}});
+        y = doc.lastAutoTable.finalY;
+      } else if(f.t === 'photos'){
+        const ph = data[f.k] || [];
+        doc.autoTable({...base, startY:y, head:[[pt(f.l) + (ph.length ? ` (${ph.length})` : '')]], body: ph.length ? [] : [['No photos']]}); y = doc.lastAutoTable.finalY + 2;
+        const pw = (CW - 4) / 2, phh = pw * 0.75;
+        for(let i=0;i<ph.length;i++){
+          const col = i % 2; if(col === 0 && y + phh + 8 > 285){ doc.addPage(); y = M; }
+          const x = M + col*(pw+4);
+          try { const I = await imgData(await photoData(ph[i].id), 1100); const r = Math.min(pw/I.w, phh/I.h); const iw = I.w*r, ih = I.h*r;
+            doc.setFillColor(245,243,239); doc.rect(x, y, pw, phh, 'F'); doc.addImage(I.url, 'JPEG', x+(pw-iw)/2, y+(phh-ih)/2, iw, ih); } catch(e){ doc.setFontSize(8); doc.text('[photo unavailable]', x+2, y+5); }
+          doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(90); doc.text(pt((i+1)+'. '+(ph[i].caption||'')), x, y+phh+3.6, {maxWidth:pw});
+          if(col === 1 || i === ph.length-1) y += phh + 7;
+        }
+      }
+    }
+    flush();
+    // signatures
+    y += 6; const n = T.sigs.length, perRow = Math.min(n, n===4?2:3), gap = 4, sw = (CW - gap*(perRow-1))/perRow, sh = 40;
+    const sigs = d.signatures || [];
+    for(let i=0;i<n;i++){
+      const col = i % perRow; if(col === 0 && i>0) y += sh + gap;
+      if(col === 0 && y + sh > 285){ doc.addPage(); y = M; }
+      const x = M + col*(sw+gap), s = T.sigs[i], g = sigs[i];
+      doc.setDrawColor(214,209,199); doc.setLineWidth(0.25); doc.rect(x, y, sw, sh);
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(70,74,79); doc.text(pt(s.role.toUpperCase()), x+2.5, y+4.5);
+      doc.setDrawColor(150); doc.line(x+2.5, y+23, x+sw-2.5, y+23);
+      if(g){
+        try { const I = await imgData(g.img, 600, 'png'); const r = Math.min((sw-6)/I.w, 15/I.h); doc.addImage(I.url, 'PNG', x+2.5, y+22.5-I.h*r, I.w*r, I.h*r); } catch(e){}
+        doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(26,28,30); doc.text(pt(g.name), x+2.5, y+27.5, {maxWidth:sw-5});
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(100); doc.text(pt(g.designation||''), x+2.5, y+31.5, {maxWidth:sw-5}); doc.text(pt(fmtDT(g.at)), x+2.5, y+35.5);
+      } else {
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(150); doc.text('Name:', x+2.5, y+27.5); doc.text('Designation: '+pt(s.hint), x+2.5, y+31.5, {maxWidth:sw-5}); doc.text('Date:', x+2.5, y+35.5);
+      }
+    }
+    // footer
+    const pages = doc.getNumberOfPages();
+    for(let i=1;i<=pages;i++){ doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(140);
+      doc.text(pt(c.name)+'  |  '+pt(d.number)+'  |  Generated '+pt(fmtDT(new Date().toISOString())), M, 292); doc.text(`Page ${i} of ${pages}`, W-M, 292, {align:'right'}); }
+    const blob = doc.output('blob');
+    await S.dl.save({filename: `${d.number} ${T.name}.pdf`.replace(/[\\/:*?"<>|]/g,'-'), data: blob});
+  } catch(e){ if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } }
+  finally { if(btn){ btn.disabled = false; btn.textContent = '⤓ Download PDF'; } }
+}
+
+/* ---------- projects ---------- */
+function projectForm(p){
+  p = p || {status:'Active'};
+  const f = (k,l,type='text',half=1,ph='') => `<div class="fld ${half?'half':''}" id="fld_p${k}"><label>${l}</label><input type="${type}" data-pf="${k}" value="${esc(p[k])}" placeholder="${esc(ph)}"></div>`;
+  showModal(`<div class="box"><div class="mh"><h3>${p.id?'Edit project':'New project'}</h3></div><div class="mb"><div class="fgrid">
+    <div class="fld half" id="fld_pcode"><label>Project code <em>*</em></label><input data-pf="code" value="${esc(p.code)}" placeholder="e.g. PJ-MALL" maxlength="14" style="text-transform:uppercase" ${p.id?'disabled':''}><div class="hint">Used in document numbers${p.id?' — can\'t be changed':''}.</div></div>
+    <div class="fld half"><label>Status</label><select data-pf="status">${['Active','On hold','Completed'].map(s=>`<option ${s===(p.status||'Active')?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="fld" id="fld_pname"><label>Project name <em>*</em></label><input data-pf="name" value="${esc(p.name)}" placeholder="e.g. Demolition of Existing 5-Storey Shoplot, Jalan Ipoh"></div>
+    ${f('client','Client')}${f('consultant','Consultant / engineer')}
+    ${f('location','Site location')}${f('contractNo','Contract / LOA no.')}
+    ${f('start','Start date','date')}${f('end','Completion date','date')}
+    ${f('pm','Project manager')}
+  </div></div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="saveproj" data-id="${esc(p.id||'')}">${p.id?'Save':'Create project'}</button></div></div>`);
+}
+async function saveProject(id){
+  const vals = {}; document.querySelectorAll('[data-pf]').forEach(i => vals[i.dataset.pf] = i.value.trim());
+  if(!id){
+    vals.code = (vals.code||'').toUpperCase().replace(/[^A-Z0-9-]/g,'');
+    if(!vals.code){ $('#fld_pcode').classList.add('err'); toast('Enter a project code.', true); return; }
+    if(S.projects.some(p => p.code === vals.code)){ $('#fld_pcode').classList.add('err'); toast('That project code is already used.', true); return; }
+  } else delete vals.code;
+  if(!vals.name){ $('#fld_pname').classList.add('err'); toast('Enter the project name.', true); return; }
+  try {
+    if(id){ await S.db.doc('projects/'+id).update({...vals, updatedAt:new Date().toISOString()}); closeModal(); toast('Project updated'); render(); }
+    else { const ref = S.db.collection('projects').doc(); await ref.set({...vals, createdAt:new Date().toISOString(), createdBy:S.me||null}); closeModal(); toast('Project created'); go('project',{id:ref.id}); }
+  } catch(e){ dbErr(e); }
+}
+
+/* ---------- modal helpers ---------- */
+function showModal(html){ S.modalOpen = true; $('#modal').innerHTML = `<div class="modal" data-act="backdrop">${html}</div>`; }
+function closeModal(){ if(LIVE.on) stopListening(true); S.modalOpen = false; $('#modal').innerHTML = ''; PAD = null; }
+let CONFIRM_CB = null;
+function confirmBox(title, msg, okLabel, cb, danger){
+  CONFIRM_CB = cb;
+  showModal(`<div class="box" style="max-width:420px"><div class="mh"><h3>${esc(title)}</h3></div><div class="mb"><p style="margin:0">${esc(msg)}</p></div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn ${danger?'dark':'pri'}" data-act="confirmok">${esc(okLabel)}</button></div></div>`);
+}
+
+/* ---------- AI: voice notes & English correction ---------- */
+const AI_CONTEXT = 'You are helping site staff of Sadhana Demolition & Engineering Sdn Bhd, a demolition contractor in Malaysia, write formal site records.';
+const LANG_RULES = 'Staff may speak or type in Bahasa Melayu, English, or a mix of both (Malaysian English), often through phone voice dictation, so expect missing punctuation, mis-heard words and slang (e.g. "orang" = workers, "lori" = lorry, "pecah" = demolish/break, "potong besi" = cut steel, "hujan" = rain, "esok" = tomorrow, "jengkaut" = excavator). Always write in clear, concise, professional British/Malaysian construction English: translate Malay fully, correct grammar and spelling, use proper construction terminology, and keep every fact, number, name, grid line, level and time exactly as given. Never invent facts that were not said.';
+const Q3 = '"' + '""';
+function aiErr(e){
+  const c = e?.code;
+  if(c === 'cancelled') return;
+  if(c === 'not_configured') return toast('Automatic English correction isn\'t switched on yet.', true);
+  if(c === 'not_granted') return toast('Your session expired or you don\'t have access — sign in again.', true);
+  if(c === 'rate_limited') return toast('Too many requests — wait a minute and try again.', true);
+  if(c === 'invalid_json') return toast('Could not understand the reply — please try again.', true);
+  toast('The assistant could not finish — please try again.', true);
+}
+function editableFields(){
+  const T = TYPES[S.draft.type];
+  return T.fields.filter(f => f.k && f.t !== 'photos' && (S.respMode ? f.phase === 'response' : f.phase !== 'response'));
+}
+function coerceVal(f, v){
+  if(v === undefined) return undefined;
+  switch(f.t){
+    case 'table': if(!Array.isArray(v)) return undefined;
+      return v.filter(r => r && typeof r === 'object').map(r => Object.fromEntries(f.cols.map(c => [c.k, r[c.k] == null ? '' : String(r[c.k])])));
+    case 'checks': return Array.isArray(v) ? [...new Set(v.map(String).filter(x => f.o.includes(x)))] : undefined;
+    case 'select': return f.o.find(o => o.toLowerCase() === String(v).toLowerCase().trim());
+    case 'number': { if(v === '' || v === null) return ''; const n = parseFloat(v); return isNaN(n) ? undefined : String(n); }
+    case 'date': return /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : undefined;
+    case 'datetime': return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(v)) ? String(v).slice(0,16) : undefined;
+    default: return v == null ? '' : String(v);
+  }
+}
+/* The report layout is fixed: the assistant may only change what is written
+   inside existing fields. These guards enforce that whatever the reply says. */
+function plainText(v){
+  return String(v ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\*\*(.*?)\*\*/g, '$1').replace(/__(.*?)__/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*•]\s+/gm, '- ')
+    .replace(/`+/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+function templateLabels(f){
+  if(f.t !== 'table' || typeof f.def !== 'function') return [];
+  const k0 = f.cols[0].k;
+  return f.def().map(r => r?.[k0]).filter(Boolean);
+}
+function guardValue(f, v, current){
+  if(v === undefined) return undefined;
+  if(f.t === 'text') return plainText(v).replace(/\s*\n\s*/g, ' ');
+  if(f.t === 'textarea') return plainText(v);
+  if(f.t !== 'table') return v;
+  const k0 = f.cols[0].k, labels = templateLabels(f);
+  const rows = v.map(r => Object.fromEntries(f.cols.map(c => [c.k, plainText(r[c.k]).replace(/\s*\n\s*/g, ' ')])));
+  if(!labels.length) return rows;
+  // Standard rows of the form (e.g. "General worker", "Tipper lorry") always stay,
+  // with their original wording and order; only their values can change.
+  const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const curStd = (current || []).filter(r => labels.some(l => norm(l) === norm(r?.[k0])));
+  const stdNames = curStd.length ? curStd.map(r => r[k0]) : labels;
+  const out = stdNames.map(name => {
+    const hit = rows.find(r => norm(r[k0]) === norm(name));
+    const base = Object.fromEntries(f.cols.map(c => [c.k, '']));
+    const was = (current || []).find(r => norm(r?.[k0]) === norm(name));
+    return hit ? {...base, ...hit, [k0]: name} : {...base, ...(was || {}), [k0]: name};
+  });
+  rows.forEach(r => { if(!stdNames.some(n => norm(n) === norm(r[k0]))) out.push(r); });
+  return out;
+}
+
+function openVoice(){
+  S.voice = S.voice && S.voice.doc === S.draft ? S.voice : {doc:S.draft, text:'', result:null, busy:false, ctl:null};
+  S.voice.result = null;
+  renderVoice();
+  if(srAvailable()) startListening(); else focusVoice();
+}
+const MIC_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg>', SEND_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6l-.01 6.53L15 12 3.39 13.87z"/></svg>';
+function voicePlaceholder(code){
+  if(code === 'DSR') return 'Contoh: Hari ini general worker 15 orang, operator 3. Excavator breaker 1 unit kerja 8 jam. Kita pecah slab level 3 grid A sampai C. Hujan pukul 3 stop kerja setengah jam. Lori buang debris 8 trip. Esok sambung grid D sampai F.';
+  if(code === 'PR') return 'Contoh: Progress minggu ni actual 42 percent, planned 45. Structural demolition dah 35 percent. Lambat sebab hujan 2 hari.';
+  if(code === 'RFI') return 'Contoh: Tanya consultant sama ada boundary wall depan Jalan Ipoh kena kekal atau roboh. Kalau roboh perlu hoarding baru.';
+  if(code === 'TBT') return 'Contoh: Toolbox talk pukul 8 pagi pasal kerja dekat tepi bangunan, pakai harness, jangan masuk exclusion zone.';
+  if(code === 'PTW') return 'Contoh: Permit hot work potong besi bumbung grid D sampai F, pukul 9 pagi sampai 5 petang. Fire extinguisher ada, fire watch Ali.';
+  return 'Cakap atau taip di sini…';
+}
+/* Direct listening (Web Speech API). Inside Claude the microphone is usually
+   blocked by the frame; if so we fall back to the keyboard microphone. */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const STOP_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+const LIVE = {rec:null, on:false, base:''};
+function srAvailable(){ return !!SR && !S.srBlocked; }
+function startListening(){
+  const t = $('#vtext'); if(!t) return;
+  let rec;
+  try { rec = new SR(); } catch(e){ S.srBlocked = true; return focusVoice(); }
+  rec.lang = S.voiceLang || 'ms-MY'; rec.continuous = true; rec.interimResults = true;
+  LIVE.rec = rec; LIVE.base = t.value.trim() ? t.value.trim() + ' ' : '';
+  let finals = '';
+  rec.onresult = ev => {
+    let interim = '';
+    for(let i = ev.resultIndex; i < ev.results.length; i++){
+      const r = ev.results[i];
+      if(r.isFinal) finals += r[0].transcript + ' '; else interim += r[0].transcript;
+    }
+    const box = $('#vtext'); if(!box) return;
+    box.value = (LIVE.base + finals + interim).replace(/\s+/g, ' ').trimStart();
+    if(S.voice) S.voice.text = box.value;
+  };
+  rec.onerror = ev => {
+    if(['not-allowed','service-not-allowed','audio-capture'].includes(ev.error)){
+      S.srBlocked = true; stopListening(true);
+      const tip = $('#vtip'); if(tip) tip.innerHTML = '🔒 Microphone is blocked. Tap the 🔒 or ⓘ next to the web address → <b>Permissions</b> → allow <b>Microphone</b>, then try again. Or tap the <b>🎤 mic on your keyboard</b> instead.';
+      focusVoice();
+    } else if(ev.error === 'no-speech'){ /* keep going */ }
+    else { stopListening(true); toast('Listening stopped (' + ev.error + ').', true); }
+  };
+  rec.onend = () => { if(LIVE.on && LIVE.rec === rec){ try { rec.start(); return; } catch(e){} } stopListening(true); };
+  try { rec.start(); LIVE.on = true; } catch(e){ S.srBlocked = true; return focusVoice(); }
+  const b = $('#vbtn'); if(b){ b.classList.remove('send'); b.classList.add('live'); b.innerHTML = STOP_SVG; b.setAttribute('aria-label','Stop listening'); }
+  const tip = $('#vtip'); if(tip){ tip.innerHTML = '🔴 Listening… speak now in Bahasa Melayu or English. Tap ■ to stop.'; tip.classList.add('on'); }
+}
+function stopListening(silent){
+  const rec = LIVE.rec; LIVE.on = false; LIVE.rec = null;
+  if(rec){ try { rec.stop(); } catch(e){} }
+  const b = $('#vbtn'); if(b){ b.classList.remove('live'); b.dataset.x = ''; }
+  syncVoiceBtn(true);
+  const tip = $('#vtip'); if(tip && !S.srBlocked && !silent) tip.innerHTML = 'Got it. Tap ➤ to fill in the form, or 🎤 to add more.';
+  else if(tip && !S.srBlocked) tip.innerHTML = 'Tap ➤ to fill in the form, or 🎤 to add more.';
+}
+
+function focusVoice(){
+  const t = $('#vtext'); if(!t) return;
+  try { t.focus({preventScroll:true}); t.setSelectionRange(t.value.length, t.value.length); } catch(e){}
+  const tip = $('#vtip'); if(tip){ if(!S.srBlocked && !SR) tip.innerHTML = '⌨️ Keyboard is open — now tap the <b>🎤 mic on your keyboard</b> and speak. Tap ➤ when done.'; tip.classList.add('on'); }
+}
+function syncVoiceBtn(force){
+  const t = $('#vtext'), b = $('#vbtn'); if(!t || !b || LIVE.on) return;
+  const has = !!t.value.trim();
+  if(!force && has === b.classList.contains('send')) return;
+  b.classList.toggle('send', has); b.innerHTML = has ? SEND_SVG : MIC_SVG; b.setAttribute('aria-label', has ? 'Fill in form' : 'Speak');
+}
+function renderVoice(){
+  const V = S.voice, T = TYPES[S.draft.type];
+  let body;
+  if(V.busy){
+    body = `<div class="loading" style="min-height:180px"><div><div class="spin"></div>Understanding your note and writing it in proper English…</div></div>`;
+  } else if(V.result){
+    const fl = editableFields(); const ch = V.result.changes; const keys = Object.keys(ch);
+    body = `${V.result.summary.length ? `<div class="eyebrow" style="margin-bottom:6px">What will change</div><ul class="vsum">${V.result.summary.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${V.result.unclear ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-top:10px"><b>?</b><span>${esc(V.result.unclear)}</span></div>` : ''}
+      ${keys.length ? keys.map(k => { const f = fl.find(x => x.k === k); const v = ch[k];
+        if(f.t === 'table'){ const rows = cleanRows(f, v); return `<div class="vchg"><div class="h">${esc(f.l)}</div><table><tr>${f.cols.map(c=>`<th>${esc(c.l)}</th>`).join('')}</tr>${rows.map(r=>`<tr>${f.cols.map(c=>`<td>${esc(r[c.k])}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${f.cols.length}" class="muted">(empty)</td></tr>`}</table></div>`; }
+        return `<div class="vchg"><div class="h">${esc(f.l)}</div><div class="b">${esc(valueText(f, v)) || '<span class="muted">(cleared)</span>'}</div></div>`; }).join('')
+      : `<p class="muted">Nothing in the note matched this form. Try adding more detail.</p>`}`;
+  } else {
+    body = `<div class="vhint"><b>🎤</b><span>${SR && !S.srBlocked ? 'Tap the green <b style="font-size:13px">🎤</b> and just speak — Bahasa Melayu, English or mixed. Tap ■ to stop, then ➤ to fill in the form.' : 'Tap the green <b style="font-size:13px">🎤 button</b>, then the <b style="font-size:13px">mic on your keyboard</b> (Gboard: top-right · Samsung: toolbar above the letters). Speak in <b style="font-size:13px">Bahasa Melayu or English</b>, then tap <b style="font-size:13px">➤</b>.'}</span></div>
+      ${SR && !S.srBlocked ? `<div class="langsw"><button data-act="vlang" data-l="ms-MY" class="${(S.voiceLang||'ms-MY')==='ms-MY'?'on':''}">Bahasa Melayu</button><button data-act="vlang" data-l="en-MY" class="${S.voiceLang==='en-MY'?'on':''}">English</button></div>` : ''}<div class="composer"><textarea id="vtext" class="vbox" rows="2" placeholder="${esc(voicePlaceholder(T.code))}">${esc(V.text)}</textarea><button class="micbtn ${V.text.trim()?'send':''}" id="vbtn" data-act="vmic" aria-label="Speak">${V.text.trim()?SEND_SVG:MIC_SVG}</button></div><div class="vtip" id="vtip">⌨️ Keyboard is open — now tap the <b>🎤 mic on your keyboard</b> and speak. Tap ➤ when done.</div>
+      <div class="small muted" style="margin-top:6px">🔒 Voice only changes what's written in the form — the report layout, sections and table columns always stay the same.<br>Commands also work: <i>"tukar general worker jadi 15 orang"</i>, <i>"tipper lorry tak ada hari ni"</i>, <i>"add 2 gas cutters"</i>, <i>"tulis semula work done lebih formal"</i>.</div>`;
+  }
+  const foot = V.busy ? `<button class="btn" data-act="vstop">Stop</button>`
+    : V.result ? `<button class="btn ghost" data-act="vback">← Edit note</button><button class="btn pri" data-act="vapply" ${Object.keys(V.result.changes).length?'':'disabled'}>Apply to form</button>`
+    : `<button class="btn ghost" data-act="vclose">Close</button><button class="btn ghost" data-act="fixall">✨ Fix English in all fields</button><button class="btn pri" data-act="vgo">Fill in form →</button>`;
+  showModal(`<div class="box"><div class="mh"><div><div class="eyebrow">${esc(T.name)}</div><h3>🎤 Voice note</h3></div></div><div class="mb">${body}</div><div class="mf" style="flex-wrap:wrap">${foot}</div></div>`);
+}
+async function runVoice(){
+  if(LIVE.on) stopListening(true);
+  const V = S.voice; V.text = ($('#vtext')?.value || '').trim();
+  if(!V.text){ toast('Speak or type a note first.', true); return; }
+  const fl = editableFields();
+  const schema = fl.map(f => { const o = {key:f.k, label:f.l, type:f.t}; if(f.o) o.options = f.o; if(f.cols) o.columns = f.cols.map(c => ({key:c.k, label:c.l})); return o; });
+  const cur = {}; fl.forEach(f => cur[f.k] = S.draft.data[f.k] ?? '');
+  const p = projById(S.draft.projectId) || {};
+  const prompt = AI_CONTEXT + '\nThey are filling in a "' + TYPES[S.draft.type].name + '" for the project "' + (p.name || '') + '". Today is ' + today() + ' (current time ' + new Date().toTimeString().slice(0,5) + ').\n\n' + LANG_RULES + `
+
+IMPORTANT: The report format is fixed and must never change. You may only change the CONTENT written inside the existing fields listed below. You cannot add, remove, rename or reorder fields, sections, headings or table columns, and you cannot change layout, fonts, styling, the letterhead, document number, signatures or photos. Do not use Markdown (no **bold**, # headings or tables) inside values. If the note asks for any of these format changes, ignore that part and explain in "unclear" that the report format cannot be changed by voice. In tables, the standard rows already in the form (e.g. trades and equipment) must stay with their names unchanged; to show something is not on site, clear its numbers instead of removing the row.
+
+The note below may add information, or give commands to change, replace or remove existing content (e.g. "tukar", "ganti", "buang", "padam", "tambah", "change", "remove", "add", "rewrite"). Work out which form fields it relates to.
+- text / textarea fields: return the COMPLETE new value in proper English. When adding to a textarea that already has content, keep the existing content and merge the new information in sensibly, unless told to replace it. Use a numbered list ("1. ...") when there are several separate activities.
+- table fields: return the COMPLETE new rows array (objects using the column keys) for any table you change, keeping existing rows unless told to remove them. Put counts and quantities as plain digits.
+- select fields: use exactly one of the listed options. checks fields: an array of the listed options.
+- date: YYYY-MM-DD. datetime: YYYY-MM-DDTHH:MM. number: digits only.
+- Only include fields that actually change.
+
+Form fields:
+` + JSON.stringify(schema) + `
+
+Current values:
+` + JSON.stringify(cur) + `
+
+Voice note:
+` + Q3 + V.text.slice(0, 6000) + Q3 + `
+
+Reply with only a JSON object: {"changes": {"<field key>": <new value>}, "summary": ["one short English line per change"], "unclear": "anything in the note you could not understand or place, otherwise an empty string"}`;
+  V.busy = true; V.ctl = new AbortController(); renderVoice();
+  try {
+    const r = await S.sample.json(prompt, {signal: V.ctl.signal, cache: false});
+    const changes = {};
+    for(const [k, v] of Object.entries(r?.changes || {})){ const f = fl.find(x => x.k === k); if(!f) continue; const c = guardValue(f, coerceVal(f, v), S.draft.data[k]); if(c !== undefined && JSON.stringify(c) !== JSON.stringify(S.draft.data[k] ?? '')) changes[k] = c; }
+    V.result = {changes, summary: Array.isArray(r?.summary) ? r.summary.map(String).slice(0, 20) : [], unclear: typeof r?.unclear === 'string' ? r.unclear : ''};
+  } catch(e){ aiErr(e); if(!S.sample){ closeModal(); return; } }
+  V.busy = false; if(S.modalOpen) renderVoice();
+}
+function applyVoice(){
+  const V = S.voice; if(!V?.result) return;
+  Object.assign(S.draft.data, clone(V.result.changes));
+  Object.keys(V.result.changes).forEach(k => delete S.fixUndo[k]);
+  const n = Object.keys(V.result.changes).length;
+  V.text = ''; V.result = null; S.dirty = true;
+  closeModal(); render(); toast(`${n} field${n>1?'s':''} updated — please check before signing`);
+}
+async function fixField(k, btn){
+  const T = TYPES[S.draft.type], f = T.fields.find(x => x.k === k), v = (S.draft.data[k] || '').trim();
+  if(!v){ toast('Nothing to correct yet.', true); return; }
+  btn.disabled = true; btn.textContent = '✨ Fixing…';
+  try {
+    const {text} = await S.sample(AI_CONTEXT + '\n' + LANG_RULES + '\n\nRewrite the following "' + f.l + '" entry from a ' + T.name + ' in proper English. Keep the same meaning and level of detail. Keep numbered lists as numbered lists. Change the wording only, not the structure; do not use Markdown. Reply with only the rewritten text, with no preamble or quotation marks.\n\n' + Q3 + v.slice(0, 8000) + Q3, {modelTier:'quick'});
+    let out = text.trim(); if(out.startsWith(Q3)) out = out.slice(3); if(out.endsWith(Q3)) out = out.slice(0,-3); out = plainText(out);
+    if(S.view.name !== 'edit' || !S.draft) return;
+    S.fixUndo[k] = S.draft.data[k]; S.draft.data[k] = out; S.dirty = true;
+    rerenderEditorField(k);
+  } catch(e){ aiErr(e); btn.disabled = false; btn.textContent = '✨ Fix English'; }
+}
+async function fixAll(){
+  const fl = editableFields().filter(f => (f.t === 'textarea' || f.t === 'text' || f.t === 'table') && !isEmpty(S.draft.data[f.k]));
+  if(!fl.length){ toast('Nothing to correct yet.', true); return; }
+  const cur = {}; fl.forEach(f => cur[f.k] = f.t === 'table' ? cleanRows(f, S.draft.data[f.k]) : S.draft.data[f.k]);
+  const V = S.voice; V.busy = true; V.ctl = new AbortController(); renderVoice();
+  try {
+    const r = await S.sample.json(AI_CONTEXT + '\n' + LANG_RULES + '\n\nBelow are the current values of a ' + TYPES[S.draft.type].name + ' form as JSON (tables are arrays of row objects). Correct every text value into proper English (translating any Malay), keeping meaning, numbers, names and structure exactly the same. Change wording only: do not add, remove or reorder fields or table rows, and do not use Markdown. Leave values that are already correct unchanged, and do not change numeric quantities or table keys.\n\n' + JSON.stringify(cur) + '\n\nReply with only a JSON object containing ONLY the keys whose value you changed, each with its full corrected value.', {signal: V.ctl.signal, cache:false});
+    const changes = {}, summary = [];
+    for(const [k, v] of Object.entries(r || {})){ const f = fl.find(x => x.k === k); if(!f) continue; const c = guardValue(f, coerceVal(f, v), S.draft.data[k]); if(c !== undefined && JSON.stringify(c) !== JSON.stringify(cur[k])){ changes[k] = c; summary.push('Corrected English in "' + f.l + '"'); } }
+    V.result = {changes, summary: summary.length ? summary : ['Everything already reads well — no corrections needed.'], unclear:''};
+  } catch(e){ aiErr(e); if(!S.sample){ closeModal(); return; } }
+  V.busy = false; if(S.modalOpen) renderVoice();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', async e => {
+  const el = e.target.closest('[data-act]'); if(!el) return;
+  const a = el.dataset.act, id = el.dataset.id;
+  if(a === 'backdrop'){ if(e.target === el && !$('#sgPad') && !S.voice?.busy){ if($('#vtext') && S.voice) S.voice.text = $('#vtext').value; closeModal(); } return; }
+  switch(a){
+    case 'nav': go(el.dataset.v); break;
+    case 'gsignin': googleSignIn(); break;
+    case 'authmode': S.authMode = el.dataset.m; render(); break;
+    case 'signout': closeModal(); S.view = {name:'home'}; FB.authM.signOut(FB.auth); break;
+    case 'addstaff': addStaffForm(); break;
+    case 'savestaff': createStaff(); break;
+    case 'copycreds': try { await navigator.clipboard.writeText(el.dataset.t); toast('Copied'); } catch(err){ toast('Copy failed — select the text instead.', true); } break;
+    case 'proj': go('project', {id}); break;
+    case 'tab': S.view.tab = el.dataset.t; render(); break;
+    case 'open': go('doc', {id}); break;
+    case 'newproj': projectForm(); break;
+    case 'editproj': projectForm(projById(id)); break;
+    case 'saveproj': saveProject(id); break;
+    case 'new': S.draft = newDraft(el.dataset.p, el.dataset.t); S.respMode = false; go('edit'); break;
+    case 'edit': { const d = docById(id); if(!d) return; if(nextSigIndex(d)!==0){ toast('Signed documents are locked.', true); return; } S.draft = clone(d); S.respMode = false; go('edit'); break; }
+    case 'respond': { const d = docById(id); if(!d) return; S.draft = clone(d); const T = TYPES[d.type]; T.fields.forEach(f => { if(f.phase==='response' && f.k && isEmpty(S.draft.data[f.k]) && f.def) S.draft.data[f.k] = typeof f.def==='function'?f.def():f.def; }); if(d.type==='PTW' && !S.draft.data.closeTime){ const n=new Date(); S.draft.data.closeTime = n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate())+'T'+pad2(n.getHours())+':'+pad2(n.getMinutes()); } S.respMode = true; go('edit'); break; }
+    case 'dup': { const d = docById(id); if(!d) return; const nd = newDraft(d.projectId, d.type); const T = TYPES[d.type];
+      T.fields.forEach(f => { if(f.k && f.phase!=='response' && f.t!=='photos' && f.t!=='date' && f.t!=='datetime') nd.data[f.k] = clone(d.data?.[f.k] ?? nd.data[f.k]); });
+      S.draft = nd; S.respMode = false; S.view = {name:'edit'}; S.dirty = true; render(); window.scrollTo(0,0); toast('Copied into a new draft — check dates & details'); break; }
+    case 'addrow': { const k = el.dataset.k; (S.draft.data[k] = S.draft.data[k] || []).push({}); S.dirty = true; rerenderEditorField(k); document.querySelector(`#fld_${k} tbody tr:last-child input`)?.focus(); break; }
+    case 'delrow': { const k = el.dataset.k; S.draft.data[k].splice(+el.dataset.i, 1); if(!S.draft.data[k].length) S.draft.data[k].push({}); S.dirty = true; rerenderEditorField(k); break; }
+    case 'delph': { const k = el.dataset.k; S.draft.data[k].splice(+el.dataset.i, 1); S.dirty = true; rerenderEditorField(k); break; }
+    case 'save': case 'savesign': {
+      const miss = a === 'savesign' ? missingRequired(S.draft) : [];
+      if(miss.length){ flagMissing(miss); return; }
+      el.disabled = true;
+      try { if(await saveDraft()){ if(a === 'save'){ toast('Draft saved'); go('doc', {id:S.draft.id}); } else { const did = S.draft.id; S.view = {name:'doc', id:did}; render(); openSign(did, 0); } } }
+      catch(err){ dbErr(err); } finally { el.disabled = false; }
+      break; }
+    case 'saveresp': saveResponse(); break;
+    case 'voice': if(S.view.name !== 'edit') break; if(S.sample) openVoice(); else showModal(`<div class="box" style="max-width:440px"><div class="mh"><h3>🎤 Voice isn't available here</h3></div><div class="mb"><p style="margin-top:0">Voice notes and Fix English need the AI key, which hasn't been set up yet.</p><ul class="small" style="padding-left:18px;margin:0"><li>Admin: add <b>ANTHROPIC_API_KEY</b> in Cloudflare (setup guide step 5), then redeploy.</li><li>Then reload this page.</li></ul></div><div class="mf"><button class="btn pri" data-act="closemodal">OK</button></div></div>`); break;
+    case 'vgo': runVoice(); break;
+    case 'vmic': if(LIVE.on){ stopListening(); } else if(el.classList.contains('send')) runVoice(); else if(srAvailable()) startListening(); else focusVoice(); break;
+    case 'dictate': startDictation(el.dataset.k, el); break;
+    case 'vlang': if(DICT.k) stopDictation(); S.voiceLang = el.dataset.l; document.querySelectorAll('[data-act=vlang]').forEach(x => x.classList.toggle('on', x === el)); if(LIVE.on){ stopListening(true); startListening(); } break;
+    case 'vstop': S.voice?.ctl?.abort(); S.voice.busy = false; renderVoice(); break;
+    case 'vback': S.voice.result = null; renderVoice(); break;
+    case 'vapply': applyVoice(); break;
+    case 'vclose': if(S.voice) S.voice.text = $('#vtext')?.value || ''; closeModal(); break;
+    case 'fixall': if(S.voice) S.voice.text = $('#vtext')?.value || ''; fixAll(); break;
+    case 'fixen': fixField(el.dataset.k, el); break;
+    case 'undofix': { const k = el.dataset.k; if(k in S.fixUndo){ S.draft.data[k] = S.fixUndo[k]; delete S.fixUndo[k]; rerenderEditorField(k); } break; }
+    case 'sign': openSign(id, +el.dataset.i); break;
+    case 'sgclear': if(PAD){ PAD.g.clearRect(0,0,PAD.c.width,PAD.c.height); Object.assign(PAD,{strokes:0,minX:1e9,minY:1e9,maxX:-1,maxY:-1}); } break;
+    case 'sgdo': doSign(id, +el.dataset.i); break;
+    case 'closemodal': closeModal(); render(); break;
+    case 'confirmok': { const cb = CONFIRM_CB; CONFIRM_CB = null; closeModal(); cb && cb(); break; }
+    case 'pdf': makePDF(id); break;
+    case 'csv': if(S.recentFull && !S.allLoaded){ await loadAllDocs(); } exportCSV(); break;
+    case 'loadall': loadAllDocs(el); break;
+    case 'install': if(S.installEvt){ S.installEvt.prompt(); try { await S.installEvt.userChoice; } catch(err){} S.installEvt = null; render(); } break;
+    case 'hideinstall': try { localStorage.setItem('sde-hide-install','1'); } catch(err){} render(); break;
+    case 'zoom': showModal(`<div class="box wide lightbox"><div class="mh"><h3 style="font-size:15px">${esc(el.dataset.cap||'Photo')}</h3><div class="sp"></div><button class="btn sm" data-act="closemodal">Close</button></div><div class="mb"><img ${photoAttr(el.dataset.zid)} alt=""></div></div>`); break;
+    case 'revert': confirmBox('Return to draft?', 'All signatures on this document will be removed so it can be edited again. This is recorded as an update.', 'Return to draft', async () => {
+      try { await S.db.doc('docs/'+id).update({signatures:[], updatedAt:new Date().toISOString(), updatedBy:S.me||null, revertedAt:new Date().toISOString()}); toast('Returned to draft'); render(); } catch(err){ dbErr(err); } }, true); break;
+    case 'del': confirmBox('Delete this document?', 'This permanently removes the document and its signatures from the project record.', 'Delete', async () => {
+      const pid = docById(id)?.projectId; try { await S.db.doc('docs/'+id).delete(); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); } catch(err){ dbErr(err); } }, true); break;
+    case 'savesettings': { const vals = {}; document.querySelectorAll('[data-set]').forEach(i => vals[i.dataset.set] = i.value.trim()); if(!vals.name) vals.name = COMPANY_DEFAULT.name;
+      try { await S.db.doc('settings/company').set({...company(), ...vals}); toast('Saved'); } catch(err){ dbErr(err); } break; }
+    case 'rmlogo': try { await S.db.doc('settings/company').set({...company(), logoId:''}); } catch(err){ dbErr(err); } break;
+  }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if(t.matches('[data-filter]')) return applyRegFilter();
+  if(t.id === 'vtext'){ if(S.voice) S.voice.text = t.value; syncVoiceBtn(); return; }
+  if(!S.draft || S.view.name !== 'edit') return;
+  if(t.dataset.f){ S.draft.data[t.dataset.f] = t.value; S.dirty = true; delete S.fixUndo[t.dataset.f]; t.closest('.fld')?.classList.remove('err'); }
+  else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err'); }
+  else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
+});
+document.addEventListener('submit', e => { if(e.target.id === 'authForm'){ e.preventDefault(); emailAuth(e.target); } });
+document.addEventListener('change', async e => {
+  const t = e.target;
+  if(t.dataset.role){ const uid = t.dataset.role, role = t.value; try { await S.db.doc('users/'+uid).update({role, roleBy:S.me, roleAt:new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; }
+  if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
+  if(t.dataset.photos && t.files?.length){ uploadPhotos(t.dataset.photos, t.files); t.value = ''; }
+  if(t.matches('[data-filter]')) applyRegFilter();
+  if(t.hasAttribute('data-logo') && t.files?.[0]){
+    try { const blob = await compress(t.files[0], 600, .9); const r = await S.assets.upload(blob); await S.db.doc('settings/company').set({...company(), logoId:r.id}); toast('Logo updated'); }
+    catch(err){ dbErr(err); }
+  }
+});
+window.addEventListener('beforeunload', e => { if(S.dirty){ e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- boot ---------- */
+/* ============================================================
+   Platform layer for the stand-alone version:
+   Firebase Auth + Firestore, photos stored in Firestore,
+   AI through the site's own /api/ai endpoint.
+   ============================================================ */
+const FB_VER = '13.1.0';
+const FB_BASE = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
+const FB = {};          // loaded Firebase modules + instances
+const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', admin:'Admin', removed:'Removed'};
+
+function cfgOwners(){ return ((window.APP_CONFIG && window.APP_CONFIG.ownerEmails) || []).map(e => String(e).toLowerCase().trim()).filter(Boolean); }
+function isOwnerEmail(u){ return !!(u && u.email && cfgOwners().includes(u.email.toLowerCase())); }
+
+/* --- Firestore adapter with the same small interface the app uses --- */
+function offlineSafe(p){
+  // When the phone has no signal, Firestore keeps the write and syncs it later.
+  // Don't leave the screen waiting for the server in that case.
+  if(navigator.onLine) return p;
+  p.catch(e => console.warn('queued write failed', e));
+  return Promise.resolve();
+}
+function refreshExtra(path){
+  // Older documents aren't in the live list; refresh their copy after a change.
+  const m = path.match(/^docs\/([^/]+)$/); if(!m || !S.extra || !S.extra[m[1]]) return;
+  F_get(path).then(s => { if(s.exists()){ S.extra[m[1]] = {id: m[1], ...s.data()}; recomputeDocs(); softRender(); } }).catch(() => {});
+}
+function F_get(path){ return FB.fs.getDoc(FB.fs.doc(FB.db, path)); }
+function makeDB(){
+  const F = FB.fs, db = FB.db;
+  const wrap = s => ({id:s.id, exists: s.exists(), data: () => s.data(), metadata: s.metadata});
+  const docRef = path => {
+    const r = F.doc(db, path);
+    return {
+      id: r.id, path,
+      get: async () => wrap(await F.getDoc(r)),
+      set: d => offlineSafe(F.setDoc(r, d)).then(() => refreshExtra(path)),
+      update: d => offlineSafe(F.updateDoc(r, d)).then(() => refreshExtra(path)),
+      delete: () => offlineSafe(F.deleteDoc(r)),
+      onSnapshot: (n, e) => F.onSnapshot(r, s => n(wrap(s)), e)
+    };
+  };
+  const coll = (path, cons = []) => ({
+    path,
+    orderBy: (f, d) => coll(path, [...cons, F.orderBy(f, d || 'asc')]),
+    limit: n => coll(path, [...cons, F.limit(n)]),
+    where: (a, b, c) => coll(path, [...cons, F.where(a, b, c)]),
+    get: async () => { const s = await F.getDocs(F.query(F.collection(db, path), ...cons)); return {docs: s.docs.map(wrap), size: s.size, empty: s.empty}; },
+    onSnapshot: (n, e) => F.onSnapshot(F.query(F.collection(db, path), ...cons), s => n({docs: s.docs.map(wrap), size: s.size, empty: s.empty}), e),
+    doc: id => docRef(path + '/' + (id || F.doc(F.collection(db, path)).id))
+  });
+  return {doc: docRef, collection: p => coll(p)};
+}
+
+/* Unique, gap-free document numbers per project + type, safe when two
+   people create a report at the same moment. */
+async function allocateSeq(pid, type){
+  const F = FB.fs, ref = F.doc(FB.db, 'counters/' + pid + '_' + type);
+  const floor = S.docs.filter(x => x.projectId === pid && x.type === type).reduce((m, x) => Math.max(m, x.seq || 0), 0);
+  return await F.runTransaction(FB.db, async tx => {
+    const s = await tx.get(ref);
+    const n = Math.max(s.exists() ? (s.data().last || 0) : 0, floor) + 1;
+    tx.set(ref, {last: n, updatedAt: new Date().toISOString()});
+    return n;
+  });
+}
+
+/* --- photos: compressed JPEGs kept in Firestore (no separate storage bill) --- */
+const PHOTO_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><rect width="4" height="3" fill="#ece8e1"/></svg>');
+S.photoCache = {};
+const photoLoads = {};
+function blobToDataURL(b){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); }); }
+async function photoData(id){
+  if(!id) throw new Error('no id');
+  if(S.photoCache[id]) return S.photoCache[id];
+  if(!photoLoads[id]) photoLoads[id] = S.db.doc('photos/' + id).get().then(s => { const d = s.exists ? s.data().data : ''; if(d) S.photoCache[id] = d; delete photoLoads[id]; return d; });
+  return photoLoads[id];
+}
+function hydratePhotos(root){
+  (root || document).querySelectorAll('img[data-pid]').forEach(img => {
+    const id = img.dataset.pid; if(!id || img.dataset.loaded === id) return;
+    img.dataset.loaded = id;
+    photoData(id).then(u => { if(u && img.dataset.pid === id) img.src = u; }).catch(() => {});
+  });
+}
+new MutationObserver(() => hydratePhotos()).observe(document.documentElement, {childList: true, subtree: true});
+const photoStore = {
+  upload: async blob => {
+    const data = await blobToDataURL(blob);
+    if(data.length > 950000) throw {code: 'too_large'};
+    const ref = S.db.collection('photos').doc();
+    await ref.set({data, createdAt: new Date().toISOString(), by: S.me || null});
+    S.photoCache[ref.id] = data;
+    return {id: ref.id};
+  }
+};
+
+/* --- downloads: a normal browser download --- */
+const downloader = {
+  save: async ({filename, data}) => {
+    const blob = data instanceof Blob ? data : new Blob([data], {type: /\.csv$/i.test(filename) ? 'text/csv' : 'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return {status: 'saved'};
+  }
+};
+
+/* --- AI through /api/ai (the API key stays on the server) --- */
+async function aiCall(prompt, opts = {}){
+  const u = FB.auth && FB.auth.currentUser; if(!u) throw {code: 'not_granted'};
+  const token = await u.getIdToken();
+  let r;
+  try {
+    r = await fetch(window.APP_CONFIG.aiEndpoint || '/api/ai', {method: 'POST', signal: opts.signal, headers: {'content-type': 'application/json', authorization: 'Bearer ' + token},
+      body: JSON.stringify({prompt, maxTokens: opts.maxTokens || 2500, json: !!opts.json})});
+  } catch(e){ throw {code: e && e.name === 'AbortError' ? 'cancelled' : 'upstream_error'}; }
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw {code: r.status === 429 ? 'rate_limited' : r.status === 401 || r.status === 403 ? 'not_granted' : r.status === 503 ? 'not_configured' : 'upstream_error', message: j.error || ''};
+  if(!j.text) throw {code: 'empty_completion'};
+  return j.text;
+}
+function parseLooseJSON(t){
+  try { return JSON.parse(t); } catch(e){}
+  const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if(f){ try { return JSON.parse(f[1]); } catch(e){} }
+  const a = t.search(/[\[{]/), b = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
+  if(a >= 0 && b > a){ try { return JSON.parse(t.slice(a, b + 1)); } catch(e){} }
+  throw {code: 'invalid_json', text: t};
+}
+const aiSample = async (prompt, opts = {}) => ({text: await aiCall(prompt, opts), truncated: false});
+aiSample.json = async (prompt, opts = {}) => parseLooseJSON(await aiCall(prompt + '\n\nReply with only the JSON, no other text.', {...opts, json: true}));
+
+/* --- sign-in screens --- */
+function authShell(inner){
+  return `<div style="max-width:420px;margin:28px auto" class="card pad">
+    <div class="row" style="gap:12px;margin-bottom:14px"><div class="mark" style="width:46px;height:46px;font-size:16px;color:#fff">SDE</div>
+    <div><b style="font:800 17px Archivo">${esc(company().name)}</b><div class="small muted">Site Records</div></div></div>${inner}</div>`;
+}
+function loginView(mode){
+  mode = mode || 'signin';
+  const isNew = mode === 'signup', isReset = mode === 'reset';
+  return authShell(`
+    ${isReset ? '' : `<button class="btn" style="width:100%;padding:12px" data-act="gsignin"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+    <div class="row" style="margin:16px 0;color:var(--muted);font-size:12.5px"><div class="sp" style="height:1px;background:var(--line)"></div>or with email<div class="sp" style="height:1px;background:var(--line)"></div></div>`}
+    <form id="authForm" data-mode="${mode}">
+      <div class="fgrid">
+        ${isNew ? `<div class="fld"><label>Full name</label><input name="name" autocomplete="name" required></div>` : ''}
+        <div class="fld"><label>Email</label><input name="email" type="email" autocomplete="email" required></div>
+        ${isReset ? '' : `<div class="fld"><label>Password</label><input name="password" type="password" autocomplete="${isNew ? 'new-password' : 'current-password'}" minlength="6" required></div>`}
+      </div>
+      <button class="btn pri" style="width:100%;margin-top:14px;padding:12px" type="submit">${isNew ? 'Create account' : isReset ? 'Send reset link' : 'Sign in'}</button>
+    </form>
+    <div class="row small" style="justify-content:space-between;margin-top:12px">
+      ${mode === 'signin' ? `<button class="crumb" data-act="authmode" data-m="signup">New here? Create an account</button><button class="crumb" data-act="authmode" data-m="reset">Forgot password?</button>`
+        : `<button class="crumb" data-act="authmode" data-m="signin">← Back to sign in</button>`}
+    </div>`);
+}
+function pendingView(){
+  const u = FB.auth.currentUser, r = S.myRole;
+  return authShell(`<h3 style="margin-bottom:6px">${r === 'removed' ? 'Access removed' : 'Waiting for approval'}</h3>
+    <p class="muted" style="margin-top:0">${r === 'removed' ? 'Your access to Site Records has been removed. Contact your admin if this is a mistake.' : 'Your account has been created. An admin needs to approve it before you can see projects. This page will open automatically once you are approved.'}</p>
+    <div class="small muted">Signed in as <b>${esc(u.email || u.displayName || '')}</b></div>
+    <button class="btn" style="margin-top:14px" data-act="signout">Sign out</button>`);
+}
+function setupNeededView(){
+  return authShell(`<h3 style="margin-bottom:6px">Setup not finished</h3><p class="muted" style="margin:0">The Firebase settings haven't been added to this app file yet. Send your firebaseConfig to Claude to get the finished file, then upload it to GitHub again.</p>`);
+}
+function authError(e){
+  const c = (e && e.code) || '';
+  const m = {
+    'auth/invalid-credential': 'Wrong email or password.', 'auth/wrong-password': 'Wrong email or password.', 'auth/user-not-found': 'No account with that email.',
+    'auth/email-already-in-use': 'That email already has an account — sign in instead.', 'auth/weak-password': 'Password must be at least 6 characters.',
+    'auth/invalid-email': 'That email address looks wrong.', 'auth/too-many-requests': 'Too many tries — wait a few minutes.',
+    'auth/popup-closed-by-user': '', 'auth/cancelled-popup-request': '', 'auth/network-request-failed': 'No internet connection.',
+    'auth/unauthorized-domain': 'This web address isn\'t allowed yet — add it under Firebase → Authentication → Settings → Authorized domains.',
+    'auth/operation-not-allowed': 'This sign-in method isn\'t switched on in Firebase yet.'
+  };
+  const msg = c in m ? m[c] : 'Sign-in failed (' + c + ').';
+  if(msg) toast(msg, true);
+}
+async function googleSignIn(){
+  const A = FB.authM, p = new A.GoogleAuthProvider();
+  p.setCustomParameters({prompt: 'select_account'});
+  try { await A.signInWithPopup(FB.auth, p); }
+  catch(e){ if(e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) { try { await A.signInWithRedirect(FB.auth, p); } catch(e2){ authError(e2); } } else authError(e); }
+}
+async function emailAuth(form){
+  const A = FB.authM, f = new FormData(form), mode = form.dataset.mode;
+  const email = String(f.get('email') || '').trim(), pw = String(f.get('password') || '');
+  const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+  try {
+    if(mode === 'reset'){ await A.sendPasswordResetEmail(FB.auth, email); toast('Reset link sent — check your email.'); S.authMode = 'signin'; render(); }
+    else if(mode === 'signup'){ const cr = await A.createUserWithEmailAndPassword(FB.auth, email, pw); const nm = String(f.get('name') || '').trim(); if(nm){ await A.updateProfile(cr.user, {displayName: nm}); S.pendingName = nm; } }
+    else await A.signInWithEmailAndPassword(FB.auth, email, pw);
+  } catch(e){ authError(e); }
+  finally { btn.disabled = false; }
+}
+
+/* --- team management (admin) --- */
+function teamView(){
+  if(!S.canEdit) return `<div class="card empty">Only admins can manage the team.</div>`;
+  const order = {pending: 0, admin: 1, staff: 2, removed: 3};
+  const list = [...S.users].sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || String(a.name).localeCompare(String(b.name)));
+  const pend = list.filter(u => u.role === 'pending').length;
+  return `<div class="pagehead"><div><div class="eyebrow">Who can use Site Records</div><h1>Team</h1></div><div class="sp"></div><button class="btn pri" data-act="addstaff">+ Add staff</button></div>
+  ${pend ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn)"><b>!</b><span>${pend} person${pend > 1 ? 's are' : ' is'} waiting for approval. Choose <b>Staff</b> to let them in.</span></div>` : ''}
+  <div class="card"><table class="reg"><thead><tr><th>Name</th><th class="hm">Email</th><th>Access</th></tr></thead><tbody>
+  ${list.map(u => { const owner = isOwnerEmail(u); const me = u.id === S.me;
+    return `<tr><td><b>${esc(u.name || '—')}</b>${me ? ' <span class="pill draft">You</span>' : ''}${owner ? ' <span class="pill type">OWNER</span>' : ''}<div class="small muted" style="display:none">${esc(u.email || '')}</div></td>
+    <td class="hm small">${esc(u.email || '')}</td>
+    <td>${owner || me ? `<span class="pill done">${esc(ROLE_LABEL[u.role] || u.role)}</span>` : `<select class="inp" style="padding:6px 8px;font-size:13.5px;width:auto" data-role="${esc(u.id)}">${['pending', 'staff', 'admin', 'removed'].map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td></tr>`; }).join('')}
+  </tbody></table></div>
+  <p class="small muted">Staff can create, edit drafts and sign reports. Admins can also manage the team, company details, and return signed reports to draft or delete them. "Removed" blocks access but keeps their records and signatures.</p>`;
+}
+function addStaffForm(){
+  showModal(`<div class="box"><div class="mh"><h3>Add staff with email & password</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0">For staff who don't use Google. Give them the email and temporary password; they can change it later with "Forgot password". Staff with Gmail can simply open the app and tap <b>Continue with Google</b> — then approve them here.</p>
+    <div class="fgrid"><div class="fld" id="fld_sname"><label>Full name</label><input id="stName"></div>
+    <div class="fld" id="fld_semail"><label>Email</label><input id="stEmail" type="email"></div>
+    <div class="fld half" id="fld_spw"><label>Temporary password</label><input id="stPw" value="${'Sde' + Math.random().toString(36).slice(2, 8) + '!'}"></div>
+    <div class="fld half"><label>Access</label><select id="stRole"><option value="staff">Staff</option><option value="admin">Admin</option></select></div></div>
+  </div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="savestaff">Create account</button></div></div>`);
+}
+async function createStaff(){
+  const name = $('#stName').value.trim(), email = $('#stEmail').value.trim(), pw = $('#stPw').value, role = $('#stRole').value;
+  if(!name){ $('#fld_sname').classList.add('err'); return toast('Enter a name.', true); }
+  if(!email){ $('#fld_semail').classList.add('err'); return toast('Enter an email.', true); }
+  if(pw.length < 6){ $('#fld_spw').classList.add('err'); return toast('Password needs at least 6 characters.', true); }
+  const btn = document.querySelector('[data-act=savestaff]'); btn.disabled = true;
+  try {
+    // A second Firebase app instance creates the account without signing the admin out.
+    const sec = FB.appM.getApps().find(a => a.name === 'staff-creator') || FB.appM.initializeApp(window.APP_CONFIG.firebase, 'staff-creator');
+    const sa = FB.authM.getAuth(sec);
+    const cr = await FB.authM.createUserWithEmailAndPassword(sa, email, pw);
+    await FB.authM.updateProfile(cr.user, {displayName: name}).catch(() => {});
+    await FB.authM.signOut(sa);
+    await S.db.doc('users/' + cr.user.uid).set({name, email, role, createdAt: new Date().toISOString(), addedBy: S.me});
+    closeModal(); render();
+    showModal(`<div class="box" style="max-width:440px"><div class="mh"><h3>Account created ✓</h3></div><div class="mb"><p style="margin-top:0">Send these to <b>${esc(name)}</b>:</p>
+      <div class="vchg"><div class="b">Website: ${esc(location.origin)}\nEmail: ${esc(email)}\nPassword: ${esc(pw)}</div></div>
+      <p class="small muted">They sign in with "Sign in" (not Google).</p></div><div class="mf"><button class="btn" data-act="copycreds" data-t="${esc('Sadhana Site Records\n' + location.origin + '\nEmail: ' + email + '\nPassword: ' + pw)}">Copy</button><button class="btn pri" data-act="closemodal">Done</button></div></div>`);
+  } catch(e){ btn.disabled = false; authError(e); }
+}
+
+/* --- recent + on-demand documents --- */
+const RECENT_LIMIT = 300;
+S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false;
+function recomputeDocs(){
+  const m = {...S.extra}; S.recent.forEach(d => m[d.id] = d);
+  S.docs = Object.values(m).filter(d => TYPES[d.type]);
+}
+async function loadProjectDocs(pid){
+  if(!pid || S.loadedProj[pid] || S.allLoaded || !S.recentFull) return;
+  S.loadedProj[pid] = 1;
+  try { const s = await S.db.collection('docs').where('projectId', '==', pid).get(); s.docs.forEach(x => S.extra[x.id] = {id: x.id, ...x.data()}); recomputeDocs(); softRender(); }
+  catch(e){ S.loadedProj[pid] = 0; console.error(e); }
+}
+async function loadAllDocs(btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
+  try { const s = await S.db.collection('docs').get(); s.docs.forEach(x => S.extra[x.id] = {id: x.id, ...x.data()}); S.allLoaded = true; recomputeDocs(); render(); }
+  catch(e){ dbErr(e); if(btn){ btn.disabled = false; btn.textContent = 'Load older documents'; } }
+}
+
+/* --- install as an app --- */
+S.installEvt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; softRender(); });
+window.addEventListener('appinstalled', () => { S.installEvt = null; toast('Installed ✓ — open Site Records from your home screen'); softRender(); });
+if('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+function installBanner(){
+  if(isStandalone()) return '';
+  try { if(localStorage.getItem('sde-hide-install')) return ''; } catch(e){}
+  if(S.installEvt) return `<div class="vhint" style="background:#e9f6ee;color:#1f6b3f;align-items:center"><b>📲</b><span style="flex:1"><b style="font-size:14px">Install Site Records as an app</b><br>Opens full screen from your home screen, like any app.</span><button class="btn pri sm" data-act="install">Install</button><button class="xbtn" data-act="hideinstall" title="Hide">×</button></div>`;
+  if(isIOS()) return `<div class="vhint" style="align-items:center"><b>📲</b><span style="flex:1"><b style="font-size:14px">Install on iPhone</b><br>In Safari tap <b>Share</b> ⬆️ then <b>Add to Home Screen</b>.</span><button class="xbtn" data-act="hideinstall" title="Hide">×</button></div>`;
+  return '';
+}
+
+/* --- boot --- */
+let unsubs = [];
+function stopData(){ unsubs.forEach(u => { try { u(); } catch(e){} }); unsubs = []; S.loaded = {p: 0, d: 0}; S.projects = []; S.docs = []; S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false; }
+function startData(){
+  const db = S.db;
+  const onErr = e => { console.error(e); if(e && e.code === 'permission-denied') return; toast('Lost connection to records — reload the page.', true); };
+  unsubs.push(db.collection('projects').onSnapshot(s => { S.projects = s.docs.map(x => ({id: x.id, ...x.data()})); S.loaded.p = 1; softRender(); }, onErr));
+  // Only recent documents stream live (keeps daily database reads inside the free plan).
+  // Older ones load when a project or the full register is opened.
+  unsubs.push(db.collection('docs').orderBy('createdAt', 'desc').limit(RECENT_LIMIT).onSnapshot(s => {
+    S.recent = s.docs.map(x => ({id: x.id, ...x.data()})); S.recentFull = s.size >= RECENT_LIMIT; recomputeDocs(); S.loaded.d = 1; softRender();
+  }, onErr));
+  unsubs.push(db.collection('users').onSnapshot(s => {
+    S.users = s.docs.map(x => ({id: x.id, ...x.data()}));
+    S.users.forEach(u => { if(u.name) S.names[u.id] = u.name; });
+    softRender();
+  }, () => {}));
+  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; softRender(); }, () => {}));
+}
+async function onSignedIn(u){
+  S.me = u.uid; S.names[u.uid] = u.displayName || u.email || 'Me';
+  const ref = S.db.doc('users/' + u.uid);
+  let snap;
+  try { snap = await ref.get(); } catch(e){ snap = {exists: false}; }
+  if(!snap.exists){
+    const base = {name: S.pendingName || u.displayName || (u.email || '').split('@')[0], email: u.email || '', createdAt: new Date().toISOString()};
+    const uref = FB.fs.doc(FB.db, 'users/' + u.uid);
+    // The security rules only allow the owner's email to start as admin; everyone else starts as pending.
+    try { await FB.fs.setDoc(uref, {...base, role: 'admin'}); }
+    catch(e){ try { await FB.fs.setDoc(uref, {...base, role: 'pending'}); } catch(e2){ console.error(e2); } }
+  }
+  if(S.unsubMe) S.unsubMe();
+  S.unsubMe = ref.onSnapshot(s => {
+    const d = s.exists ? s.data() : {role: 'pending'};
+    const prev = S.myRole; S.myRole = d.role || 'pending';
+    if(d.name) S.names[u.uid] = d.name;
+    S.canEdit = S.myRole === 'admin'; S.canWrite = S.myRole === 'admin' || S.myRole === 'staff';
+    if(S.canWrite && !(prev === 'admin' || prev === 'staff')){ startData(); }
+    if(!S.canWrite && (prev === 'admin' || prev === 'staff')){ stopData(); }
+    S.authState = S.canWrite ? 'in' : 'pending';
+    render();
+  }, e => { console.error(e); S.authState = 'pending'; render(); });
+}
+(async function boot(){
+  S.users = []; S.authState = 'loading';
+  if(!window.APP_CONFIG || !window.APP_CONFIG.firebase){ S.authState = 'nosetup'; render(); return; }
+  try {
+    const [appM, authM, fs] = await Promise.all([import(FB_BASE + 'firebase-app.js'), import(FB_BASE + 'firebase-auth.js'), import(FB_BASE + 'firebase-firestore.js')]);
+    Object.assign(FB, {appM, authM, fs});
+    FB.app = appM.initializeApp(window.APP_CONFIG.firebase);
+    FB.auth = authM.getAuth(FB.app);
+    try { FB.db = fs.initializeFirestore(FB.app, {localCache: fs.persistentLocalCache({tabManager: fs.persistentMultipleTabManager()})}); }
+    catch(e){ FB.db = fs.getFirestore(FB.app); }
+  } catch(e){
+    console.error(e);
+    $('#main').innerHTML = authShell('<h3>Can\'t connect</h3><p class="muted">Check your internet connection and reload the page.</p>');
+    return;
+  }
+  S.db = makeDB(); S.assets = photoStore; S.dl = downloader; S.sample = aiSample;
+  if(!window.APP_CONFIG.aiEndpoint) S.sample = null;
+  authM_getRedirect();
+  FB.authM.onAuthStateChanged(FB.auth, u => {
+    stopData(); if(S.unsubMe){ S.unsubMe(); S.unsubMe = null; } S.myRole = null; S.canWrite = false; S.canEdit = false;
+    if(!u){ S.me = null; S.authState = 'out'; S.view = {name: 'home'}; render(); return; }
+    S.authState = 'loading'; render();
+    onSignedIn(u);
+  });
+})();
+function authM_getRedirect(){ try { FB.authM.getRedirectResult(FB.auth).catch(authError); } catch(e){} }
+
+</script>
+</body>
+</html>
