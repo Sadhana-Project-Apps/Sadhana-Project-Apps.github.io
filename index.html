@@ -357,20 +357,22 @@ const TYPES = {
     ]
   },
   PR: {
-    name: 'Weekly Progress Report', code: 'PR', blurb: 'S-curve, works, issues, weather, manpower, photos', cover: true,
+    name: 'Progress Report', code: 'PR', blurb: 'Weekly, fortnightly or monthly progress', cover: true,
+    nameFn: d => (d.period || 'Weekly') + ' Progress Report',
     sigs: [
       {role:'Prepared by', hint:'Site Engineer'},
       {role:'Checked by', hint:'Project Manager'},
       {role:'Approved by', hint:'Client / Consultant'}
     ],
     done: 'Approved',
-    title: d => 'Weekly Progress Report' + (d.reportNo ? ' No. ' + d.reportNo : '') + ' — ' + fmtDate(d.to),
+    title: d => (d.period || 'Weekly') + ' Progress Report' + (d.reportNo ? ' No. ' + d.reportNo : '') + ' — ' + fmtDate(d.to),
     dateField: 'to',
     fields: [
       {sec:'Reporting period', pdf:false},
+      {k:'period', l:'Report type', t:'select', req:1, o:['Weekly','Fortnightly','Monthly'], w:'half', def:'Weekly', pdf:false},
       {k:'reportNo', l:'Report no.', t:'text', w:'half', ph:'e.g. 1', pdf:false},
       {k:'from', l:'Period from', t:'date', req:1, w:'half', pdf:false},
-      {k:'to', l:'Period to', t:'date', req:1, w:'half', def: () => today(), pdf:false},
+      {k:'to', l:'Period to', t:'date', req:1, w:'half', def: () => today(), pdf:false, hint:'Filled in automatically from the report type — change it if needed'},
       {k:'coverPhoto', l:'Cover photo', t:'photos', hint:'One site photo for the cover page', pdf:false},
       {sec:'S-Curve'},
       {k:'planned', l:'Scheduled progress to date (%)', t:'number', w:'half'},
@@ -382,20 +384,20 @@ const TYPES = {
       {sec:'Progress Summary – Other Works'},
       {k:'otherWorks', l:'Other works (permits, submissions, etc.)', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description',pw:80},{k:'start',l:'Start date',w:100,center:1},{k:'finish',l:'Finish date',w:100,center:1},{k:'status',l:'Status',w:110,center:1}],
         def: () => ['Demolition notification (local authority)','Dilapidation report','Temporary hoarding installation','CIDB registration','LHDN stamping'].map(desc => ({desc}))},
-      {sec:'One-Week Look-Ahead'},
-      {k:'lookahead', l:'Planned works next week', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description'},{k:'start',l:'Est. start',w:110,center:1,pw:40}], def: () => [{},{},{}]},
+      {sec:'Look-Ahead (Next Period)'},
+      {k:'lookahead', l:'Planned works for the next period', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description'},{k:'start',l:'Est. start',w:110,center:1,pw:40}], def: () => [{},{},{}]},
       {sec:'Major Issues Affecting Progress'},
       {k:'issues', l:'Issues', t:'table', num:1, sub:false, cols:[{k:'issue',l:'Issue',pw:36},{k:'desc',l:'Description',pw:38},{k:'by',l:'Action by',w:90,center:1,pw:22},{k:'status',l:'Status'}], def: () => [{},{}]},
       {sec:'Weather Report'},
       {k:'weather', l:'Weather', t:'table', sub:false, cols:[{k:'date',l:'Date',center:1,pw:26},{k:'am',l:'Morning',center:1},{k:'pm',l:'Afternoon',center:1},{k:'rain',l:'Rain hours',n:1,w:80,pw:24},{k:'remarks',l:'Remarks'}], def: () => []},
       {sec:'Manpower at Site'},
-      {k:'manpower', l:'Manpower', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, cols:[{k:'name',l:'Personnel',pw:46}, ...DAY_COLS(7)],
+      {k:'manpower', l:'Manpower', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:31, cols:[{k:'name',l:'Personnel',pw:42}, ...DAY_COLS(31)],
         def: () => MANPOWER_LIST.map(name => ({name}))},
       {sec:'Plant & Machinery at Site'},
-      {k:'machinery', l:'Machinery', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, cols:[{k:'name',l:'Machinery',pw:46}, ...DAY_COLS(7)],
+      {k:'machinery', l:'Machinery', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:31, cols:[{k:'name',l:'Machinery',pw:42}, ...DAY_COLS(31)],
         def: () => MACHINERY_LIST.map(name => ({name}))},
       {sec:'Safety Statistics & Manhours'},
-      {k:'hse', l:'HSE statistics', t:'table', sub:false, keepRows:1, cols:[{k:'item',l:'HSE statistic'},{k:'week',l:'This week',n:1,w:90,pw:30},{k:'todate',l:'Total to date',n:1,w:100,pw:30}],
+      {k:'hse', l:'HSE statistics', t:'table', sub:false, keepRows:1, cols:[{k:'item',l:'HSE statistic'},{k:'week',l:'This period',n:1,w:90,pw:30},{k:'todate',l:'Total to date',n:1,w:100,pw:30}],
         def: () => ['Lost Time Injury (LTI)','Recordable incidents','Near misses','Total manhours','Safe workdays'].map(item => ({item}))},
       {sec:'Progress Photos'},
       {k:'photosBefore', l:'Before', t:'photos', hint:'Condition at the start of this period'},
@@ -573,6 +575,36 @@ const TYPES = {
       {k:'photos', l:'Completed pictures', t:'photos'}
     ]
   },
+  EMD: {
+    name: 'Equipment Movement Declaration', code: 'EMD', blurb: 'Machinery, tools & equipment moving in / out of site',
+    sigs: [
+      {role:'Declared by', hint:'Sadhana – Site PIC'},
+      {role:'Checked by', hint:'Client – Security'},
+      {role:'Approved by', hint:'Client – PIC'}
+    ],
+    done: 'Approved',
+    title: d => 'Equipment ' + (d.movement || 'Movement') + ' — ' + fmtDate(d.date),
+    dateField: 'date',
+    fields: [
+      {sec:'Movement Details'},
+      {k:'movement', l:'Movement', t:'select', req:1, o:['Move in','Move out'], w:'half', def:'Move in'},
+      {k:'moveInRef', l:'Move-in reference (for move out)', t:'text', w:'half', ph:'e.g. THYBTKL-EMD-001'},
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'time', l:'Time', t:'text', w:'half', ph:'e.g. 9:30am'},
+      {k:'gate', l:'Gate / entrance', t:'text', w:'half'},
+      {k:'vehicle', l:'Lorry / vehicle no.', t:'text', w:'half'},
+      {k:'driver', l:'Driver name', t:'text', w:'half'},
+      {k:'driverId', l:'Driver IC / passport no.', t:'text', w:'half'},
+      {k:'transporter', l:'Transport company', t:'text'},
+      {sec:'Machinery, Tools & Equipment'},
+      {k:'items', l:'Items', t:'table', num:1, sub:false, req:1, sumCols:['qty'], cols:[{k:'desc',l:'Description',pw:48},{k:'cat',l:'Category',o:['Machinery','Tool','Equipment'],w:110,center:1,pw:24},{k:'serial',l:'Serial / reg. no.',center:1,pw:30},{k:'qty',l:'Qty',n:1,w:60,pw:12},{k:'cond',l:'Condition',o:['Good','Fair','Damaged'],w:100,center:1,pw:20},{k:'remarks',l:'Remarks'}],
+        def: () => [{cat:'Machinery', qty:'1', cond:'Good'},{qty:'1', cond:'Good'},{qty:'1', cond:'Good'}]},
+      {sec:'Declaration'},
+      {k:'declaration', l:'Declaration', t:'textarea',
+        def:'We hereby declare that the machinery, tools and equipment listed above belong to (or are hired by) Sadhana Demolition & Engineering Sdn Bhd, and are being moved in / out of the site with the knowledge and verification of the client\'s security and person in charge. The quantities and condition were checked jointly at the gate.'},
+      {k:'photos', l:'Photos', t:'photos', optional:1, hint:'Optional — e.g. the lorry and items at the gate'}
+    ]
+  },
   TBT: {
     name: 'Toolbox Talk', code: 'TBT', blurb: 'Safety briefing & attendance',
     sigs: [
@@ -686,7 +718,7 @@ function softRender(){ if(S.view.name === 'edit' || S.modalOpen) return; render(
 function render(){
   const v = S.view, m = $('#main');
   document.body.classList.toggle('editing', v.name === 'edit');
-  document.querySelectorAll('[data-act=nav]').forEach(b => b.classList.toggle('on', b.dataset.v === (v.name==='project'||v.name==='doc'||v.name==='edit' ? 'home' : v.name)));
+  document.querySelectorAll('[data-act=nav]').forEach(b => b.classList.toggle('on', b.dataset.v === (v.name==='project'||v.name==='doc'||v.name==='edit'||v.name==='files' ? 'home' : v.name)));
   if(window.innerWidth <= 640){ const bn = $('#bnav'); if(bn) bn.querySelectorAll('button').forEach(x=>x.style.flex='1'); }
   const c = company();
   $('#coName').textContent = c.name.replace(/\s+Sdn\.? Bhd\.?$/i,'');
@@ -708,6 +740,7 @@ function render(){
       case 'register': html = registerView(); break;
       case 'settings': html = settingsView(); break;
       case 'team': html = teamView(); break;
+      case 'files': html = filesView(v.id); break;
       default: html = homeView();
     }
   } catch(e){ console.error(e); html = `<div class="card pad">Something went wrong showing this page. <button class="btn sm" data-act="nav" data-v="home">Back to projects</button></div>`; }
@@ -752,6 +785,7 @@ function homeView(){
     <div class="card kpi ${pending.length?'alert':''}"><span class="eyebrow">Awaiting signature</span><b>${pending.length}</b></div>
     <div class="card kpi"><span class="eyebrow">Documents this month</span><b>${monthDocs}</b></div>
   </div>
+  ${(() => { const ex = expiringFiles(); return ex.length ? `<div class="card" style="margin-bottom:16px"><div class="sechead"><h3>Documents expiring</h3><div class="sp"></div><span class="small muted">within 30 days</span></div><div class="list">${ex.slice(0, 8).map(x => `<div class="it" data-act="files" data-id="${esc(x.f.projectId)}"><div class="tick n">!</div><div class="t"><b>${esc(x.f.title)}</b><span>${esc(projById(x.f.projectId)?.name || '')} · ${esc(x.f.category)}</span></div><span class="pill ${x.ex.days < 0 ? '' : 'pending'}" style="${x.ex.days < 0 ? 'background:#fbeeed;color:var(--bad)' : ''}">${esc(x.ex.label)}</span></div>`).join('')}</div></div>` : ''; })()}
   <div class="grid2" style="margin-bottom:22px">
     <div class="card today"><div class="sechead"><h3>Today's daily site reports</h3><div class="sp"></div><span class="small muted">${fmtDate(t)}</span></div><div class="list">${todayList}</div></div>
     <div class="card"><div class="sechead"><h3>Awaiting signature</h3><div class="sp"></div>${drafts.length?`<span class="small muted">${drafts.length} draft${drafts.length>1?'s':''}</span>`:''}</div><div class="list">${pendList}</div></div>
@@ -791,7 +825,9 @@ function projectView(id, tab){
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
+  <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   ${S.canWrite?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
+  ${(() => { const ex = expiringFiles().filter(x => x.f.projectId === id); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
   <div class="card projinfo">
     <div><span>Client</span>${esc(p.client||'—')}</div><div><span>Consultant</span>${esc(p.consultant||'—')}</div>
     <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
@@ -941,7 +977,7 @@ function tableTotals(f, rows){
 function letterheadHTML(d){
   const c = company(), T = TYPES[d.type];
   return `<img ${c.letterheadId ? photoAttr(c.letterheadId) : `src="${LETTERHEAD_JPG}"`} alt="${esc(c.name)}" style="width:100%;display:block;margin-bottom:10px">
-    <div style="text-align:center;margin:6px 0 4px"><div style="font:800 17px Archivo;text-transform:uppercase">${esc(T.name)}</div><div class="mono small" style="color:var(--hazard-d)">${esc(d.number)}</div></div>`;
+    <div style="text-align:center;margin:6px 0 4px"><div style="font:800 17px Archivo;text-transform:uppercase">${esc(docName(T, d.data))}</div><div class="mono small" style="color:var(--hazard-d)">${esc(d.number)}</div></div>`;
   return `<div class="lh"><div class="mark">${c.logoId?`<img ${photoAttr(c.logoId)} alt="">`:'SDE'}</div>
     <div class="co"><b>${esc(c.name)}</b><div>${c.regNo?esc(c.regNo)+'<br>':''}${esc(c.address).replace(/\n/g,'<br>')}${(c.phone||c.email)?'<br>'+[c.phone&&'Tel: '+esc(c.phone), c.email&&esc(c.email)].filter(Boolean).join(' · '):''}</div></div>
     <div class="dt"><h2>${esc(T.name)}</h2><div class="mono">${esc(d.number)}</div></div></div>`;
@@ -1042,8 +1078,9 @@ function fieldInput(f, v){
     case 'checks': return `<div class="checks">${f.o.map(o=>`<label><input type="checkbox" data-chk="${f.k}" value="${esc(o)}" ${(v||[]).includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>`;
     case 'table': {
       const rows = v && v.length ? v : [{}];
-      return `<div class="ftbl"><table><thead><tr>${f.cols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=>`<tr>${f.cols.map(c=>`<td>${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : `<input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      const fcols = f.cols.filter(c => c.day == null || c.day < periodDays(S.draft?.data || {}, f.maxDays || 7));
+      return `<div class="ftbl"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}<th></th></tr></thead><tbody>
+        ${rows.map((r,i)=>`<tr>${fcols.map(c=>`<td>${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : `<input ${c.n?'inputmode="decimal"':''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
       </tbody></table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button></div>`;
     }
     case 'photos': {
@@ -1072,6 +1109,7 @@ function editView(){
   <div class="pagehead"><div><span class="pill type">${esc(T.code)}</span> <span class="mono small muted">${esc(d.number || 'New — number assigned on save')}</span><h1 style="margin-top:6px">${resp?(T.code==='PTW'?'Close-out':'Response')+' — ':''}${esc(T.name)}</h1><div class="muted small">${esc(p.name)}</div></div></div>
   ${!S.sample && SR ? `<div class="vhint form" style="margin-bottom:4px;align-items:center;flex-wrap:wrap"><b>🎤</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Speak instead of typing</b><br>Tap the green 🎤 beside any box and talk. Tap again to stop.</span><div class="langsw" style="margin:0"><button data-act="vlang" data-l="ms-MY" class="${(S.voiceLang||'ms-MY')==='ms-MY'?'on':''}">Bahasa Melayu</button><button data-act="vlang" data-l="en-MY" class="${S.voiceLang==='en-MY'?'on':''}">English</button></div></div>` : ''}
   ${S.sample ? `<div class="vhint form" style="cursor:pointer;margin-bottom:4px" data-act="voice"><b>🎤</b><span><b style="font-size:14px">Speak instead of typing</b><br>Tap the green <b style="font-size:13px">🎤</b> button and just speak. Talk in Bahasa Melayu or English — it's written up in proper English and filled into this form for you.</span></div>` : ''}
+  ${d.type === 'EMD' && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⇄</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Moving out?</b><br>Copy the item list from the move-in declaration, then check what is leaving.</span><button class="btn sm pri" data-act="pickmovein">Copy from move-in</button></div>` : ''}
   ${(d.type === 'PR' || d.type === 'MM') && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⤓</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Fill from daily reports</b><br>Copies ${d.type === 'PR' ? 'weather, ' : ''}manpower and machinery for this period from the daily site reports.</span><button class="btn sm pri" data-act="fillpr">Fill now</button></div>` : ''}
   <div class="form">${html}</div>
   ${S.sample ? '' : '<!--'}<button class="fab" data-act="voice" aria-label="Speak (voice note)"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg><span>Tap to speak</span></button>${S.sample ? '' : '-->'}
@@ -1264,6 +1302,7 @@ const LETTERHEAD_JPG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDA
    · body starts 50 mm from top · Arial-style (Helvetica) · green table headers · page x of y */
 const HS = {W:210, H:297, L:20, R:20, TOP:50, BOTTOM:277, CW:170, LH_Y:10, LH_H:170*286/1400};
 const GREEN_HEAD = [197,224,180], GREEN_LINE = [46,125,50], LABEL_FILL = [242,242,242], TOTAL_FILL = [255,230,153], GRID = [153,153,153], INK = [26,28,30];
+const docName = (T, data) => T.nameFn ? T.nameFn(data || {}) : T.name;
 function dayLabel(from, i){ if(!from) return 'Day '+(i+1); const d = new Date(from+'T00:00:00'); d.setDate(d.getDate()+i); return pad2(d.getDate())+'/'+pad2(d.getMonth()+1); }
 function periodDays(data, max = 7){ if(!data.from || !data.to) return max; const n = Math.round((new Date(data.to+'T00:00:00') - new Date(data.from+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
 async function letterheadData(){
@@ -1322,7 +1361,7 @@ async function makePDF(id){
     // ---- first page: cover (progress report) or title block ----
     if(T.cover){
       doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...INK);
-      doc.text(pt(T.name.toUpperCase()), HS.W/2, y + 6, {align:'center'});
+      doc.text(pt(docName(T, data).toUpperCase()), HS.W/2, y + 6, {align:'center'});
       doc.setFont('helvetica','normal'); doc.setFontSize(11);
       doc.text(pt('Report No. ' + (data.reportNo || d.seq || '') + '     |     Period: ' + periodTxt), HS.W/2, y + 13, {align:'center'});
       doc.setFont('helvetica','bold'); doc.setFontSize(11);
@@ -1375,7 +1414,7 @@ async function makePDF(id){
         let cols = f.cols.filter(cc => cc.day == null || cc.day < days);
         let rows = cleanRows(f, data[f.k]);
         if(f.keepRows) rows = (data[f.k] || []).filter(r => !isEmpty(r?.[f.cols[0].k]));
-        const head = [...(f.num ? [f.numLabel || 'ITEM'] : []), ...cols.map(cc => pt((cc.day != null ? dayLabel(data.from, cc.day) : cc.l).toUpperCase()))];
+        const head = [...(f.num ? [f.numLabel || 'ITEM'] : []), ...cols.map(cc => pt((cc.day != null ? (days > 14 ? dayLabel(data.from, cc.day).slice(0, 2) : dayLabel(data.from, cc.day)) : cc.l).toUpperCase()))];
         const dayCols = cols.filter(cc => cc.day != null);
         if(f.rowTotal) head.push('TOTAL');
         const body = rows.map((r, i) => {
@@ -1387,24 +1426,25 @@ async function makePDF(id){
         let foot;
         if(f.sumCols && rows.length){
           foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? rows.reduce((a, r) => a + (parseFloat(String(r[cc.k] || '').replace(/,/g, '')) || 0), 0).toLocaleString('en-MY') : (ci === 0 ? 'TOTAL' : ''))]];
-          if(f.num){ foot[0][0] = 'TOTAL'; if(foot[0][1] === 'TOTAL') foot[0][1] = ''; }
+          if(f.num){ foot[0][0] = ''; foot[0][1] = 'TOTAL'; }
         }
         if(f.colTotal && rows.length){
           const sums = dayCols.map(cc => rows.reduce((a, r) => a + (parseFloat(r[cc.k]) || 0), 0));
           foot = [[...(f.num ? [''] : []), ...cols.map(cc => cc.day != null ? String(sums[dayCols.indexOf(cc)]) : (cc === cols[0] ? 'TOTAL' : '')), ...(f.rowTotal ? [String(sums.reduce((a, b) => a + b, 0))] : [])]];
         }
         if(f.sub !== false) subLabel(f.l.toUpperCase()); else need(14);
+        if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); doc.text(pt('Days of ' + new Date(data.from + 'T00:00:00').toLocaleDateString('en-GB', {month:'long', year:'numeric'}) + ' (' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + ')'), L, y + 3); y += 5; }
         const colStyles = {}; let ci = 0;
         if(f.num) colStyles[ci++] = {cellWidth:12, halign:'center'};
         cols.forEach(cc => { colStyles[ci] = {...(cc.n || cc.day != null || cc.center ? {halign:'center'} : {}), ...(cc.pw ? {cellWidth:cc.pw} : {})}; ci++; });
         if(f.rowTotal) colStyles[ci] = {halign:'center', fontStyle:'bold'};
-        doc.autoTable({...base, startY:y, head:[head], body, foot, showFoot:'lastPage', columnStyles:colStyles, styles:{...base.styles, fontSize: head.length > 20 ? 5.6 : head.length > 7 ? 7.6 : 8.5, cellPadding: head.length > 20 ? 0.8 : 1.6}, headStyles:{...base.headStyles, fontSize: head.length > 20 ? 5.4 : 8.2}}); after();
+        doc.autoTable({...base, startY:y, head:[head], body, foot, showFoot:'lastPage', columnStyles:colStyles, styles:{...base.styles, fontSize: head.length > 20 ? (HS.CW < 200 ? 5.2 : 5.6) : head.length > 9 ? 6.8 : head.length > 7 ? 7.6 : 8.5, cellPadding: head.length > 20 ? (HS.CW < 200 ? 0.5 : 0.8) : head.length > 9 ? 1 : 1.6}, headStyles:{...base.headStyles, fontSize: head.length > 20 ? 5.2 : head.length > 9 ? 6.6 : 8.2}}); after();
         if(f.k === 'scurve' && rows.length) { drawSCurve(doc, rows); after(); }
       } else if(f.t === 'calc' && f.calc === 'salvage'){
         subLabel('SUMMARY');
         doc.autoTable({...base, startY:y, head:[['CATEGORY','TRIPS','TOTAL WEIGHT (KG)']], body: salvageSummary(data).map(r => r.map(pt)), columnStyles:{1:{halign:'center'}, 2:{halign:'center'}}}); after();
       } else if(f.t === 'photos'){
-        const ph = data[f.k] || []; if(!ph.length && f.k === 'coverPhoto') continue;
+        const ph = data[f.k] || []; if(!ph.length && (f.k === 'coverPhoto' || f.optional)) continue;
         need(ph.length ? 58 : 18); y += 2;
         doc.setFillColor(...GREEN_HEAD); doc.setDrawColor(...GRID); doc.setLineWidth(0.15); doc.rect(L, y, CW, 6.5, 'FD');
         doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), L + CW/2, y + 4.4, {align:'center'}); y += 6.5;
@@ -1425,7 +1465,7 @@ async function makePDF(id){
     }
     flush();
     if(!T.cover){ y += 6; heading('Signatures', 62); await sigTable(); }
-    else { y += 8; need(10); doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(102); doc.text('— END OF ' + pt(T.name.toUpperCase()) + ' —', HS.W/2, y + 4, {align:'center'}); }
+    else { y += 8; need(10); doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(102); doc.text('— END OF ' + pt(docName(T, data).toUpperCase()) + ' —', HS.W/2, y + 4, {align:'center'}); }
 
     if(T.cover && typeof tocPage === 'number'){
       doc.setPage(tocPage);
@@ -1441,11 +1481,11 @@ async function makePDF(id){
       try { doc.addImage(LH.url, 'JPEG', L, HS.LH_Y, 170, 170 * LH.h / LH.w); } catch(e){}  // letterhead is always 170 mm wide
       doc.setDrawColor(...GRID); doc.setLineWidth(0.2); doc.line(L, HS.H - 13, L + CW, HS.H - 13);
       doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102);
-      doc.text(pt(T.name + ' ' + (T.cover ? 'No. ' + (data.reportNo || d.seq || '') : d.number) + '  |  ' + periodTxt), L, HS.H - 8.5);
+      doc.text(pt(docName(T, data) + ' ' + (T.cover ? 'No. ' + (data.reportNo || d.seq || '') : d.number) + '  |  ' + periodTxt), L, HS.H - 8.5);
       doc.text(`Page ${i} of ${pages}`, L + CW, HS.H - 8.5, {align:'right'});
     }
     const blob = doc.output('blob');
-    await S.dl.save({filename: `${d.number} ${T.name}.pdf`.replace(/[\\/:*?"<>|]/g,'-'), data: blob});
+    await S.dl.save({filename: `${d.number} ${docName(T, data)}.pdf`.replace(/[\\/:*?"<>|]/g,'-'), data: blob});
   } catch(e){ if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } }
   finally { if(btn){ btn.disabled = false; btn.textContent = '⤓ Download PDF'; } }
 }
@@ -1781,6 +1821,25 @@ document.addEventListener('click', async e => {
       break; }
     case 'saveresp': saveResponse(); break;
     case 'fillpr': fillFromDailyReports(); break;
+    case 'files': S.fileQ = ''; go('files', {id}); break;
+    case 'fileadd': fileForm(el.dataset.p); break;
+    case 'fileedit': fileForm(S.files.find(x => x.id === id)?.projectId, S.files.find(x => x.id === id)); break;
+    case 'fkind': S.fileKind = el.dataset.k; el.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); $('#fUpBox').style.display = S.fileKind === 'upload' ? '' : 'none'; $('#fLinkBox').style.display = S.fileKind === 'link' ? '' : 'none'; break;
+    case 'filesave': saveFile(el.dataset.p, id, el); break;
+    case 'fileopen': openFile(id, false); break;
+    case 'filedl': openFile(id, true); break;
+    case 'filedel': { const f = S.files.find(x => x.id === id); confirmBox('Delete this document?', 'This permanently removes "' + (f?.title || '') + '" for everyone.', 'Delete', () => deleteFile(id), true); break; }
+    case 'pickmovein': {
+      const ins = S.docs.filter(x => x.type === 'EMD' && x.projectId === S.draft.projectId && x.data?.movement === 'Move in' && x.id !== S.draft.id).sort((a, b) => String(b.number).localeCompare(String(a.number)));
+      if(!ins.length){ toast('No move-in declarations in this project yet.', true); break; }
+      showModal(`<div class="box"><div class="mh"><h3>Copy from move-in</h3></div><div class="mb"><div class="list">${ins.map(x => `<div class="it" data-act="usemovein" data-id="${esc(x.id)}"><span class="pill type">EMD</span><div class="t"><b>${esc(x.number)} — ${fmtDate(x.data.date)}</b><span>${esc((x.data.items || []).filter(r => r.desc).map(r => r.desc).slice(0, 4).join(', ') || 'No items')}</span></div>${pill(x)}</div>`).join('')}</div></div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button></div></div>`);
+      break; }
+    case 'usemovein': {
+      const src = docById(id); if(!src) break;
+      S.draft.data.items = clone((src.data.items || []).filter(r => r && (r.desc || r.serial)));
+      S.draft.data.moveInRef = src.number; S.draft.data.movement = 'Move out';
+      if(!S.draft.data.vehicle) S.draft.data.vehicle = '';
+      S.dirty = true; S.modalOpen = false; $('#modal').innerHTML = ''; render(); toast('Items copied from ' + src.number + ' — check quantities and condition'); break; }
     case 'voice': if(S.view.name !== 'edit') break; if(S.sample) openVoice(); else showModal(`<div class="box" style="max-width:440px"><div class="mh"><h3>🎤 Voice isn't available here</h3></div><div class="mb"><p style="margin-top:0">Voice notes and Fix English need the AI key, which hasn't been set up yet.</p><ul class="small" style="padding-left:18px;margin:0"><li>Admin: add <b>ANTHROPIC_API_KEY</b> in Cloudflare (setup guide step 5), then redeploy.</li><li>Then reload this page.</li></ul></div><div class="mf"><button class="btn pri" data-act="closemodal">OK</button></div></div>`); break;
     case 'vgo': runVoice(); break;
     case 'vmic': if(LIVE.on){ stopListening(); } else if(el.classList.contains('send')) runVoice(); else if(srAvailable()) startListening(); else focusVoice(); break;
@@ -1807,7 +1866,7 @@ document.addEventListener('click', async e => {
     case 'revert': confirmBox('Return to draft?', 'All signatures on this document will be removed so it can be edited again. This is recorded as an update.', 'Return to draft', async () => {
       try { await S.db.doc('docs/'+id).update({signatures:[], updatedAt:new Date().toISOString(), updatedBy:S.me||null, revertedAt:new Date().toISOString()}); toast('Returned to draft'); render(); } catch(err){ dbErr(err); } }, true); break;
     case 'del': confirmBox('Delete this document?', 'This permanently removes the document and its signatures from the project record.', 'Delete', async () => {
-      const pid = docById(id)?.projectId; try { await S.db.doc('docs/'+id).delete(); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); } catch(err){ dbErr(err); } }, true); break;
+      const gone = docById(id), pid = gone?.projectId; try { await S.db.doc('docs/'+id).delete(); if(gone) await releaseSeq(gone.projectId, gone.type); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); } catch(err){ dbErr(err); } }, true); break;
     case 'savesettings': { const vals = {}; document.querySelectorAll('[data-set]').forEach(i => vals[i.dataset.set] = i.value.trim()); if(!vals.name) vals.name = COMPANY_DEFAULT.name;
       try { await S.db.doc('settings/company').set({...company(), ...vals}); toast('Saved'); } catch(err){ dbErr(err); } break; }
     case 'rmlh': try { await S.db.doc('settings/company').set({...company(), letterheadId:''}); } catch(err){ dbErr(err); } break;
@@ -1817,9 +1876,16 @@ document.addEventListener('click', async e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if(t.matches('[data-filter]')) return applyRegFilter();
+  if(t.id === 'fileq'){ S.fileQ = t.value; const pos = t.selectionStart; render(); const n = $('#fileq'); if(n){ n.focus(); n.setSelectionRange(pos, pos); } return; }
   if(t.id === 'vtext'){ if(S.voice) S.voice.text = t.value; syncVoiceBtn(); return; }
   if(!S.draft || S.view.name !== 'edit') return;
-  if(t.dataset.f){ S.draft.data[t.dataset.f] = t.value; S.dirty = true; delete S.fixUndo[t.dataset.f]; if(t.dataset.f === 'from' && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
+  if(t.dataset.f){ S.draft.data[t.dataset.f] = t.value; S.dirty = true; delete S.fixUndo[t.dataset.f]; if(S.draft.type === 'PR' && (t.dataset.f === 'from' || t.dataset.f === 'period') && S.draft.data.from){
+      const f0 = new Date(S.draft.data.from + 'T00:00:00'), per = S.draft.data.period || 'Weekly', e = new Date(f0);
+      if(per === 'Monthly') { e.setMonth(e.getMonth() + 1, 0); } else e.setDate(e.getDate() + (per === 'Fortnightly' ? 13 : 6));
+      S.draft.data.to = e.getFullYear() + '-' + pad2(e.getMonth() + 1) + '-' + pad2(e.getDate());
+      const toEl = document.querySelector('[data-f="to"]'); if(toEl) toEl.value = S.draft.data.to;
+    }
+    if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
 });
@@ -1898,15 +1964,32 @@ function makeDB(){
 
 /* Unique, gap-free document numbers per project + type, safe when two
    people create a report at the same moment. */
+/* Running numbers follow the highest number that still exists for this project + document type,
+   so a deleted report's number is used again. The counter only stops two people who create a
+   report at the same moment from getting the same number (it counts for 2 minutes after use). */
+async function highestSeq(pid, type){
+  try {
+    const s = await S.db.collection('docs').where('projectId', '==', pid).get();
+    return s.docs.map(x => x.data()).filter(x => x.type === type).reduce((m, x) => Math.max(m, x.seq || 0), 0);
+  } catch(e){
+    return S.docs.filter(x => x.projectId === pid && x.type === type).reduce((m, x) => Math.max(m, x.seq || 0), 0);
+  }
+}
 async function allocateSeq(pid, type){
   const F = FB.fs, ref = F.doc(FB.db, 'counters/' + pid + '_' + type);
-  const floor = S.docs.filter(x => x.projectId === pid && x.type === type).reduce((m, x) => Math.max(m, x.seq || 0), 0);
+  const floor = await highestSeq(pid, type);
   return await F.runTransaction(FB.db, async tx => {
     const s = await tx.get(ref);
-    const n = Math.max(s.exists() ? (s.data().last || 0) : 0, floor) + 1;
+    const c = s.exists() ? s.data() : {};
+    const recent = c.updatedAt && (Date.now() - Date.parse(c.updatedAt)) < 120000;
+    const n = (recent ? Math.max(c.last || 0, floor) : floor) + 1;
     tx.set(ref, {last: n, updatedAt: new Date().toISOString()});
     return n;
   });
+}
+async function releaseSeq(pid, type){
+  // after a delete: let the next report reuse the freed number
+  try { const top = await highestSeq(pid, type); await FB.fs.setDoc(FB.fs.doc(FB.db, 'counters/' + pid + '_' + type), {last: top, updatedAt: '2000-01-01T00:00:00.000Z'}); } catch(e){}
 }
 
 /* --- photos: compressed JPEGs kept in Firestore (no separate storage bill) --- */
@@ -2086,6 +2169,126 @@ async function createStaff(){
   } catch(e){ btn.disabled = false; authError(e); }
 }
 
+/* ---------- Project files: tender, LOA, insurance, stamp duty and other reference documents ----------
+   Uploaded files are split into pieces and kept in the database (no separate storage bill).
+   Links (e.g. Google Drive) can be saved instead of uploading. */
+const FILE_CATS = ['Tender documents','Letter of Award (LOA)','Contract / agreement','Insurance','Stamp duty (LHDN)','Permits & approvals','Bonds & guarantees','Drawings & specifications','Method statement & HIRARC','Correspondence','Others'];
+const FILE_CHUNK = 900000;            // characters of base64 per database record
+const FILE_MAX = 15 * 1024 * 1024;   // 15 MB per file
+S.files = [];
+function fmtSize(b){ return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+function expiryInfo(f){
+  if(!f.expiry) return null;
+  const days = Math.round((new Date(f.expiry + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 86400000);
+  if(days < 0) return {cls:'bad', label:'Expired ' + fmtDate(f.expiry), days};
+  if(days <= 30) return {cls:'pending', label:'Expires in ' + days + ' day' + (days === 1 ? '' : 's'), days};
+  return {cls:'done', label:'Valid to ' + fmtDate(f.expiry), days};
+}
+const fileIcon = f => f.kind === 'link' ? '🔗' : /pdf/.test(f.mime || '') ? '📄' : /image/.test(f.mime || '') ? '🖼' : /sheet|excel|csv/.test(f.mime || '') ? '📊' : /word|document/.test(f.mime || '') ? '📝' : '📁';
+function filesView(pid){
+  const p = projById(pid); if(!p) return `<div class="card empty">Project not found.</div>`;
+  const q = (S.fileQ || '').toLowerCase();
+  const list = S.files.filter(f => f.projectId === pid && f.status !== 'uploading' && (!q || (f.title + ' ' + (f.refNo || '') + ' ' + (f.notes || '') + ' ' + f.category + ' ' + (f.name || '')).toLowerCase().includes(q)));
+  const groups = FILE_CATS.map(c => [c, list.filter(f => f.category === c).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))]).filter(g => g[1].length);
+  const row = f => { const ex = expiryInfo(f); const mine = f.uploadedBy === S.me;
+    return `<div class="it" style="cursor:default"><div style="font-size:22px;width:28px;text-align:center">${fileIcon(f)}</div>
+      <div class="t"><b style="white-space:normal">${esc(f.title)}</b><span>${[f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0)].filter(Boolean).join(' · ')}${f.notes ? '<br>' + esc(f.notes) : ''}</span>
+      ${ex ? `<div style="margin-top:4px"><span class="pill ${ex.cls === 'bad' ? '' : ex.cls}" style="${ex.cls === 'bad' ? 'background:#fbeeed;color:var(--bad)' : ''}"><span class="dot"></span>${esc(ex.label)}</span></div>` : ''}</div>
+      <div class="row" style="gap:6px;flex-wrap:nowrap">
+        <button class="btn sm" data-act="fileopen" data-id="${esc(f.id)}">Open</button>
+        ${f.kind !== 'link' ? `<button class="btn sm ghost" data-act="filedl" data-id="${esc(f.id)}" title="Download">⤓</button>` : ''}
+        ${(S.canEdit || mine) ? `<button class="btn sm ghost" data-act="fileedit" data-id="${esc(f.id)}" title="Edit">✎</button>` : ''}
+      </div></div>`; };
+  return `<button class="crumb" data-act="proj" data-id="${esc(pid)}">← ${esc(p.name)}</button>
+  <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">Project files</h1><div class="muted small">Tender, LOA, insurance, stamp duty and other reference documents — everyone on the team can open them.</div></div><div class="sp"></div>
+  ${S.canWrite ? `<button class="btn pri" data-act="fileadd" data-p="${esc(pid)}">+ Add document</button>` : ''}</div>
+  <div class="filters card" style="margin-bottom:14px"><input id="fileq" placeholder="Search title, reference no., notes…" value="${esc(S.fileQ || '')}"></div>
+  ${groups.length ? groups.map(([c, fs]) => `<div class="card" style="margin-bottom:14px"><div class="sechead"><h3>${esc(c)}</h3><div class="sp"></div><span class="small muted">${fs.length}</span></div><div class="list">${fs.map(row).join('')}</div></div>`).join('')
+    : `<div class="card empty">${q ? 'No documents match your search.' : 'No documents yet. Add the tender documents, LOA, insurance policies, stamp duty and permits here so the whole team can find them.'}</div>`}`;
+}
+function fileForm(pid, f){
+  f = f || {category: FILE_CATS[0], kind: 'upload'};
+  const isNew = !f.id;
+  showModal(`<div class="box"><div class="mh"><h3>${isNew ? 'Add document' : 'Edit document'}</h3></div><div class="mb"><div class="fgrid">
+    <div class="fld half"><label>Category <em>*</em></label><select id="fCat">${FILE_CATS.map(c => `<option ${c === f.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+    <div class="fld half"><label>Reference no.</label><input id="fRef" value="${esc(f.refNo || '')}" placeholder="e.g. policy / LOA no."></div>
+    <div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="e.g. Contractor's All Risks policy"></div>
+    <div class="fld half"><label>Document date</label><input type="date" id="fDate" value="${esc(f.date || '')}"></div>
+    <div class="fld half"><label>Expiry date (if any)</label><input type="date" id="fExp" value="${esc(f.expiry || '')}"><div class="hint">You'll be warned 30 days before it expires.</div></div>
+    <div class="fld"><label>Notes</label><textarea id="fNotes" style="min-height:60px">${esc(f.notes || '')}</textarea></div>
+    ${isNew ? `<div class="fld"><label>Add as</label><div class="tabs" style="margin:0"><button type="button" class="on" data-act="fkind" data-k="upload">Upload file</button><button type="button" data-act="fkind" data-k="link">Link (Google Drive etc.)</button></div></div>
+    <div class="fld" id="fUpBox"><label>File <em>*</em></label><input type="file" id="fFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv"><div class="hint">PDF, photo, Word or Excel · up to 15 MB</div></div>
+    <div class="fld" id="fLinkBox" style="display:none"><label>Link <em>*</em></label><input id="fUrl" placeholder="https://drive.google.com/…"><div class="hint">Make sure the link is shared with your staff.</div></div>`
+    : `<div class="fld"><label>File</label><div class="small muted">${f.kind === 'link' ? '🔗 ' + esc(f.url) : '📄 ' + esc(f.name) + ' · ' + fmtSize(f.size || 0)}</div></div>`}
+  </div><div id="fProg" class="small muted" style="margin-top:8px"></div></div>
+  <div class="mf">${!isNew ? `<button class="btn ghost danger" data-act="filedel" data-id="${esc(f.id)}" style="margin-right:auto">Delete</button>` : ''}<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="filesave" data-p="${esc(pid)}" data-id="${esc(f.id || '')}">${isNew ? 'Add document' : 'Save'}</button></div></div>`);
+  S.fileKind = 'upload';
+}
+function readAsBase64(file){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(file); }); }
+async function saveFile(pid, id, btn){
+  const title = $('#fTitle').value.trim();
+  if(!title){ $('#fld_fTitle').classList.add('err'); toast('Enter a title.', true); return; }
+  const meta = {projectId: pid, category: $('#fCat').value, title, refNo: $('#fRef').value.trim(), date: $('#fDate').value, expiry: $('#fExp').value, notes: $('#fNotes').value.trim(), updatedAt: new Date().toISOString(), updatedBy: S.me || null};
+  btn.disabled = true; const prog = $('#fProg');
+  try {
+    if(id){ await S.db.doc('files/' + id).update(meta); closeModal(); toast('Saved'); render(); return; }
+    const ref = S.db.collection('files').doc();
+    if(S.fileKind === 'link'){
+      const url = $('#fUrl').value.trim();
+      if(!/^https?:\/\//i.test(url)){ toast('Paste a full link starting with https://', true); btn.disabled = false; return; }
+      await ref.set({...meta, kind: 'link', url, uploadedBy: S.me || null, uploadedAt: meta.updatedAt, status: 'ready'});
+    } else {
+      const file = $('#fFile').files[0];
+      if(!file){ toast('Choose a file.', true); btn.disabled = false; return; }
+      if(file.size > FILE_MAX){ toast('That file is over 15 MB — save it to Google Drive and add it as a link instead.', true); btn.disabled = false; return; }
+      if(!navigator.onLine){ toast('No internet — uploading needs a connection.', true); btn.disabled = false; return; }
+      prog.textContent = 'Preparing…';
+      const b64 = await readAsBase64(file);
+      const n = Math.ceil(b64.length / FILE_CHUNK) || 1;
+      await ref.set({...meta, kind: 'upload', name: file.name, mime: file.type || 'application/octet-stream', size: file.size, chunks: n, uploadedBy: S.me || null, uploadedAt: meta.updatedAt, status: 'uploading'});
+      for(let i = 0; i < n; i++){
+        prog.textContent = `Uploading… ${Math.round(i / n * 100)}%`;
+        await S.db.doc('fileChunks/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)});
+      }
+      await ref.update({status: 'ready'});
+    }
+    closeModal(); toast('Document added'); render();
+  } catch(e){ btn.disabled = false; prog.textContent = ''; dbErr(e); }
+}
+async function fileBlob(f){
+  const parts = [];
+  for(let i = 0; i < (f.chunks || 0); i++){ const s = await S.db.doc('fileChunks/' + f.id + '_' + i).get(); if(!s.exists) throw new Error('missing part'); parts.push(s.data().data); }
+  const bin = atob(parts.join('')); const u8 = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], {type: f.mime || 'application/octet-stream'});
+}
+async function openFile(id, download){
+  const f = S.files.find(x => x.id === id); if(!f) return;
+  if(f.kind === 'link'){ window.open(f.url, '_blank', 'noopener'); return; }
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // phones can't show a PDF inside a tab, so they download it and open it in the phone's PDF viewer
+  const viewable = !download && (/image/.test(f.mime || '') || (/pdf/.test(f.mime || '') && !mobile));
+  const w = viewable ? window.open('', '_blank') : null;   // opened during the tap so it isn't blocked
+  if(w) w.document.write('<p style="font:16px sans-serif;padding:20px">Opening ' + esc(f.title) + '…</p>');
+  toast('Opening ' + f.title + '…');
+  try {
+    const blob = await fileBlob(f);
+    if(w){ w.location.href = URL.createObjectURL(blob); }
+    else await S.dl.save({filename: f.name || (f.title + '.pdf'), data: blob});
+  } catch(e){ if(w) w.close(); console.error(e); toast('Could not open the file — check your connection.', true); }
+}
+async function deleteFile(id){
+  const f = S.files.find(x => x.id === id); if(!f) return;
+  try {
+    for(let i = 0; i < (f.chunks || 0); i++) await S.db.doc('fileChunks/' + id + '_' + i).delete();
+    await S.db.doc('files/' + id).delete();
+    closeModal(); toast('Deleted'); render();
+  } catch(e){ dbErr(e); }
+}
+function expiringFiles(){
+  return S.files.filter(f => f.status !== 'uploading' && projById(f.projectId)).map(f => ({f, ex: expiryInfo(f)})).filter(x => x.ex && x.ex.days <= 30).sort((a, b) => a.ex.days - b.ex.days);
+}
+
 /* --- recent + on-demand documents --- */
 const RECENT_LIMIT = 300;
 S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false;
@@ -2122,11 +2325,12 @@ function installBanner(){
 
 /* --- boot --- */
 let unsubs = [];
-function stopData(){ unsubs.forEach(u => { try { u(); } catch(e){} }); unsubs = []; S.loaded = {p: 0, d: 0}; S.projects = []; S.docs = []; S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false; }
+function stopData(){ unsubs.forEach(u => { try { u(); } catch(e){} }); unsubs = []; S.loaded = {p: 0, d: 0}; S.projects = []; S.docs = []; S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false; S.files = []; }
 function startData(){
   const db = S.db;
   const onErr = e => { console.error(e); if(e && e.code === 'permission-denied') return; toast('Lost connection to records — reload the page.', true); };
   unsubs.push(db.collection('projects').onSnapshot(s => { S.projects = s.docs.map(x => ({id: x.id, ...x.data()})); S.loaded.p = 1; softRender(); }, onErr));
+  unsubs.push(db.collection('files').onSnapshot(s => { S.files = s.docs.map(x => ({id: x.id, ...x.data()})); softRender(); }, () => {}));
   // Only recent documents stream live (keeps daily database reads inside the free plan).
   // Older ones load when a project or the full register is opened.
   unsubs.push(db.collection('docs').orderBy('createdAt', 'desc').limit(RECENT_LIMIT).onSnapshot(s => {
