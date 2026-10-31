@@ -94,7 +94,7 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .proj .counts{display:flex;gap:14px;margin-top:12px;font-size:12.5px;color:var(--muted)}
 .proj .counts b{color:var(--ink);font-size:15px;display:block}
 /* project page */
-.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:14px;scrollbar-width:none}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:2px;margin-bottom:14px}
 .tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 13px;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
 .tabs button.on{background:var(--steel);color:#fff;border-color:var(--steel)}
 .tabs button i{font-style:normal;opacity:.6;margin-left:4px}
@@ -316,6 +316,7 @@ window.APP_CONFIG = {
     messagingSenderId: "200778512138",
     appId: "1:200778512138:web:3095bcc947f4bd5358ecf3"
   },
+  ownerEmails: ['asysyukrie23@gmail.com'],   // always admin
   aiEndpoint: ''   // optional, for automatic English correction later
 };
 /* ================================================================= */
@@ -699,7 +700,7 @@ function statusOf(d){
 }
 const pill = d => { const s = statusOf(d); return `<span class="pill ${s.cls}"><span class="dot"></span>${esc(s.label)}</span>`; };
 const docDate = d => d.data?.[TYPES[d.type].dateField] || d.createdAt;
-const docTitle = d => { try { return TYPES[d.type].title(d.data || {}); } catch(e){ return TYPES[d.type].name; } };
+const docTitle = d => { if(d.customTitle) return d.customTitle; try { return TYPES[d.type].title(d.data || {}); } catch(e){ return TYPES[d.type].name; } };
 const nameOf = id => (id && S.names[id]) || 'Team member';
 
 async function resolveNames(ids){
@@ -908,6 +909,7 @@ function settingsView(){
     </div>
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
+  ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
   <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
@@ -1027,6 +1029,7 @@ function docView(id){
         ${st.next>0 && S.canWrite && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF</button>
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
+        ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
         ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
         ${(S.canEdit || (st.next===0 && d.createdBy===S.me)) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">Delete</button>`:''}
       </div></div>
@@ -1837,6 +1840,11 @@ document.addEventListener('click', async e => {
     case 'fkind': S.fileKind = el.dataset.k; el.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); $('#fUpBox').style.display = S.fileKind === 'upload' ? '' : 'none'; $('#fLinkBox').style.display = S.fileKind === 'link' ? '' : 'none'; break;
     case 'filesave': saveFile(el.dataset.p, id, el); break;
     case 'bulkgo': runBulk(el); break;
+    case 'checksetup': checkSetup(el); break;
+    case 'renamedoc': renameDocForm(id); break;
+    case 'renamedocsave': renameDocSave(id, el); break;
+    case 'renamegroup': renameGroupForm(el.dataset.p, el.dataset.g); break;
+    case 'renamegroupsave': renameGroupSave(el); break;
     case 'fileopen': openFile(id, false); break;
     case 'filedl': openFile(id, true); break;
     case 'filedel': { const f = S.files.find(x => x.id === id); confirmBox('Delete this document?', 'This permanently removes "' + (f?.title || '') + '" for everyone.', 'Delete', () => deleteFile(id), true); break; }
@@ -1931,7 +1939,7 @@ const FB_BASE = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
 const FB = {};          // loaded Firebase modules + instances
 const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', admin:'Admin', removed:'Removed'};
 
-function cfgOwners(){ return ((window.APP_CONFIG && window.APP_CONFIG.ownerEmails) || []).map(e => String(e).toLowerCase().trim()).filter(Boolean); }
+function cfgOwners(){ return ((window.APP_CONFIG && window.APP_CONFIG.ownerEmails) || ['asysyukrie23@gmail.com']).map(e => String(e).toLowerCase().trim()).filter(Boolean); }
 function isOwnerEmail(u){ return !!(u && u.email && cfgOwners().includes(u.email.toLowerCase())); }
 
 /* --- Firestore adapter with the same small interface the app uses --- */
@@ -2186,7 +2194,66 @@ async function createStaff(){
    Links (e.g. Google Drive) can be saved instead of uploading. */
 const FILE_CATS = ['Tender documents','Letter of Award (LOA)','Contract / agreement','Insurance','Stamp duty (LHDN)','Permits & approvals','Bonds & guarantees','Drawings & specifications','Method statement & HIRARC','Correspondence','Others'];
 const FILE_CHUNK = 900000;            // characters of base64 per database record
-const FILE_MAX = 15 * 1024 * 1024;   // 15 MB per file
+const FILE_MAX = 200 * 1024 * 1024;     // largest file we accept before compressing
+const FILE_TARGET = 9.5 * 1024 * 1024;  // every stored file is kept under 10 MB
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+function loadJs(src){ return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(sc); }); }
+async function pdfjs(){
+  if(!window.pdfjsLib){ await loadJs(PDFJS + 'pdf.min.js'); window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
+  return window.pdfjsLib;
+}
+const canvasBlob = (c, q) => new Promise(r => c.toBlob(r, 'image/jpeg', q));
+const baseName = n => String(n || 'file').replace(/\.[^.]+$/, '');
+// Returns a version of the file that is under 10 MB (photos and PDFs are re-compressed, other files are zipped).
+async function shrinkFile(file, say){
+  say = say || (() => {});
+  if(file.size <= FILE_TARGET) return {blob: file, name: file.name, mime: file.type || 'application/octet-stream', size: file.size};
+  const mime = file.type || '', nm = file.name || '';
+  const mb = fmtSize(file.size);
+  if(/^image\//.test(mime) || /\.(jpe?g|png|webp|heic)$/i.test(nm)){
+    say('Compressing photo (' + mb + ')…');
+    const bmp = await createImageBitmap(file);
+    for(const [maxD, q] of [[4000, .85], [3200, .8], [2600, .75], [2000, .7], [1600, .65], [1200, .6]]){
+      const k = Math.min(1, maxD / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const b = await canvasBlob(c, q);
+      if(b && b.size <= FILE_TARGET) return {blob: b, name: baseName(nm) + '.jpg', mime: 'image/jpeg', size: b.size, origSize: file.size, compressed: true};
+    }
+    throw Object.assign(new Error('too big'), {code: 'too-big'});
+  }
+  if(/pdf/.test(mime) || /\.pdf$/i.test(nm)){
+    const lib = await pdfjs();
+    const pdf = await lib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+    const n = pdf.numPages;
+    for(const [dpi, q] of [[150, .72], [120, .62], [100, .55], [80, .5], [60, .45]]){
+      const out = new jspdf.jsPDF({unit: 'pt', compress: true});
+      out.deletePage(1);
+      for(let i = 1; i <= n; i++){
+        say(`Compressing PDF (${mb}) — page ${i} of ${n}…`);
+        const page = await pdf.getPage(i); const vp1 = page.getViewport({scale: 1});
+        const sc = Math.min(dpi / 72, Math.sqrt(12e6 / (vp1.width * vp1.height)));   // phones can't draw huge canvases
+        const vp = page.getViewport({scale: sc});
+        const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        await page.render({canvasContext: ctx, viewport: vp}).promise;
+        out.addPage([vp1.width, vp1.height], vp1.width > vp1.height ? 'l' : 'p');
+        out.addImage(c.toDataURL('image/jpeg', q), 'JPEG', 0, 0, vp1.width, vp1.height, undefined, 'NONE');
+        c.width = c.height = 0; page.cleanup();
+      }
+      const b = out.output('blob');
+      if(b.size <= FILE_TARGET){ pdf.destroy(); return {blob: new Blob([b], {type: 'application/pdf'}), name: nm, mime: 'application/pdf', size: b.size, origSize: file.size, compressed: true}; }
+    }
+    pdf.destroy();
+    throw Object.assign(new Error('too big'), {code: 'too-big'});
+  }
+  if(window.CompressionStream){
+    say('Compressing ' + nm + ' (' + mb + ')…');
+    const b = await new Response(file.stream().pipeThrough(new CompressionStream('gzip'))).blob();
+    if(b.size <= FILE_TARGET) return {blob: b, name: nm, mime: mime || 'application/octet-stream', size: b.size, origSize: file.size, compressed: true, enc: 'gzip'};
+  }
+  throw Object.assign(new Error('too big'), {code: 'too-big'});
+}
 S.files = [];
 function fmtSize(b){ return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
 function expiryInfo(f){
@@ -2204,10 +2271,10 @@ function filesView(pid){
   const gkey = f => f.folder || f.category || 'General';
   const keys = [...new Set(list.map(gkey))].sort((a, b) => { const ia = FILE_CATS.indexOf(a), ib = FILE_CATS.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b); });
   const groups = keys.map(k => [k, list.filter(f => gkey(f) === k).sort((a, b) => String(a.subfolder || '').localeCompare(String(b.subfolder || '')) || String(b.date || '').localeCompare(String(a.date || '')) || String(a.title).localeCompare(String(b.title)))]);
-  const used = S.files.filter(f => f.kind === 'upload').reduce((a, f) => a + (f.size || 0), 0) * 1.37;
+  const used = S.files.filter(f => f.kind === 'upload' && f.status !== 'uploading').reduce((a, f) => a + (f.size || 0), 0) * 1.37;
   const row = f => { const ex = expiryInfo(f); const mine = f.uploadedBy === S.me;
     return `<div class="it" style="cursor:default"><div style="font-size:22px;width:28px;text-align:center">${fileIcon(f)}</div>
-      <div class="t"><b style="white-space:normal">${esc(f.title)}</b><span>${[f.subfolder && '📂 ' + esc(f.subfolder), f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0)].filter(Boolean).join(' · ')}${f.notes && !f.notes.startsWith('Folder: ') ? '<br>' + esc(f.notes) : ''}</span>
+      <div class="t"><b style="white-space:normal">${esc(f.title)}</b><span>${[f.subfolder && '📂 ' + esc(f.subfolder), f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0) + (f.compressed ? ' (compressed from ' + fmtSize(f.origSize || 0) + ')' : '')].filter(Boolean).join(' · ')}${f.notes && !f.notes.startsWith('Folder: ') ? '<br>' + esc(f.notes) : ''}</span>
       ${ex ? `<div style="margin-top:4px"><span class="pill ${ex.cls === 'bad' ? '' : ex.cls}" style="${ex.cls === 'bad' ? 'background:#fbeeed;color:var(--bad)' : ''}"><span class="dot"></span>${esc(ex.label)}</span></div>` : ''}</div>
       <div class="row" style="gap:6px;flex-wrap:nowrap">
         <button class="btn sm" data-act="fileopen" data-id="${esc(f.id)}">Open</button>
@@ -2219,22 +2286,22 @@ function filesView(pid){
   ${S.canWrite ? `<div class="row"><label class="btn pri" style="margin:0">⇪ Upload files<input type="file" multiple hidden data-bulk="files" data-p="${esc(pid)}"></label>${'webkitdirectory' in document.createElement('input') && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<label class="btn" style="margin:0">📁 Upload a folder<input type="file" webkitdirectory multiple hidden data-bulk="folder" data-p="${esc(pid)}"></label>` : ''}<button class="btn ghost" data-act="fileadd" data-p="${esc(pid)}">+ Add one (with details or link)</button></div>` : ''}</div>
   ${S.canWrite && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<div class="dropzone small muted">Tip: drag a folder or files from your computer onto this page to upload them all at once. Sub-folders become groups.</div>` : ''}
   <div class="filters card" style="margin-bottom:14px"><input id="fileq" placeholder="Search title, reference no., notes…" value="${esc(S.fileQ || '')}"></div>
-  ${groups.length ? groups.map(([c, fs]) => `<div class="card" style="margin-bottom:14px"><div class="sechead"><h3>${esc(c)}</h3><div class="sp"></div><span class="small muted">${fs.length}</span></div><div class="list">${fs.map(row).join('')}</div></div>`).join('')
+  ${groups.length ? groups.map(([c, fs]) => `<div class="card" style="margin-bottom:14px"><div class="sechead"><h3>${esc(c)}</h3><div class="sp"></div><span class="small muted">${fs.length}</span>${S.canEdit ? `<button class="btn sm ghost" data-act="renamegroup" data-p="${esc(pid)}" data-g="${esc(c)}" title="Rename group">✎</button>` : ''}</div><div class="list">${fs.map(row).join('')}</div></div>`).join('')
     : `<div class="card empty">${q ? 'No documents match your search.' : 'No documents yet. Upload your project folder (tender, LOA, insurance, stamp duty, permits…) so the whole team can find everything.'}</div>`}
-  <p class="small muted" style="text-align:center">Storage used by all projects: ${fmtSize(used)} of about 1,000 MB on the free plan.</p>`;
+  <p class="small muted" style="text-align:center">These files belong to <b>${esc(p.code)}</b> only. Storage — this project: ${fmtSize(S.files.filter(f => f.projectId === pid && f.kind === 'upload').reduce((a, f) => a + (f.size || 0), 0) * 1.37)} · all projects together: ${fmtSize(used)} of about 1,000 MB (free plan).</p>`;
 }
 function fileForm(pid, f){
   f = f || {category: FILE_CATS[0], kind: 'upload'};
   const isNew = !f.id;
   showModal(`<div class="box"><div class="mh"><h3>${isNew ? 'Add document' : 'Edit document'}</h3></div><div class="mb"><div class="fgrid">
-    <div class="fld half"><label>Category <em>*</em></label><select id="fCat">${[...new Set([...(f.category && !FILE_CATS.includes(f.category) ? [f.category] : []), ...FILE_CATS])].map(c => `<option ${c === f.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+    <div class="fld half"><label>Group <em>*</em></label><input id="fCat" list="fCatList" value="${esc(f.folder || f.category || FILE_CATS[0])}"><datalist id="fCatList">${[...new Set([...S.files.filter(x => x.projectId === pid).map(x => x.folder || x.category).filter(Boolean), ...FILE_CATS])].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="fld half"><label>Reference no.</label><input id="fRef" value="${esc(f.refNo || '')}" placeholder="e.g. policy / LOA no."></div>
     <div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="e.g. Contractor's All Risks policy"></div>
     <div class="fld half"><label>Document date</label><input type="date" id="fDate" value="${esc(f.date || '')}"></div>
     <div class="fld half"><label>Expiry date (if any)</label><input type="date" id="fExp" value="${esc(f.expiry || '')}"><div class="hint">You'll be warned 30 days before it expires.</div></div>
     <div class="fld"><label>Notes</label><textarea id="fNotes" style="min-height:60px">${esc(f.notes || '')}</textarea></div>
     ${isNew ? `<div class="fld"><label>Add as</label><div class="tabs" style="margin:0"><button type="button" class="on" data-act="fkind" data-k="upload">Upload file</button><button type="button" data-act="fkind" data-k="link">Link (Google Drive etc.)</button></div></div>
-    <div class="fld" id="fUpBox"><label>File <em>*</em></label><input type="file" id="fFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv"><div class="hint">PDF, photo, Word or Excel · up to 15 MB</div></div>
+    <div class="fld" id="fUpBox"><label>File <em>*</em></label><input type="file" id="fFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv"><div class="hint">PDF, photo, Word or Excel · big files are compressed under 10 MB automatically</div></div>
     <div class="fld" id="fLinkBox" style="display:none"><label>Link <em>*</em></label><input id="fUrl" placeholder="https://drive.google.com/…"><div class="hint">Make sure the link is shared with your staff.</div></div>`
     : `<div class="fld"><label>File</label><div class="small muted">${f.kind === 'link' ? '🔗 ' + esc(f.url) : '📄 ' + esc(f.name) + ' · ' + fmtSize(f.size || 0)}</div></div>`}
   </div><div id="fProg" class="small muted" style="margin-top:8px"></div></div>
@@ -2245,10 +2312,10 @@ function readAsBase64(file){ return new Promise((res, rej) => { const r = new Fi
 async function saveFile(pid, id, btn){
   const title = $('#fTitle').value.trim();
   if(!title){ $('#fld_fTitle').classList.add('err'); toast('Enter a title.', true); return; }
-  const meta = {projectId: pid, category: $('#fCat').value, title, refNo: $('#fRef').value.trim(), date: $('#fDate').value, expiry: $('#fExp').value, notes: $('#fNotes').value.trim(), updatedAt: new Date().toISOString(), updatedBy: S.me || null};
+  const meta = {projectId: pid, category: $('#fCat').value.trim() || 'General', title, refNo: $('#fRef').value.trim(), date: $('#fDate').value, expiry: $('#fExp').value, notes: $('#fNotes').value.trim(), updatedAt: new Date().toISOString(), updatedBy: S.me || null};
   btn.disabled = true; const prog = $('#fProg');
   try {
-    if(id){ await S.db.doc('files/' + id).update({...meta, folder: meta.category}); closeModal(); toast('Saved'); render(); return; }
+    if(id){ const {projectId, ...upd} = meta; await S.db.doc('files/' + id).update({...upd, folder: meta.category}); closeModal(); toast('Saved'); render(); return; }
     const ref = S.db.collection('files').doc();
     if(S.fileKind === 'link'){
       const url = $('#fUrl').value.trim();
@@ -2257,27 +2324,23 @@ async function saveFile(pid, id, btn){
     } else {
       const file = $('#fFile').files[0];
       if(!file){ toast('Choose a file.', true); btn.disabled = false; return; }
-      if(file.size > FILE_MAX){ toast('That file is over 15 MB — save it to Google Drive and add it as a link instead.', true); btn.disabled = false; return; }
+      if(file.size > FILE_MAX){ toast('That file is over 200 MB — save it to Google Drive and add it as a link instead.', true); btn.disabled = false; return; }
       if(!navigator.onLine){ toast('No internet — uploading needs a connection.', true); btn.disabled = false; return; }
       prog.textContent = 'Preparing…';
-      const b64 = await readAsBase64(file);
-      const n = Math.ceil(b64.length / FILE_CHUNK) || 1;
-      await ref.set({...meta, kind: 'upload', name: file.name, mime: file.type || 'application/octet-stream', size: file.size, chunks: n, uploadedBy: S.me || null, uploadedAt: meta.updatedAt, status: 'uploading'});
-      for(let i = 0; i < n; i++){
-        prog.textContent = `Uploading… ${Math.round(i / n * 100)}%`;
-        await S.db.doc('fileChunks/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)});
-      }
-      await ref.update({status: 'ready'});
+      const {projectId, ...m2} = meta;
+      await uploadOne(pid, file, {...m2, folder: meta.category}, (i, n) => prog.textContent = `Uploading… ${Math.round(i / n * 100)}%`, msg => prog.textContent = msg);
     }
     closeModal(); toast('Document added'); render();
-  } catch(e){ btn.disabled = false; prog.textContent = ''; dbErr(e); }
+  } catch(e){ btn.disabled = false; prog.textContent = ''; if(e.code === 'too-big') toast('Could not compress this file under 10 MB — save it to Google Drive and add it as a link.', true); else dbErr(e); }
 }
 async function fileBlob(f){
   const parts = [];
   for(let i = 0; i < (f.chunks || 0); i++){ const s = await S.db.doc('fileChunks/' + f.id + '_' + i).get(); if(!s.exists) throw new Error('missing part'); parts.push(s.data().data); }
   const bin = atob(parts.join('')); const u8 = new Uint8Array(bin.length);
   for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-  return new Blob([u8], {type: f.mime || 'application/octet-stream'});
+  const blob = new Blob([u8], {type: f.mime || 'application/octet-stream'});
+  if(f.enc === 'gzip') return new Blob([await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()], {type: f.mime || 'application/octet-stream'});
+  return blob;
 }
 async function openFile(id, download){
   const f = S.files.find(x => x.id === id); if(!f) return;
@@ -2304,17 +2367,27 @@ async function deleteFile(id){
 }
 /* ---------- bulk upload: whole folder or many files at once, no details needed ---------- */
 const SKIP_NAMES = /^(\.|~\$|thumbs\.db$|desktop\.ini$)/i;
-async function uploadOne(pid, file, meta, onPart){
-  const b64 = await readAsBase64(file);
+async function uploadOne(pid, file, meta, onPart, say){
+  const sh = await shrinkFile(file, say);
+  const b64 = await readAsBase64(sh.blob);
   const n = Math.ceil(b64.length / FILE_CHUNK) || 1;
   const ref = S.db.collection('files').doc();
-  await ref.set({...meta, projectId: pid, kind: 'upload', name: file.name, mime: file.type || 'application/octet-stream', size: file.size, chunks: n,
+  let made = 0, metaMade = false;
+  try {
+  await ref.set({...meta, projectId: pid, kind: 'upload', name: sh.name, mime: sh.mime, size: sh.size, chunks: n,
+    ...(sh.compressed ? {compressed: true, origSize: sh.origSize} : {}), ...(sh.enc ? {enc: sh.enc} : {}),
     uploadedBy: S.me || null, uploadedAt: new Date().toISOString(), status: 'uploading'});
   for(let i = 0; i < n; i++){
     if(onPart) onPart(i, n);
-    await S.db.doc('fileChunks/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)});
+    await S.db.doc('fileChunks/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)}); made++;
   }
   await ref.update({status: 'ready'});
+  } catch(e){
+    // remove the half-uploaded file so nothing is left behind
+    for(let i = 0; i < made; i++){ try { await S.db.doc('fileChunks/' + ref.id + '_' + i).delete(); } catch(x){} }
+    try { await ref.delete(); } catch(x){}
+    throw e;
+  }
 }
 // entries: [{file, path}] where path is relative to the chosen folder, e.g. "LOA/Letter of Award.pdf"
 function prepareBulk(pid, entries){
@@ -2331,9 +2404,11 @@ function prepareBulk(pid, entries){
   const byFolder = {}; items.forEach(x => byFolder[x.folder] = (byFolder[x.folder] || 0) + 1);
   S.bulk = {pid, items};
   showModal(`<div class="box"><div class="mh"><h3>Upload ${items.length} file${items.length === 1 ? '' : 's'}</h3></div><div class="mb">
+    <div class="vhint" style="margin-bottom:10px"><b>📁</b><span>Uploading to <b>${esc(projById(pid)?.code || '')}</b> — ${esc(projById(pid)?.name || '')}<br>Only this project's team page will show these files.</span></div>
     <p class="small muted" style="margin-top:0">Each file keeps its own name. Sub-folders become groups. ${fmtSize(total)} in total.</p>
     <div class="list card" style="box-shadow:none">${Object.entries(byFolder).map(([f, c]) => `<div class="it" style="cursor:default"><div style="font-size:20px">📁</div><div class="t"><b>${esc(f)}</b></div><span class="small muted">${c} file${c === 1 ? '' : 's'}</span></div>`).join('')}</div>
-    ${skipped.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-top:10px"><b>!</b><span>${skipped.length} file${skipped.length === 1 ? ' is' : 's are'} over 15 MB and will be skipped:<br>${skipped.map(x => esc(x.path) + ' (' + fmtSize(x.file.size) + ')').join('<br>')}<br>Save ${skipped.length === 1 ? 'it' : 'them'} to Google Drive and use <b>+ Add document → Link</b>.</span></div>` : ''}
+    ${items.some(x => x.file.size > FILE_TARGET) ? `<p class="small muted">${items.filter(x => x.file.size > FILE_TARGET).length} big file(s) will be compressed under 10 MB automatically — this can take a little while.</p>` : ''}
+    ${skipped.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-top:10px"><b>!</b><span>${skipped.length} file${skipped.length === 1 ? ' is' : 's are'} over 200 MB and will be skipped:<br>${skipped.map(x => esc(x.path) + ' (' + fmtSize(x.file.size) + ')').join('<br>')}<br>Save ${skipped.length === 1 ? 'it' : 'them'} to Google Drive and use <b>+ Add document → Link</b>.</span></div>` : ''}
     <div id="bulkProg" style="display:none;margin-top:12px"><div class="prog"><i id="bulkBar" style="width:0%"></i></div><div id="bulkTxt" class="small muted" style="margin-top:6px"></div></div>
   </div><div class="mf"><button class="btn ghost" data-act="closemodal" id="bulkCancel">Cancel</button>${items.length ? `<button class="btn pri" data-act="bulkgo">Upload ${items.length} file${items.length === 1 ? '' : 's'}</button>` : ''}</div></div>`);
 }
@@ -2341,20 +2416,21 @@ async function runBulk(btn){
   const B = S.bulk; if(!B) return;
   if(!navigator.onLine){ toast('No internet — uploading needs a connection.', true); return; }
   btn.disabled = true; $('#bulkCancel').disabled = true; $('#bulkProg').style.display = '';
-  const total = B.items.reduce((a, x) => a + x.file.size, 0) || 1; let done = 0, ok = 0, failed = [];
+  const total = B.items.reduce((a, x) => a + x.file.size, 0) || 1; let done = 0, ok = 0, failed = [], lastErr = null;
   S.bulkBusy = true;
   for(let k = 0; k < B.items.length; k++){
     const x = B.items[k];
     $('#bulkTxt').textContent = `Uploading ${k + 1} of ${B.items.length} — ${x.file.name}`;
     try {
       await uploadOne(B.pid, x.file, {category: x.folder, folder: x.folder, subfolder: x.sub, title: x.file.name.replace(/\.[^.]+$/, ''), refNo: '', date: '', expiry: '', notes: x.sub ? 'Folder: ' + x.sub : ''},
-        (i, n) => { $('#bulkBar').style.width = Math.round((done + x.file.size * i / n) / total * 100) + '%'; });
+        (i, n) => { $('#bulkTxt').textContent = `Uploading ${k + 1} of ${B.items.length} — ${x.file.name}`; $('#bulkBar').style.width = Math.round((done + x.file.size * i / n) / total * 100) + '%'; },
+        msg => { $('#bulkTxt').textContent = `${k + 1} of ${B.items.length}: ${msg}`; });
       ok++;
-    } catch(e){ console.error(e); failed.push(x.file.name); }
+    } catch(e){ console.error(e); failed.push(x.file.name + (e.code === 'too-big' ? ' — could not get it under 10 MB' : '')); if(e.code !== 'too-big' || !lastErr) lastErr = e; }
     done += x.file.size; $('#bulkBar').style.width = Math.round(done / total * 100) + '%';
   }
   S.bulkBusy = false; S.bulk = null; closeModal(); render();
-  if(failed.length) toast(`${ok} uploaded, ${failed.length} failed: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}`, true);
+  if(failed.length) showUploadProblem(ok, failed, lastErr);
   else toast(`${ok} file${ok === 1 ? '' : 's'} uploaded ✓`);
 }
 // drag & drop of files or whole folders (laptop)
@@ -2382,6 +2458,69 @@ document.addEventListener('drop', async e => {
   prepareBulk(S.view.id, out);
 });
 
+function showUploadProblem(ok, failed, e){
+  const code = (e && e.code) || '';
+  const rules = /permission/i.test(code) || /permission/i.test(String(e && e.message));
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>${ok ? ok + ' uploaded, ' : ''}${failed.length} not uploaded</h3></div><div class="mb">
+    ${rules ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn)"><b>!</b><span><b>The database rules don't allow project files yet.</b><br>An admin needs to publish the latest rules in Firebase (Firestore Database → make sure <b>(default)</b> is selected → Rules → paste → Publish). Then try again.</span></div>`
+      : code === 'too-big' ? `<p style="margin-top:0">These files are still over 10 MB even after compressing. Save them to Google Drive and use <b>+ Add one → Link</b>.</p>`
+      : `<p style="margin-top:0">Something went wrong while uploading${code ? ' (' + esc(code) + ')' : ''}. Check your internet connection and try again.</p>`}
+    <div class="small muted" style="margin-top:8px">${failed.slice(0, 8).map(esc).join('<br>')}${failed.length > 8 ? '<br>…' : ''}</div>
+  </div><div class="mf"><button class="btn pri" data-act="closemodal">OK</button></div></div>`);
+}
+/* Settings → Check setup: confirms the database and its rules are ready */
+async function checkSetup(btn){
+  btn.disabled = true; S.setupOut = 'Checking…'; const o0 = $('#setupOut'); if(o0) o0.innerHTML = S.setupOut;
+  const rows = [];
+  const step = async (label, fn) => { try { await fn(); rows.push(['✓', label, '']); return true; } catch(e){ rows.push(['✗', label, (e && e.code) || (e && e.message) || 'failed']); return false; } };
+  await step('Read projects', () => S.db.collection('projects').limit(1).get());
+  await step('Read reports', () => S.db.collection('docs').limit(1).get());
+  const id = 'setup-check-' + Date.now();
+  const okFiles = await step('Project files: save', () => S.db.doc('files/' + id).set({projectId: '_check', title: 'check', kind: 'link', url: 'https://example.com', uploadedBy: S.me, status: 'ready'}));
+  await step('Project files: file parts', async () => { await S.db.doc('fileChunks/' + id + '_0').set({fileId: id, i: 0, data: 'x'}); await S.db.doc('fileChunks/' + id + '_0').delete(); });
+  if(okFiles) await step('Project files: delete', () => S.db.doc('files/' + id).delete());
+  const bad = rows.some(r => r[0] === '✗');
+  S.setupOut = `<table class="reg" style="margin-top:8px">${rows.map(r => `<tr><td style="width:28px;color:${r[0] === '✓' ? 'var(--ok)' : 'var(--bad)'};font-weight:800">${r[0]}</td><td>${esc(r[1])}</td><td class="small muted">${esc(r[2])}</td></tr>`).join('')}</table>
+    <p class="small" style="margin:8px 0 0;color:${bad ? 'var(--bad)' : 'var(--ok)'}">${bad ? 'Not ready: publish the latest rules in Firebase (Firestore Database → (default) → Rules → paste → Publish), then check again.' : 'Everything is ready ✓'}</p>`;
+  const o1 = $('#setupOut'); if(o1) o1.innerHTML = S.setupOut;
+  btn.disabled = false;
+}
+/* ---------- admin: rename a document's title / subject (also after signing) ---------- */
+function renameDocForm(id){
+  const d = docById(id); if(!d || !S.canEdit) return; const T = TYPES[d.type];
+  const flds = T.fields.filter(f => f.t === 'text' && f.phase !== 'response');
+  S.renameFields = flds.map(f => f.k);
+  showModal(`<div class="box"><div class="mh"><h3>Rename / edit subject</h3></div><div class="mb"><div class="fgrid">
+    <div class="fld"><label>Title shown in the app</label><input id="rnTitle" value="${esc(d.customTitle || '')}" placeholder="${esc((() => { try { return T.title(d.data || {}); } catch(e){ return T.name; } })())}"><div class="hint">Leave empty to use the automatic title.</div></div>
+    ${flds.map(f => `<div class="fld"><label>${esc(f.l)}</label><input data-rn="${esc(f.k)}" value="${esc((d.data || {})[f.k] || '')}"></div>`).join('')}
+  </div>${(d.signatures || []).length ? '<p class="small muted" style="margin-bottom:0">This document is signed. Only admins can make this change; the signatures stay as they are.</p>' : ''}</div>
+  <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="renamedocsave" data-id="${esc(id)}">Save</button></div></div>`);
+}
+async function renameDocSave(id, btn){
+  const d = docById(id); if(!d) return; btn.disabled = true;
+  const data = {...(d.data || {})};
+  document.querySelectorAll('[data-rn]').forEach(i => data[i.dataset.rn] = i.value.trim());
+  try {
+    await S.db.doc('docs/' + id).update({data, customTitle: $('#rnTitle').value.trim(), updatedAt: new Date().toISOString(), updatedBy: S.me || null});
+    Object.assign(d, {data, customTitle: $('#rnTitle').value.trim()});
+    closeModal(); toast('Saved'); render();
+  } catch(e){ btn.disabled = false; dbErr(e); }
+}
+/* ---------- admin: rename a group (folder) of project files ---------- */
+function renameGroupForm(pid, g){
+  showModal(`<div class="box" style="max-width:460px"><div class="mh"><h3>Rename group</h3></div><div class="mb"><div class="fld"><label>Group name</label><input id="rgName" value="${esc(g)}"></div></div>
+  <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="renamegroupsave" data-p="${esc(pid)}" data-g="${esc(g)}">Save</button></div></div>`);
+}
+async function renameGroupSave(btn){
+  const pid = btn.dataset.p, g = btn.dataset.g, nn = $('#rgName').value.trim();
+  if(!nn || nn === g){ closeModal(); return; }
+  btn.disabled = true;
+  try {
+    for(const f of S.files.filter(f => f.projectId === pid && (f.folder || f.category || 'General') === g))
+      await S.db.doc('files/' + f.id).update({folder: nn, category: nn});
+    closeModal(); toast('Group renamed'); render();
+  } catch(e){ btn.disabled = false; dbErr(e); }
+}
 function expiringFiles(){
   return S.files.filter(f => f.status !== 'uploading' && projById(f.projectId)).map(f => ({f, ex: expiryInfo(f)})).filter(x => x.ex && x.ex.days <= 30).sort((a, b) => a.ex.days - b.ex.days);
 }
@@ -2455,6 +2594,7 @@ async function onSignedIn(u){
   if(S.unsubMe) S.unsubMe();
   S.unsubMe = ref.onSnapshot(s => {
     const d = s.exists ? s.data() : {role: 'pending'};
+    if(isOwnerEmail(u) && s.exists && d.role !== 'admin'){ ref.update({role: 'admin'}).catch(console.error); d.role = 'admin'; }
     const prev = S.myRole; S.myRole = d.role || 'pending';
     if(d.name) S.names[u.uid] = d.name;
     S.canEdit = S.myRole === 'admin'; S.canWrite = S.myRole === 'admin' || S.myRole === 'staff';
