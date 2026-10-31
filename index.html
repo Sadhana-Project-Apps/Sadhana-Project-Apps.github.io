@@ -388,6 +388,106 @@ function contractDay(p, date){
   return `${dayDiff(date, p.end)}/${total} days remaining (Day ${day})`;
 }
 
+/* ---------- LETTERS: drafted from the details staff enter ---------- */
+const LTR_CATS = [
+  {k:'EOTN', l:'Extension of Time – Notice of delay', code:'EOT'},
+  {k:'EOTA', l:'Extension of Time – Application', code:'EOT'},
+  {k:'VO',   l:'Variation / additional works', code:'VO'},
+  {k:'AUTH', l:'Application to authority (TNB, council, etc.)', code:'APP'},
+  {k:'CLM',  l:'Payment / progress claim', code:'PC'},
+  {k:'CMP',  l:'Completion & handover notice', code:'CMP'},
+  {k:'GEN',  l:'General letter', code:'GEN'}
+];
+const ltrCat = x => LTR_CATS.find(c => c.l === x.category) || LTR_CATS[LTR_CATS.length - 1];
+const isCat = (...ks) => x => ks.includes(ltrCat(x).k);
+const NUMW = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const TENW = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+function numWords(n){ n = Math.round(numv(n)); if(n < 20) return NUMW[n] || String(n); if(n < 100) return TENW[Math.floor(n / 10)] + (n % 10 ? '-' + NUMW[n % 10] : ''); if(n < 1000) return NUMW[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' and ' + numWords(n % 100) : ''); return String(n); }
+const ordDate = v => { if(!v) return ''; const x = new Date(String(v).slice(0, 10) + 'T00:00:00'), d = x.getDate(); const sfx = (d % 100 >= 11 && d % 100 <= 13) ? 'th' : ['th','st','nd','rd','th','th','th','th','th','th'][d % 10]; return d + sfx + ' ' + x.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); };
+const MS_MONTHS = ['Januari','Februari','Mac','April','Mei','Jun','Julai','Ogos','September','Oktober','November','Disember'];
+const msDate = v => { if(!v) return ''; const x = new Date(String(v).slice(0, 10) + 'T00:00:00'); return x.getDate() + ' ' + MS_MONTHS[x.getMonth()] + ' ' + x.getFullYear(); };
+const ltrDate = (x, v) => x.language === 'Bahasa Melayu' ? msDate(v) : ordDate(v);
+const rm = v => 'RM ' + numv(v).toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const lines = t => String(t || '').split(/\n+/).map(l => l.replace(/^\s*([-*•·]|\d+[.)]|[a-z][.)])\s*/i, '').trim()).filter(Boolean);
+const sent = t => { t = String(t || '').trim(); if(!t) return ''; t = typeof polishText === 'function' ? polishText(t).replace(/\n/g, ' ') : t; t = t.charAt(0).toLowerCase() === t.charAt(0) ? t : t; return /[.!?]$/.test(t) ? t : t + '.'; };
+const lc1 = t => { t = String(t || '').trim().replace(/[.]+$/, ''); return t ? t.charAt(0).toLowerCase() + t.slice(1) : t; };
+const subList = (items, ms) => items.map((t, i) => `    ${String.fromCharCode(97 + i)}.  ${t.replace(/[.;]+$/, '')}${i < items.length - 2 ? ';' : i === items.length - 2 ? (ms ? '; dan' : '; and') : '.'}`).join('\n');
+function ltrSubject(x){
+  const c = ltrCat(x).k, ms = x.language === 'Bahasa Melayu';
+  if(c === 'EOTN') return 'Notice of Delay and Intention to Claim Extension of Time';
+  if(c === 'EOTA') return 'Application for Extension of Time' + (x.eotNo ? ' No. ' + x.eotNo : '') + (x.days ? ` – ${numv(x.days)} Days` : '');
+  if(c === 'VO')   return 'Notification of Variation / Additional Works' + (x.voDesc ? ' – ' + lines(x.voDesc)[0].replace(/[.]+$/, '').slice(0, 70) : '');
+  if(c === 'AUTH') return ms ? 'Permohonan Kebenaran ' + (x.purpose || '') : 'Application for Permission ' + (x.purpose ? 'for ' + x.purpose : '');
+  if(c === 'CLM')  return 'Progress Claim' + (x.claimNo ? ' No. ' + x.claimNo : '') + (x.claimTo ? ' for Work Done up to ' + ordDate(x.claimTo) : '');
+  if(c === 'CMP')  return 'Notice of Completion and Request for Joint Inspection' + (x.area ? ' – ' + x.area : '');
+  return ms ? '' : '';
+}
+function draftLetter(d){
+  const x = d.data || {}, p = projById(d.projectId) || {}, c = ltrCat(x).k, ms = x.language === 'Bahasa Melayu';
+  const P = []; const add = t => { if(t) P.push(t); };
+  const extra = lines(x.points).map(sent);
+  const encl = lines(x.enclosures);
+  const clause = x.clause ? (ms ? ` selaras dengan ${x.clause}` : ` pursuant to ${x.clause}`) : '';
+  let intro = ms ? 'Dengan hormatnya perkara di atas adalah dirujuk.' : 'We refer to the above matter' + (x.refTo ? ' and to ' + lc1(x.refTo) : '') + '.';
+  let close = ms ? 'Kerjasama dan perhatian pihak tuan/puan amatlah dihargai dan didahului dengan ucapan terima kasih.' : 'We trust the above is in order and look forward to your favourable reply.';
+  if(c === 'EOTN'){
+    add(`We hereby give notice${clause} that the progress of the Works has been, and is likely to be further, delayed by ${lc1(sent(x.event)).replace(/[.]+$/, '') || '[event]'}.`);
+    add(`The event commenced on ${ordDate(x.evStart) || '[date]'}${x.evEnd ? ' and ended on ' + ordDate(x.evEnd) : ' and is still continuing as at the date of this letter'}.` + (x.impact ? ' As a result, ' + lc1(sent(x.impact)) + '.' : ''));
+    add(`The event is beyond our control and, in our view, constitutes a ground for extension of time under the Contract. We therefore reserve our right to an extension of time to the Date for Completion of ${ordDate(x.origEnd || p.end) || '[date]'}. Full particulars and our assessment of the delay will be submitted once the effect of the event can be reasonably assessed.`);
+    if(x.mitigation) add(`In the meantime, we are taking the following steps to minimise the delay:\n${subList(lines(x.mitigation).map(sent), false)}`);
+    close = 'We trust the above is in order and look forward to your acknowledgement of this notice.';
+  } else if(c === 'EOTA'){
+    const days = numv(x.days), orig = x.origEnd || p.end, nw = orig && days ? addDays(orig, days) : '';
+    add(`Further to our notice${x.noticeRef ? ' ref. ' + x.noticeRef : ''}, we hereby apply${clause} for an extension of time of ${days ? numWords(days) + ' (' + days + ') days' : '[number of] days'} to the Date for Completion of the Works.`);
+    add(`The delay was caused by ${lc1(sent(x.event)).replace(/[.]+$/, '') || '[event]'}, which is beyond our control. The event commenced on ${ordDate(x.evStart) || '[date]'}${x.evEnd ? ' and ended on ' + ordDate(x.evEnd) : ' and is still continuing'}.` + (x.impact ? ' As a result, ' + lc1(sent(x.impact)) + '.' : ''));
+    add(`Summary of our application:\n    a.  Original Date for Completion:  ${ordDate(orig) || '[date]'}\n    b.  Extension of time applied:  ${days ? days + ' days' : '[days]'}\n    c.  Revised Date for Completion:  ${ordDate(nw) || '[date]'}`);
+    if(x.mitigation) add(`We have taken the following steps to minimise the delay:\n${subList(lines(x.mitigation).map(sent), false)}`);
+    if(encl.length) add('Our supporting documents are enclosed for your reference.');
+    close = 'We would be grateful if you could review and grant the extension of time applied for at your earliest convenience.';
+  } else if(c === 'VO'){
+    add(`We wish to inform you that ${x.voBy ? 'pursuant to the instruction from ' + x.voBy + (x.voDate ? ' dated ' + ordDate(x.voDate) : '') + ', ' : ''}the following works are additional to / varied from the original scope of the Contract:\n${subList(lines(x.voDesc).map(sent), false)}`);
+    if(x.voCost || x.voDays) add([x.voCost ? `Our estimated cost for the above works is ${rm(x.voCost)} (excluding SST, if applicable).` : '', x.voDays ? `The works will require an additional ${numWords(x.voDays)} (${numv(x.voDays)}) days, and we reserve our right to a corresponding extension of time.` : ''].filter(Boolean).join(' '));
+    add('We shall proceed with the above works only upon receipt of your written instruction or confirmation, and the works shall be valued as a variation to the Contract.');
+    close = 'We look forward to your written confirmation.';
+  } else if(c === 'AUTH'){
+    if(ms){
+      add(`Untuk makluman pihak tuan/puan, Sadhana Demolition & Engineering Sdn Bhd (SDESB) telah dilantik${p.client ? ' oleh ' + p.client : ''} bagi melaksanakan ${p.name ? 'projek ' + p.name : 'kerja-kerja di tapak tersebut'}.`);
+      add(`Sehubungan dengan itu, pihak kami ingin memohon kebenaran ${x.purpose ? lc1(x.purpose) : '[tujuan]'}${x.location ? ' di ' + x.location : ''}.`);
+      const t = [['Lokasi', x.location], ['Skop kerja', x.scope], ['Kerja yang tidak dilakukan', x.notDone], ['Tarikh dicadangkan', x.propDate ? msDate(x.propDate) : 'Pada tarikh yang ditetapkan oleh pihak tuan/puan'], ['Tempoh', x.duration], ['Bilangan personel', x.people]].filter(r => r[1]);
+      add('Butiran kerja yang dicadangkan adalah seperti berikut:\n' + t.map(r => `    ${r[0]}:  ${r[1]}`).join('\n'));
+      const sf = lines(x.safety); if(sf.length) add('Pihak kami akan mematuhi sepenuhnya peraturan keselamatan semasa kerja dijalankan, termasuk:\n' + subList(sf, true));
+      close = 'Sehubungan dengan itu, pihak kami dengan ini memohon jasa baik pihak tuan/puan untuk memberikan kebenaran tersebut. Kerjasama dan perhatian pihak tuan/puan amatlah dihargai dan didahului dengan ucapan terima kasih.';
+    } else {
+      add(`For your information, Sadhana Demolition & Engineering Sdn Bhd (SDESB) has been appointed${p.client ? ' by ' + p.client : ''} to carry out ${p.name ? 'the works for ' + p.name : 'the works at the above site'}.`);
+      add(`In this regard, we would like to apply for permission ${x.purpose ? 'for ' + lc1(x.purpose) : '[purpose]'}${x.location ? ' at ' + x.location : ''}.`);
+      const t = [['Location', x.location], ['Scope of work', x.scope], ['Works not carried out', x.notDone], ['Proposed date', x.propDate ? ordDate(x.propDate) : 'On a date to be fixed by your office'], ['Duration', x.duration], ['No. of personnel', x.people]].filter(r => r[1]);
+      add('The details of the proposed works are as follows:\n' + t.map(r => `    ${r[0]}:  ${r[1]}`).join('\n'));
+      const sf = lines(x.safety); if(sf.length) add('We will fully comply with all safety requirements during the works, including:\n' + subList(sf.map(s => s.replace(/[.]+$/, '')), false));
+      close = 'We would be grateful for your kind approval and for your office to fix the date and representative for the above. Thank you for your kind cooperation.';
+    }
+  } else if(c === 'CLM'){
+    add(`We are pleased to submit our Progress Claim${x.claimNo ? ' No. ' + x.claimNo : ''} for work done${x.claimTo ? ' up to ' + ordDate(x.claimTo) : ''}, amounting to ${x.amount ? rm(x.amount) : 'RM [amount]'}${x.amount ? ' (Ringgit Malaysia: ' + numWords(Math.floor(numv(x.amount))).replace(/^./, m => m.toUpperCase()) + ' only)' : ''}.`);
+    add(`Kindly arrange for the claim to be certified and paid within ${x.payDays ? numWords(x.payDays) + ' (' + numv(x.payDays) + ') days' : 'the period stated in the Contract'}${clause}.`);
+    if(encl.length) add('The supporting documents are enclosed for your verification.');
+    close = 'We look forward to your favourable certification and payment.';
+  } else if(c === 'CMP'){
+    add(`We are pleased to inform you that the works${x.area ? ' at ' + x.area : ''} were completed on ${ordDate(x.doneDate) || '[date]'}.`);
+    add(`We would like to request a joint inspection${x.inspDate ? ' on ' + ordDate(x.inspDate) : ' at your earliest convenience'} for the purpose of verification and handover of the completed area.`);
+    add('Any outstanding items identified during the inspection will be recorded and rectified accordingly.');
+    close = 'Kindly confirm your availability. Thank you.';
+  } else {
+    if(!extra.length) add(ms ? '[Isi kandungan surat]' : '[Letter content]');
+  }
+  extra.forEach(add);
+  const body = [intro, ...P.map((t, i) => (i + 1) + '.  ' + t), close].join('\n\n');
+  return body;
+}
+function ltrRef(d){
+  const p = projById(d.projectId) || {}, x = d.data || {};
+  const code = (x.refCode || ltrCat(x).code || 'GEN').toUpperCase(), yr = String(x.date || today()).slice(0, 4);
+  return `SDESB/${p.code || 'PROJ'}/${code}/${yr}/${d.seq ? String(d.seq).padStart(3, '0') : '___'}`;
+}
+
 const SCRAP_TYPES = ['Rebar', 'Stainless steel', 'Cables', 'Aluminium', 'Copper', 'Mild steel / structural steel', 'Cast iron', 'Others'];
 const TYPES = {
   DSR: {
@@ -627,6 +727,78 @@ const TYPES = {
       {k:'purpose', l:'Purpose', t:'checks', o:['For information / record','For approval','For comment','For action','As required'], def: () => ['For information / record']}
     ]
   },
+  LTR: {
+    name: 'Letter', code: 'LTR', blurb: 'Extension of time, variation, claims, authority applications & other letters', letter: true,
+    sigs: [ {role:'Signed by', hint:'Authorised signatory'} ],
+    done: 'Issued',
+    title: d => (d.subject || ltrCat(d).l) + (d.toName ? ' — ' + d.toName : ''),
+    dateField: 'date',
+    fields: [
+      {sec:'Letter'},
+      {k:'category', l:'Type of letter', t:'select', req:1, o: LTR_CATS.map(c => c.l), def: 'General letter', hint:'The details asked below change with the type of letter.'},
+      {k:'language', l:'Language', t:'select', o:['English','Bahasa Melayu'], def:'English', w:'half'},
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'ourRef', l:'Our ref.', t:'auto', w:'half', calc: (x, d) => ltrRef(d)},
+      {k:'refCode', l:'Ref. code (optional)', t:'text', w:'half', ph:'e.g. EOT, DT, WK', hint:'Middle part of our reference. Leave empty to use the default.'},
+      {k:'yourRef', l:'Your ref. (optional)', t:'text', w:'half'},
+      {k:'marking', l:'Marking (optional)', t:'select', o:['CONFIDENTIAL','URGENT','WITHOUT PREJUDICE','BY HAND & EMAIL'], w:'half'},
+      {sec:'To'},
+      {k:'toName', l:'Company / authority', t:'text', req:1, ph:'e.g. Sunrise Innovations Sdn Bhd'},
+      {k:'toAddress', l:'Address', t:'textarea', ph:'Level U2, Block C5, Solaris Dutamas,\nNo. 1, Jalan Dutamas 1,\n50480 Kuala Lumpur.'},
+      {k:'attn', l:'Attention (optional)', t:'text', w:'half', ph:'e.g. Ms. Eileen'},
+      {k:'cc', l:'Copy to (c.c.) — one per line', t:'textarea', w:'half'},
+      {sec:'Matter'},
+      {k:'reTitle', l:'RE: project title', t:'text', hint:'Filled in from the project — change it if needed.'},
+      {k:'subject', l:'Subject', t:'text', hint:'Leave empty and it will be written for you when you draft the letter.'},
+      {k:'refTo', l:'Refer to (optional)', t:'text', ph:'e.g. our meeting on 17 September 2026'},
+      {k:'clause', l:'Contract clause (optional)', t:'text', ph:'e.g. Clause 23 of the Letter of Award', when: isCat('EOTN','EOTA','VO','CLM')},
+      {sec:'Details — Extension of Time', when: isCat('EOTN','EOTA')},
+      {k:'event', l:'What caused the delay?', t:'textarea', req:1, ph:'e.g. Late handover of Block B by the client; TNB supply not isolated'},
+      {k:'evStart', l:'Delay started on', t:'date', w:'half'},
+      {k:'evEnd', l:'Delay ended on', t:'date', w:'half', hint:'Leave empty if it is still continuing.'},
+      {k:'origEnd', l:'Original completion date', t:'date', w:'half'},
+      {k:'days', l:'Extension applied (days)', t:'number', w:'half', when: isCat('EOTA')},
+      {k:'newEnd', l:'Revised completion date', t:'auto', w:'half', when: isCat('EOTA'), calc: x => x.origEnd && numv(x.days) ? fmtDate(addDays(x.origEnd, numv(x.days))) : '—'},
+      {k:'eotNo', l:'EOT application no.', t:'text', w:'half', when: isCat('EOTA'), ph:'e.g. 1'},
+      {k:'noticeRef', l:'Our earlier notice ref.', t:'text', w:'half', when: isCat('EOTA')},
+      {k:'impact', l:'Effect on the works', t:'textarea', ph:'e.g. Demolition of Block B could not start; machinery idle on site'},
+      {k:'mitigation', l:'Steps taken to reduce the delay (one per line)', t:'textarea'},
+      {sec:'Details — Variation', when: isCat('VO')},
+      {k:'voDesc', l:'Additional / changed works (one per line)', t:'textarea', req:1},
+      {k:'voBy', l:'Instructed by', t:'text', w:'half', ph:'e.g. the S.O., Mr. Lee'},
+      {k:'voDate', l:'Instruction date', t:'date', w:'half'},
+      {k:'voCost', l:'Estimated cost (RM)', t:'number', w:'half'},
+      {k:'voDays', l:'Extra time needed (days)', t:'number', w:'half'},
+      {sec:'Details — Application', when: isCat('AUTH')},
+      {k:'purpose', l:'Permission for', t:'text', req:1, ph:'e.g. access to TNB substation TX1 & TX2 for defect mapping'},
+      {k:'location', l:'Location', t:'text'},
+      {k:'scope', l:'Scope of work', t:'text'},
+      {k:'notDone', l:'Works NOT carried out', t:'text', ph:'e.g. No hacking, drilling, hot work or touching of TNB equipment'},
+      {k:'propDate', l:'Proposed date', t:'date', w:'half'},
+      {k:'duration', l:'Duration', t:'text', w:'half', ph:'e.g. 1 to 2 hours'},
+      {k:'people', l:'No. of personnel', t:'text', ph:'e.g. 3 (Structural Engineer, Site Supervisor, Safety Supervisor)'},
+      {k:'safety', l:'Safety commitments (one per line)', t:'textarea', def:'Entry only with the presence and supervision of an authorised representative\nNo touching or interference with any equipment, cables or panels\nFull Personal Protective Equipment (PPE) at all times'},
+      {sec:'Details — Claim', when: isCat('CLM')},
+      {k:'claimNo', l:'Claim no.', t:'text', w:'half'},
+      {k:'claimTo', l:'Work done up to', t:'date', w:'half'},
+      {k:'amount', l:'Amount claimed (RM)', t:'number', w:'half', req:1},
+      {k:'payDays', l:'Payment period (days)', t:'number', w:'half', ph:'e.g. 30'},
+      {sec:'Details — Completion', when: isCat('CMP')},
+      {k:'area', l:'Area / works completed', t:'text', req:1},
+      {k:'doneDate', l:'Completed on', t:'date', w:'half'},
+      {k:'inspDate', l:'Proposed joint inspection date', t:'date', w:'half'},
+      {sec:'Content'},
+      {k:'points', l:'Other points to include (one per line — plain words are fine)', t:'textarea', ph:'e.g. machinery standby cost will be claimed separately'},
+      {k:'enclosures', l:'Enclosures (one per line)', t:'textarea', ph:'e.g. Site photos dated 20 October 2026'},
+      {k:'_draft', l:'', t:'draftbtn'},
+      {k:'body', l:'Letter content', t:'textarea', hint:'Tap “Draft the letter” to write it from the details above, then edit freely. Numbered paragraphs (1., 2.) and a., b. lines are laid out automatically in the PDF.'},
+      {sec:'Signatory'},
+      {k:'signName', l:'Name', t:'text', w:'half', req:1},
+      {k:'signTitle', l:'Designation', t:'text', w:'half', ph:'e.g. Director, Project'},
+      {k:'signPhone', l:'Phone', t:'text', w:'half'},
+      {k:'signEmail', l:'Email', t:'text', w:'half'}
+    ]
+  },
   PDH: {
     name: 'Pre-Demolition Inspection & Handover', code: 'PDH', blurb: 'Joint inspection before demolition starts',
     sigs: [
@@ -763,6 +935,8 @@ const TYPES = {
 };
 
 const TYPE_KEYS = Object.keys(TYPES);
+TYPE_KEYS.forEach(k => { let cur = null; TYPES[k].fields.forEach(f => { if(f.sec) cur = f.when || null; else if(cur && !f.when) f.when = cur; }); });
+const shown = (f, data) => !f.when || f.when(data || {});
 // Admin can rename document types (Settings → company.typeNames). Originals kept so names can be reset.
 const TYPE_ORIG = {}; TYPE_KEYS.forEach(k => TYPE_ORIG[k] = {name: TYPES[k].name, blurb: TYPES[k].blurb});
 function applyTypeNames(){
@@ -948,7 +1122,7 @@ function docRow(d, showProj){
 /* ---------- PROJECT ---------- */
 // three folders for the documents of each project
 const DOC_CATS = [
-  {k:'OPS', name:'Operation', icon:'🏗', types:['DSR','PR','MM','RFI','TR','PDH','IAH','EMD']},
+  {k:'OPS', name:'Operation', icon:'🏗', types:['DSR','PR','MM','RFI','TR','LTR','PDH','IAH','EMD']},
   {k:'SHE', name:'Safety & Environmental', icon:'🦺', types:['TBT','PTW','SW']},
   {k:'SCR', name:'Scrap & Salvage', icon:'♻', types:['SSO']}
 ];
@@ -971,6 +1145,7 @@ const ISO_MAP = {
   SSO: {'14001':'8.1 Operational control – scrap & recycling', '9001':'8.5.3 Property belonging to customers'},
   RFI: {'9001':'8.2.1 Customer communication'},
   TR:  {'9001':'7.5 Documented information'},
+  LTR: {'9001':'8.2.1 Customer communication'},
   PDH: {'9001':'8.5.3 Property belonging to customers', '45001':'6.1.2 Hazard identification & risk assessment'},
   IAH: {'9001':'8.6 Release of products & services'},
   EMD: {'9001':'7.1.3 Infrastructure', '45001':'8.1 Operational planning & control'},
@@ -1171,7 +1346,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (S) · folders + ISO audit pack</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (T) · letters</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1365,6 +1540,7 @@ function salvageSummary(data){
     return [label, String(rows.length), rows.reduce((a, r) => a + (parseFloat(String(r.kg || '').replace(/,/g, '')) || 0), 0).toLocaleString('en-MY')]; });
 }
 function docBodyHTML(d){
+  if(TYPES[d.type].letter) return letterHTML(d);
   const T = TYPES[d.type], data = withAutos(d);
   const st = statusOf(d);
   const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase==='response' && !isEmpty(data[f.k]));
@@ -1416,8 +1592,93 @@ function tableTotals(f, rows){
   if(!numCols.length || rows.length < (f.sumCols ? 1 : 2)) return '';
   return `<tr style="font-weight:700;background:#faf8f4">${f.cols.map((c,i) => { if(i===0) return '<td>Total</td>'; if(numCols.includes(c) && rows.some(r=>!isEmpty(r[c.k]))){ const s = rows.reduce((a,r)=>a+numv(r[c.k]),0); return `<td>${c.dp ? fmtN(s, c.dp) : +s.toFixed(2)}</td>`; } return '<td></td>'; }).join('')}</tr>`;
 }
+/* ---------- letter layout (screen + PDF) ---------- */
+function ltrParts(d){
+  const x = withAutos(d), ms = x.language === 'Bahasa Melayu';
+  return {x, ms, ref: ltrRef(d), date: ltrDate(x, x.date),
+    sal: ms ? 'Tuan / Puan,' : 'Dear Sir / Madam,',
+    re: x.reTitle ? (ms ? '' : 'RE: ') + x.reTitle : '',
+    closing: ms ? ['Sekian.', 'Yang benar,'] : ['Thank you.', 'Yours faithfully,'],
+    forCo: ms ? 'b.p. SADHANA DEMOLITION & ENGINEERING SDN BHD' : 'for and on behalf of SADHANA DEMOLITION & ENGINEERING SDN BHD',
+    refL: ms ? 'Rujukan Kami' : 'Our Ref', yrefL: ms ? 'Rujukan Tuan' : 'Your Ref', dateL: ms ? 'Tarikh' : 'Date', attnL: ms ? 'Perhatian' : 'Attn', ccL: ms ? 's.k.' : 'c.c.', enclL: ms ? 'Lampiran' : 'Encl.',
+    body: String(x.body || '').trim() || draftLetter(d)};
+}
+function letterHTML(d){
+  const L = ltrParts(d), x = L.x, sig = (d.signatures || [])[0];
+  const paras = L.body.split(/\n\s*\n/).map(p => `<p style="margin:0 0 10px;white-space:pre-wrap">${esc(p)}</p>`).join('');
+  return `<div class="letter" style="font-size:14px;line-height:1.5;padding:4px 6px">
+    <div style="display:flex;justify-content:space-between;gap:10px"><div>${L.refL}: ${esc(L.ref)}${x.yourRef ? `<br>${L.yrefL}: ${esc(x.yourRef)}` : ''}<br>${L.dateL}: ${esc(L.date)}</div>${x.marking ? `<b>${esc(x.marking)}</b>` : ''}</div>
+    <p style="margin:14px 0 10px"><b>${esc(String(x.toName || '').toUpperCase())}</b><br>${esc(x.toAddress || '').replace(/\n/g, '<br>')}</p>
+    ${x.attn ? `<p style="margin:0 0 10px">${L.attnL}: ${esc(x.attn)}</p>` : ''}
+    <p style="margin:0 0 10px">${L.sal}</p>
+    ${L.re ? `<p style="margin:0 0 6px"><b><u>${esc(L.re)}</u></b></p>` : ''}
+    ${x.subject ? `<p style="margin:0 0 12px"><b>${L.ms ? esc(x.subject.toUpperCase()) : 'Subject: ' + esc(x.subject)}</b></p>` : ''}
+    ${paras}
+    <p style="margin:14px 0 4px">${L.closing.map(esc).join('<br><br>')}</p>
+    <div style="height:64px;display:flex;align-items:center">${sig ? `<img src="${esc(sig.img)}" alt="" style="max-height:60px">` : '<span class="muted small">(signature)</span>'}</div>
+    <p style="margin:0 0 10px"><b>${esc(x.signName || '')}</b>${x.signTitle ? '<br>' + esc(x.signTitle) : ''}${x.signPhone ? '<br>' + esc(x.signPhone) : ''}${x.signEmail ? '<br>' + esc(x.signEmail) : ''}<br><span class="small">${esc(L.forCo)}</span></p>
+    ${lines(x.enclosures).length ? `<p style="margin:0 0 8px"><b>${L.enclL}</b><br>${lines(x.enclosures).map((e, i) => (i + 1) + '. ' + esc(e)).join('<br>')}</p>` : ''}
+    ${lines(x.cc).length ? `<p style="margin:0"><b>${L.ccL}</b><br>${lines(x.cc).map(esc).join('<br>')}</p>` : ''}
+  </div>`;
+}
+async function letterPdf(d){
+  const L = ltrParts(d), x = L.x, sig = (d.signatures || [])[0];
+  const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4'});
+  Object.assign(HS, {W:210, H:297, CW:170, BOTTOM:277});
+  const {CW, TOP, BOTTOM} = HS, LX = HS.L, LH = 5;
+  let y = TOP;
+  const need = h => { if(y + h > BOTTOM){ doc.addPage(); y = TOP; } };
+  const font = (b, sz) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(sz || 10); doc.setTextColor(...INK); };
+  const write = (t, o = {}) => { font(o.bold, o.size); const ind = o.ind || 0, w = CW - ind; const ls = doc.splitTextToSize(pt(t), w);
+    ls.forEach(ln => { need(LH); doc.text(ln, LX + ind, y + 3.6); if(o.u){ const tw = doc.getTextWidth(ln); doc.setLineWidth(0.25); doc.setDrawColor(...INK); doc.line(LX + ind, y + 4.4, LX + ind + tw, y + 4.4); } y += LH; }); };
+  const hang = (pre, t, ind, at) => { font(false); const ls = doc.splitTextToSize(pt(t), CW - at); need(LH); doc.text(pt(pre), LX + ind, y + 3.6); ls.forEach((ln, i) => { if(i) need(LH); doc.text(ln, LX + at, y + 3.6); y += LH; }); };
+  // header lines
+  font(false); doc.text(pt(L.refL + ': ' + L.ref), LX, y + 3.6); if(x.marking){ font(true); doc.text(pt(x.marking), LX + CW, y + 3.6, {align:'right'}); } y += LH;
+  if(x.yourRef) write(L.yrefL + ': ' + x.yourRef);
+  write(L.dateL + ': ' + L.date); y += 4;
+  write(String(x.toName || '').toUpperCase(), {bold: true});
+  lines(x.toAddress).forEach(a => write(a)); y += 3;
+  if(x.attn){ write(L.attnL + ': ' + x.attn); y += 3; }
+  write(L.sal); y += 3;
+  if(L.re){ write(L.re, {bold: true, u: true}); y += 1.5; }
+  if(x.subject){ write(L.ms ? x.subject.toUpperCase() : 'Subject: ' + x.subject, {bold: true}); }
+  y += 3;
+  // body
+  for(const para of L.body.split(/\n\s*\n/)){
+    const ls = para.split('\n'); need(LH * 2);
+    ls.forEach((ln, i) => {
+      let m;
+      if(i === 0 && (m = ln.match(/^(\d+[.)])\s+(.*)$/))) hang(m[1], m[2], 0, 9);
+      else if((m = ln.match(/^\s+([a-z][.)]|[ivx]+[.)]|[-•])\s+(.*)$/i))) hang(m[1], m[2], 9, 16);
+      else if(/^\s{2,}/.test(ln)){ const t = ln.trim(), kv = t.match(/^([^:]{2,40}):\s{2,}(.*)$/); if(kv){ font(true); need(LH); doc.text(pt(kv[1]), LX + 9, y + 3.6); font(false); const vs = doc.splitTextToSize(pt(kv[2]), CW - 62); vs.forEach((v, j) => { if(j) need(LH); doc.text(v, LX + 62, y + 3.6); y += LH; }); } else write(t, {ind: 9}); }
+      else write(ln, {ind: /^\d+[.)]/.test(ls[0]) && i ? 9 : 0});
+    });
+    y += 3;
+  }
+  // closing & signature
+  need(48); y += 1;
+  write(L.closing[0]); y += 3; write(L.closing[1]);
+  if(sig){ try { const I = await imgData(sig.img, 600, 'png'); const h = 16, w = Math.min(60, I.w / I.h * h); doc.addImage(I.url, 'PNG', LX, y + 1, w, h); } catch(e){} }
+  y += 19;
+  doc.setDrawColor(...INK); doc.setLineWidth(0.2); doc.line(LX, y, LX + 60, y); y += 1.5;
+  write(x.signName || '', {bold: true}); [x.signTitle, x.signPhone, x.signEmail].filter(Boolean).forEach(v => write(v));
+  write(L.forCo, {size: 8.5});
+  if(sig){ font(false, 7.5); doc.setTextColor(102); doc.text(pt('Signed electronically by ' + sig.name + ' on ' + fmtDT(sig.at)), LX, y + 3.2); y += LH; }
+  const en = lines(x.enclosures); if(en.length){ y += 4; write(L.enclL, {bold: true}); en.forEach((e, i) => hang((i + 1) + '.', e, 0, 7)); }
+  const cc = lines(x.cc); if(cc.length){ y += 4; write(L.ccL, {bold: true}); cc.forEach(c => write(c)); }
+  // letterhead + footer
+  const LHd = await letterheadData(); const pages = doc.getNumberOfPages();
+  for(let i = 1; i <= pages; i++){ doc.setPage(i);
+    try { doc.addImage(LHd.url, 'JPEG', LX, HS.LH_Y, 170, 170 * LHd.h / LHd.w); } catch(e){}
+    doc.setDrawColor(...GRID); doc.setLineWidth(0.2); doc.line(LX, HS.H - 13, LX + CW, HS.H - 13);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102);
+    doc.text(pt(L.refL + ': ' + L.ref), LX, HS.H - 8.5); doc.text(`Page ${i} of ${pages}`, LX + CW, HS.H - 8.5, {align:'right'}); }
+  const name = `${L.ref.replace(/\//g, '_')} ${x.subject || 'Letter'}`.replace(/[\\/:*?"<>|]/g, '-').slice(0, 120) + '.pdf';
+  return {blob: doc.output('blob'), name};
+}
 function letterheadHTML(d){
   const c = company(), T = TYPES[d.type];
+  if(T.letter) return `<img ${c.letterheadId ? photoAttr(c.letterheadId) : `src="${LETTERHEAD_JPG}"`} alt="${esc(c.name)}" style="width:100%;display:block;margin-bottom:10px">`;
   return `<img ${c.letterheadId ? photoAttr(c.letterheadId) : `src="${LETTERHEAD_JPG}"`} alt="${esc(c.name)}" style="width:100%;display:block;margin-bottom:10px">
     <div style="text-align:center;margin:6px 0 4px"><div style="font:800 17px Archivo;text-transform:uppercase">${esc(docName(T, d.data))}</div><div class="mono small" style="color:var(--hazard-d)">${esc(d.number)}</div></div>`;
   return `<div class="lh"><div class="mark">${c.logoId?`<img ${photoAttr(c.logoId)} alt="">`:'SDE'}</div>
@@ -1480,6 +1741,9 @@ function newDraft(pid, type){
     if(last && last.data?.hse) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); } }
   if(type === 'MM'){ data.to = monthEnd(data.from); }
+  if(type === 'LTR'){ const p = projById(pid) || {}; data.reTitle = (p.name || '').toUpperCase() + (p.contractNo ? ' [LOA REF: ' + p.contractNo + ']' : ''); data.origEnd = p.end || '';
+    let sg = {}; try { sg = JSON.parse(localStorage.getItem('sde-signer') || '{}'); } catch(e){}
+    data.signName = sg.signName || S.names[S.me] || ''; data.signTitle = sg.signTitle || ''; data.signPhone = sg.signPhone || ''; data.signEmail = sg.signEmail || ''; }
   if(type === 'DSR'){
     const last = S.docs.filter(x => x.type === 'DSR' && x.projectId === pid && (x.data?.works || []).length).sort((a, b) => String(b.data?.date || '').localeCompare(String(a.data?.date || '')) || (b.seq || 0) - (a.seq || 0))[0];
     const carry = last ? last.data.works.filter(r => r && r.work && numv(r.pct) < 100).map(r => ({work: r.work, pct: r.pct || ''})) : [];
@@ -1548,6 +1812,7 @@ function polishText(t){
   s = s.replace(/(\d)\s*(meters?|metres?)\b/gi, '$1 m').replace(/(\d)\s*(square meters?|square metres?|sq m)\b/gi, '$1 m²');
   s = s.replace(/\b(lot|level|block|grid|zone|phase|gate|tower|floor|blok|bay|unit|area)\s+(\d+)\s?([a-z])\b(?=\s)/gi, (m0, w, n, l) => w + ' ' + n + l.toUpperCase());
   s = s.replace(/\b(lot|level|block|grid|zone|phase|gate|tower|floor|blok|bay|unit|area)\s+([a-z]?\d+[a-z]?|[a-z])\b/gi, (m0, w, n) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() + ' ' + n.toUpperCase());
+  s = s.replace(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|june|july|august|september|october|november|december)\b/gi, m0 => m0.charAt(0).toUpperCase() + m0.slice(1).toLowerCase());
   s = s.replace(/\bi\b/g, 'I').replace(/\bok\b/gi, 'OK').replace(/\b(ppe|ptw|hirarc|lti|tnb|loa|rfi|cidb|dosh|jkkp|psa)\b/gi, m0 => m0.toUpperCase());
   s = s.replace(/\s+([.,?:!%])/g, '$1').replace(/([.,?:!])(?=[A-Za-z])/g, '$1 ').replace(/[ \t]+/g, ' ');
   // informal words → formal report wording
@@ -1614,6 +1879,7 @@ function fieldInput(f, v){
   const dk = `data-f="${f.k}"`;
   switch(f.t){
     case 'textarea': return `<div class="dict"><textarea ${dk} placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>${micBtn(f.k)}</div>${S.sample?`<div class="fixrow">${f.k in S.fixUndo?`<button class="undo" data-act="undofix" data-k="${f.k}">Undo</button>`:''}<button class="aibtn" data-act="fixen" data-k="${f.k}">✨ Fix English</button></div>`:''}`;
+    case 'draftbtn': return `<button type="button" class="btn pri" data-act="ltrdraft" style="width:100%">✨ Draft the letter from the details above</button>`;
     case 'auto': return `<div class="autobox"><span data-auto="${f.k}">${esc(S.draft ? autoValue(f, S.draft) : v) || '—'}</span><em>auto</em></div>`;
     case 'date': return `<input type="date" ${dk} value="${esc(v)}">`;
     case 'datetime': return `<input type="datetime-local" ${dk} value="${esc(v)}">`;
@@ -1645,6 +1911,7 @@ function editView(){
   let html = '', open = false;
   const fields = T.fields.filter(f => f.t !== 'calc' && (resp ? f.phase === 'response' : f.phase !== 'response'));
   for(const f of fields){
+    if(!shown(f, d.data)) continue;
     if(f.sec){ if(open) html += '</div>'; html += `<div class="fsec"><h3>${esc(f.sec)}</h3></div><div class="fgrid">`; open = true; continue; }
     if(!open){ html += '<div class="fgrid" style="margin-top:14px">'; open = true; }
     html += `<div class="fld ${f.w==='half'?'half':''}" id="fld_${f.k}"><label>${esc(f.l)}${f.req?' <em>*</em>':''}</label>${fieldInput(f, d.data[f.k])}${f.hint?`<div class="hint">${esc(f.hint)}</div>`:''}</div>`;
@@ -1669,6 +1936,7 @@ function editView(){
 function missingRequired(d, phase){
   const T = TYPES[d.type];
   return T.fields.filter(f => f.k && f.req && (phase==='response' ? f.phase==='response' : f.phase!=='response'))
+    .filter(f => shown(f, d.data))
     .filter(f => f.t==='table' ? !cleanRows(f, d.data[f.k]).length : isEmpty(d.data[f.k]));
 }
 function flagMissing(list){
@@ -1685,6 +1953,8 @@ async function saveDraft(){
   const T = TYPES[d.type];
   const data = clone(d.data);
   T.fields.forEach(f => { if(f.t==='table'){ const r = cleanRows(f, data[f.k]); r.forEach(x => calcRow(f, x)); data[f.k] = r; } });
+  if(d.type === 'LTR'){ if(!data.subject) data.subject = ltrSubject(data); if(!String(data.body || '').trim()) data.body = draftLetter({...d, data});
+    try { localStorage.setItem('sde-signer', JSON.stringify({signName: data.signName, signTitle: data.signTitle, signPhone: data.signPhone, signEmail: data.signEmail})); } catch(e){} }
   T.fields.forEach(f => { if(f.t === 'auto') data[f.k] = autoValue(f, {...d, data}); });
   if(!d.id){
     const p = projById(d.projectId);
@@ -1864,6 +2134,7 @@ async function makePDF(id, opt){
   if(!S.dl && !opt.blob){ toast('Downloads aren\'t available in this view.', true); return; }
   const btn = opt.blob ? null : document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
+    if(TYPES[d.type].letter){ const r = await letterPdf(d); if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
     const T = TYPES[d.type], p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
     const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'});
     Object.assign(HS, T.landscape ? {W:297, H:210, CW:257, BOTTOM:190} : {W:210, H:297, CW:170, BOTTOM:277});
@@ -2395,6 +2666,8 @@ document.addEventListener('click', async e => {
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
     case 'typenames': typeNamesForm(); break;
+    case 'ltrdraft': { const go2 = () => { const x = S.draft.data; if(!x.subject) x.subject = ltrSubject(x); x.body = draftLetter(S.draft); S.dirty = true; rerenderEditorField('subject'); rerenderEditorField('body'); const b = $('[data-f="body"]'); if(b){ b.style.minHeight = '420px'; b.scrollIntoView({block:'center'}); } toast('Letter drafted — check and edit it before signing'); };
+      if(String(S.draft.data.body || '').trim()) confirmBox('Replace the letter content?', 'The current letter content will be replaced by a new draft from the details above.', 'Replace', go2); else go2(); break; }
     case 'isopack': isoPackForm(); break;
     case 'isogo': makeIsoPack(el); break;
     case 'isoyear': { const v = el.dataset.y; if(v === '12m'){ $('#isoFrom').value = addDays(today(), -365); $('#isoTo').value = today(); } else { $('#isoFrom').value = v + '-01-01'; $('#isoTo').value = v + '-12-31'; } break; }
@@ -2473,6 +2746,7 @@ document.addEventListener('input', e => {
     if(S.draft.type === 'RFI' && t.dataset.f === 'requiredBy') S.draft._reqSet = true;
     if(S.draft.type === 'RFI' && t.dataset.f === 'issued' && S.draft.data.issued && !S.draft._reqSet){ S.draft.data.requiredBy = addDays(S.draft.data.issued, 7); const te = document.querySelector('[data-f="requiredBy"]'); if(te) te.value = S.draft.data.requiredBy; }
     refreshAutos();
+    if(S.draft.type === 'LTR' && (t.dataset.f === 'category' || t.dataset.f === 'language')){ const y0 = window.scrollY; render(); window.scrollTo(0, y0); return; }
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
     refreshAutos(); }
