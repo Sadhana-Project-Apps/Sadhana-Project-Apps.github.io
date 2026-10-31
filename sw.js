@@ -1,5 +1,5 @@
 // Sadhana Site Records — lets the installed app open even with weak signal.
-const CACHE = 'sde-app-v1';
+const CACHE = 'sde-app-v2';
 const HOME = new URL('./', self.registration.scope).href;
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll([HOME]).catch(() => {}))); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
