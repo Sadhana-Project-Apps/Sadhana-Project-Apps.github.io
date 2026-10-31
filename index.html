@@ -1048,7 +1048,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (P) · document folders</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (R) · formal wording</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1371,7 +1371,92 @@ const MIC_SMALL = '<svg viewBox="0 0 24 24" width="20" height="20" fill="current
 function micBtn(k){ return (!S.sample && SR) ? `<button type="button" class="fmic" data-act="dictate" data-k="${k}" aria-label="Speak into this box">${MIC_SMALL}</button>` : ''; }
 /* Speak straight into one box (no AI): the phone's own speech recognition, Malay or English. */
 const DICT = {rec:null, k:null};
+// formal reporting style for one sentence (no AI)
+const PAST = {do:'Carried out', did:'Carried out', done:'Carried out', 'carry out':'Carried out', 'carried out':'Carried out', start:'Commenced', started:'Commenced', begin:'Commenced', began:'Commenced',
+  continue:'Continued', continued:'Continued', finish:'Completed', finished:'Completed', complete:'Completed', completed:'Completed', demolish:'Demolished', remove:'Removed', clear:'Cleared',
+  cut:'Cut', break:'Broke', dismantle:'Dismantled', strip:'Stripped', install:'Installed', load:'Loaded', unload:'Unloaded', send:'Sent', collect:'Collected', check:'Checked', inspect:'Inspected',
+  conduct:'Conducted', have:'Held', had:'Held', hold:'Held', move:'Moved', bring:'Brought', take:'Took', get:'Obtained', got:'Obtained', prepare:'Prepared', submit:'Submitted', receive:'Received',
+  deliver:'Delivered', transport:'Transported', hack:'Hacked', crush:'Crushed', dispose:'Disposed of', stockpile:'Stockpiled', stop:'Stopped', erect:'Erected', fix:'Fixed', repair:'Repaired',
+  clean:'Cleaned', sweep:'Swept', spray:'Sprayed', water:'Watered', level:'Levelled', excavate:'Excavated', backfill:'Backfilled', segregate:'Segregated', sort:'Sorted', cover:'Covered',
+  protect:'Protected', barricade:'Barricaded', secure:'Secured', mobilise:'Mobilised', mobilize:'Mobilised', demobilise:'Demobilised', demobilize:'Demobilised', setup:'Set up', 'set up':'Set up',
+  brief:'Briefed', attend:'Attended', meet:'Met', discuss:'Discussed', measure:'Measured', survey:'Surveyed', mark:'Marked', weigh:'Weighed', sell:'Sold', buy:'Bought', hire:'Hired', use:'Used', put:'Placed', place:'Placed', lift:'Lifted', shift:'Shifted', dump:'Dumped', pile:'Piled', burn:'Burned', test:'Tested', record:'Recorded', report:'Reported', inform:'Informed', request:'Requested', wait:'Waited', proceed:'Proceeded with', go:'Proceeded to', went:'Proceeded to'};
+const VERB_RE = Object.keys(PAST).sort((a, b) => b.length - a.length).map(k => k.replace(' ', '\\s+')).join('|');
+function formalSentence(x){
+  let s = ' ' + x + ' ';
+  // Manglish particles and informal words
+  s = s.replace(/\s(lah|lor|meh|mah|leh|wor|hor|ya|yah|ah)\b(?=[\s.,!?])/gi, ' ');
+  s = s.replace(/\b(basically|actually|literally|just|kind of|sort of|pretty much|anyway|anyhow|you see|like that|something like that|and so on|etc etc)\b,?/gi, ' ');
+  s = s.replace(/\bgonna\b/gi, 'going to').replace(/\bwanna\b/gi, 'want to').replace(/\bgotta\b/gi, 'have to').replace(/\bkinda\b/gi, '').replace(/\ba lot of\b|\blots of\b/gi, 'many').replace(/\bstuffs?\b/gi, 'items').replace(/\bthings\b/gi, 'items').replace(/\bguys\b/gi, 'workers').replace(/\bboss\b/gi, 'management');
+  s = s.replace(/\b(can't|cannot)\b/gi, 'cannot').replace(/\bwon't\b/gi, 'will not').replace(/\b(\w+)n't\b/gi, '$1 not').replace(/\bit's\b/gi, 'it is').replace(/\bthat's\b/gi, 'that is').replace(/\bthere's\b/gi, 'there is').replace(/\b(we|they|you)'re\b/gi, '$1 are').replace(/\b(I|we|they|you)'ve\b/gi, '$1 have').replace(/\b(I|we|they|you|it|he|she)'ll\b/gi, '$1 will').replace(/\bI'm\b/g, 'I am');
+  s = s.replace(/\s(already|oredi|dah)\b(?=[\s.,!?])/gi, ' ');
+  s = s.replace(/^\s*((so|okay|ok|alright|right|well|um|then|and then|and|also|after that|next|today|this morning|this afternoon|just now)[\s,]+)+/i, ' ');
+  // "got 15 workers" / "we have 15 workers"
+  s = s.replace(/^\s*(we\s+|there\s+)?(got|have|has|had|was|were|is|are)\s+(\d+)\s+(general\s+)?(workers?|pax|men|people|labou?rs?|persons?|operators?)\b/i, (m0, a, b, n, g) => ` ${n} ${g ? 'general ' : ''}workers on site`);
+  // future: "we will continue X" -> "To continue X"
+  s = s.replace(/^\s*(tomorrow\s+)?(we|i|the team|our team|our workers|workers|the workers|they)\s+(will|shall|are going to|is going to|going to|plan to|planning to|want to|need to|have to|must)\s+/i, ' To ');
+  // progressive: "we are stripping X" -> "Stripping X in progress"
+  s = s.replace(/^\s*(we|i|the team|our team|our workers|workers|the workers|they)\s+(are|is|am|still)\s+(still\s+)?(\w+ing)\b(.*?)\s*$/i, (m0, a, b, c, v, rest) => ` ${v}${rest.replace(/[.!?]+$/, '')} in progress `);
+  // past/plain: "we demolish X" -> "Demolished X"
+  const re = new RegExp('^\\s*(we|i|the team|our team|our workers|workers|the workers|they|the crew|our crew)\\s+(have\\s+|has\\s+|had\\s+|already\\s+)?(' + VERB_RE + ')\\b', 'i');
+  s = s.replace(re, (m0, a, b, v) => ' ' + (PAST[v.toLowerCase().replace(/\s+/g, ' ')] || v));
+  s = s.replace(/^\s*Carried out\s+the\s+/, ' Carried out ');
+  s = s.replace(/\s(today|just now|this morning|this afternoon)\s*([.!?]?)\s*$/i, '$2 ');
+  // "X done" / "X finished" at end -> completed
+  s = s.replace(/\s(is|are|was|were)?\s*(done|finish|finished|settled|settle|siap|beres)\s*([.!?]?)\s*$/i, ' completed$3 ');
+  // leftover subject pronoun start: "we ..." -> drop
+  s = s.replace(/^\s*(we|i)\s+(?=\w+ed\b)/i, ' ');
+  s = s.replace(/\s+/g, ' ').trim().replace(/^[,.\s]+/, '');
+  return s;
+}
+/* Tidy up spoken English: punctuation words, fillers, repeats, capitals, units, site terms */
+function polishText(t){
+  if(!t) return t;
+  let s = ' ' + String(t).replace(/\s+/g, ' ') + ' ';
+  s = s.replace(/\s+(full stop|fullstop|titik)\b/gi, '.').replace(/\s+comma\b/gi, ',').replace(/\s+question mark\b/gi, '?').replace(/\s+colon\b/gi, ':')
+       .replace(/\s*\b(new line|next line|new paragraph|next item|next point)\b\s*/gi, '\n');
+  s = s.replace(/\b(um+|uh+|uhm+|erm+|er|ah+|hmm+|you know|i mean|like i said)\b,?/gi, ' ');
+  // informal / chatty words
+  s = s.replace(/\b(basically|actually|literally|honestly|kind of|sort of|you see|anyway|anyways|alright|lah|la|leh|lor|meh|loh|ya|yeah|yah|kan|ok la|okay la)\b,?/gi, ' ');
+  for(let i = 0; i < 3; i++) s = s.replace(/(^\s*|[.!?\n]\s*)(so|and so|and then|then|okay|ok|well|right|now|and|but)\b[,]?\s+/gi, '$1');
+  s = s.replace(/([a-z0-9])\s+(so|then)\s+(we|the|i|they|work|all)\b/gi, '$1, $2 $3');
+  s = s.replace(/\b(\w+)(\s+\1\b)+/gi, '$1');
+  s = s.replace(/(\d)\s*(percent|per cent|percentage)\b/gi, '$1%');
+  s = s.replace(/(\d)\s*(kilos?|kilograms?|kgs?|kilo gram)\b/gi, '$1 kg').replace(/(\d)\s*(tonnes?|tons?|metric tons?)\b/gi, '$1 tonnes');
+  s = s.replace(/(\d)\s*(meters?|metres?)\b/gi, '$1 m').replace(/(\d)\s*(square meters?|square metres?|sq m)\b/gi, '$1 m²');
+  s = s.replace(/\b(lot|level|block|grid|zone|phase|gate|tower|floor|blok|bay|unit|area)\s+(\d+)\s?([a-z])\b(?=\s)/gi, (m0, w, n, l) => w + ' ' + n + l.toUpperCase());
+  s = s.replace(/\b(lot|level|block|grid|zone|phase|gate|tower|floor|blok|bay|unit|area)\s+([a-z]?\d+[a-z]?|[a-z])\b/gi, (m0, w, n) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() + ' ' + n.toUpperCase());
+  s = s.replace(/\bi\b/g, 'I').replace(/\bok\b/gi, 'OK').replace(/\b(ppe|ptw|hirarc|lti|tnb|loa|rfi|cidb|dosh|jkkp|psa)\b/gi, m0 => m0.toUpperCase());
+  s = s.replace(/\s+([.,?:!%])/g, '$1').replace(/([.,?:!])(?=[A-Za-z])/g, '$1 ').replace(/[ \t]+/g, ' ');
+  // informal words → formal report wording
+  const FORMAL = [[/\bgonna\b/gi, 'going to'], [/\bwanna\b/gi, 'want to'], [/\bgotta\b/gi, 'have to'], [/\bcan'?t\b/gi, 'cannot'], [/\bdon'?t\b/gi, 'do not'], [/\bdidn'?t\b/gi, 'did not'],
+    [/\bwon'?t\b/gi, 'will not'], [/\bisn'?t\b/gi, 'is not'], [/\baren'?t\b/gi, 'are not'], [/\bwasn'?t\b/gi, 'was not'], [/\bit'?s\b/gi, 'it is'], [/\bthere'?s\b/gi, 'there is'],
+    [/\b(the |our )?(guys|boys|fellas|workers guys)\b/gi, 'workers'], [/\b(stuffs?|things)\b/gi, 'items'], [/\blots of\b|\ba lot of\b/gi, 'many'], [/\ba bit\b/gi, 'slightly'],
+    [/\b(kind of|sort of|pretty much|more or less|basically|actually|literally|honestly|just|already|anyway|lah|la|ah)\b,?/gi, ''],
+    [/\ball (ok|okay)\b/gi, 'all in order'], [/\b(is|are|was|were|all)\s+(ok|okay|fine|good)\b/gi, '$1 satisfactory'], [/\b(is|are|was|were)\s+done\b/gi, '$1 completed'], [/\s+done\s*(?=[.\n]|$)/gi, ' completed'],
+    [/\bfinish(ed)?\b/gi, 'completed'], [/\bcheck(ed)? out\b/gi, 'inspected'], [/\bfix(ed)?\b/gi, 'rectified'], [/\bsupposed to\b/gi, 'scheduled to'], [/\b(came|come|comes|reach|reached) (to )?(the )?site\b/gi, 'arrived on site'], [/\s+(about|around|roughly|more or less)\s+(\d)/gi, ', approximately $2'],
+    [/\b(all in order|satisfactory)\s+(no|nil)\b/gi, '$1; $2'], [/\bno accident\b/gi, 'no accidents'], [/\b(work|works|operation|job) (stop|stopped|stops)\s+(for\s+)?(\d)/gi, '$1 stopped for $4'], [/,?\s+so\s+(?=\w)/gi, '; therefore '], [/\s+(it is|they are|all are|everything is) satisfactory\b/gi, '; found satisfactory']];
+  FORMAL.forEach(([re, to]) => { s = s.replace(re, to); });
+  const PAST = {demolish:'Demolished', remove:'Removed', clear:'Cleared', strip:'Stripped', cut:'Cut', install:'Installed', complete:'Completed', continue:'Continued', check:'Checked', inspect:'Inspected', dismantle:'Dismantled', hack:'Hacked', break:'Broke', load:'Loaded', transport:'Transported', collect:'Collected', sort:'Sorted', stack:'Stacked', erect:'Erected', conduct:'Conducted', hold:'Held', start:'Commenced', begin:'Commenced', send:'Sent', deliver:'Delivered', dispose:'Disposed of', clean:'Cleaned', spray:'Sprayed', barricade:'Barricaded', fence:'Fenced', excavate:'Excavated', backfill:'Backfilled', crush:'Crushed', move:'Moved', mobilise:'Mobilised', mobilize:'Mobilised', demobilise:'Demobilised', receive:'Received', submit:'Submitted', prepare:'Prepared', attend:'Attended', carry:'Carried', do:'Carried out', did:'Carried out', make:'Made', set:'Set', take:'Took', bring:'Brought', put:'Placed', cover:'Covered', secure:'Secured', water:'Watered', level:'Levelled', sweep:'Swept', segregate:'Segregated'};
+  const SUBJ = /^(?:(?:so|okay|ok|alright|right|well|now|then|and then|and|also|today|tomorrow|next|later|this morning|this afternoon|this evening|just now|for today)[ ,]+)*(?:(we|i|the team|our team|our workers|the workers|workers|my team|the crew|our crew)\s+(?:(will|going to|shall|plan to|need to|have to)\s+|(?:have|has|had|were|was|are|is)\s+)?)?(\w+)?/i;
+  return s.split('\n').map(l => {
+    l = l.trim().replace(/^[,.]\s*/, ''); if(!l) return '';
+    l = l.split(/(?<=[.!?])\s+/).map(x => { const end = (x.match(/[.!?]+$/) || [''])[0]; const b = formalSentence(x.replace(/[.!?]+$/, '')); return b ? b + end : ''; }).filter(Boolean).join(' ');
+    if(!l) return '';
+    l = l.replace(SUBJ, (m0, who, fut, verb) => {
+      if(!verb) return '';
+      const v = verb.toLowerCase();
+      if(!who) return verb;                         // only openers dropped ("So", "Okay", "Today")
+      if(fut) return v.charAt(0).toUpperCase() + v.slice(1);          // plan: "Continue stripping…"
+      if(PAST[v]) return PAST[v];
+      return v.charAt(0).toUpperCase() + v.slice(1);
+    });
+    l = l.replace(/^(Carried out)\s+(the|a|some)\s+/i, '$1 ').replace(/\s{2,}/g, ' ').replace(/\s+([.,?:!%])/g, '$1');
+    l = l.replace(/(^|[.!?]\s+)([a-z])/g, (m0, a, b) => a + b.toUpperCase());
+    if(l.split(' ').length > 2 && !/[.!?:]$/.test(l)) l += '.';
+    return l; }).filter(Boolean).join('\n');
+}
 function stopDictation(){
+  if(DICT.fin){ try { DICT.fin(); } catch(e){} DICT.fin = null; }
   const r = DICT.rec; DICT.rec = null;
   if(r){ try { r.stop(); } catch(e){} }
   document.querySelectorAll('.fmic.live').forEach(b => b.classList.remove('live'));
@@ -1382,17 +1467,18 @@ function startDictation(k, btn){
   stopDictation();
   const el = document.querySelector(`[data-f="${k}"]`); if(!el) return;
   let rec; try { rec = new SR(); } catch(e){ toast('Voice typing isn\'t supported in this browser — use Chrome.', true); return; }
-  rec.lang = S.voiceLang || 'ms-MY'; rec.continuous = true; rec.interimResults = true;
+  rec.lang = 'en-MY'; rec.continuous = true; rec.interimResults = true;
   const base = el.value.replace(/\s+$/,''); let finals = '';
   const cap = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
   rec.onresult = ev => {
     let interim = '';
     for(let i = ev.resultIndex; i < ev.results.length; i++){ const r = ev.results[i]; if(r.isFinal) finals += r[0].transcript.trim() + ' '; else interim += r[0].transcript; }
-    const said = cap((finals + interim).replace(/\s+/g,' ').trim());
-    const sep = !base ? '' : (el.tagName === 'TEXTAREA' && /[.!?]$/.test(base) ? '\n' : (/[.!?,]$/.test(base) ? ' ' : '. '));
+    const said = cap((polishText(finals) + ' ' + interim).replace(/[ \t]+/g,' ').trim());
     el.value = base + (said ? sep + said : '');
     S.draft.data[k] = el.value; S.dirty = true; el.closest('.fld')?.classList.remove('err');
   };
+  const sep = !base ? '' : (el.tagName === 'TEXTAREA' ? '\n' : (/[.!?,]$/.test(base) ? ' ' : '. '));
+  DICT.fin = () => { const said = polishText(finals); el.value = base + (said ? sep + (el.tagName === 'TEXTAREA' ? said : said.replace(/\n/g, ' ')) : ''); if(S.draft){ S.draft.data[k] = el.value; } if(typeof refreshAutos === 'function') refreshAutos(); };
   rec.onerror = ev => {
     if(['not-allowed','service-not-allowed','audio-capture'].includes(ev.error)){ toast('Microphone is blocked — tap the icon beside the web address → Permissions → allow Microphone.', true); stopDictation(); }
     else if(ev.error !== 'no-speech' && ev.error !== 'aborted'){ toast('Voice stopped (' + ev.error + ').', true); stopDictation(); }
@@ -1444,8 +1530,8 @@ function editView(){
   return `
   <button class="crumb" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">← ${d.id?'Back to document':esc(p.name)}</button>
   <div class="pagehead"><div><span class="pill type">${esc(T.code)}</span> <span class="mono small muted">${esc(d.number || 'New — number assigned on save')}</span><h1 style="margin-top:6px">${resp?(T.code==='PTW'?'Close-out':'Response')+' — ':''}${esc(T.name)}</h1><div class="muted small">${esc(p.name)}</div></div></div>
-  ${!S.sample && SR ? `<div class="vhint form" style="margin-bottom:4px;align-items:center;flex-wrap:wrap"><b>🎤</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Speak instead of typing</b><br>Tap the green 🎤 beside any box and talk. Tap again to stop.</span><div class="langsw" style="margin:0"><button data-act="vlang" data-l="ms-MY" class="${(S.voiceLang||'ms-MY')==='ms-MY'?'on':''}">Bahasa Melayu</button><button data-act="vlang" data-l="en-MY" class="${S.voiceLang==='en-MY'?'on':''}">English</button></div></div>` : ''}
-  ${S.sample ? `<div class="vhint form" style="cursor:pointer;margin-bottom:4px" data-act="voice"><b>🎤</b><span><b style="font-size:14px">Speak instead of typing</b><br>Tap the green <b style="font-size:13px">🎤</b> button and just speak. Talk in Bahasa Melayu or English — it's written up in proper English and filled into this form for you.</span></div>` : ''}
+  ${!S.sample && SR ? `<div class="vhint form" style="margin-bottom:4px;align-items:center;flex-wrap:wrap"><b>🎤</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Speak instead of typing</b><br>Tap the green 🎤 beside any box and speak in English. Tap again to stop — your words are turned into formal report sentences automatically. Say “new line” for the next point.</span></div>` : ''}
+  ${S.sample ? `<div class="vhint form" style="cursor:pointer;margin-bottom:4px" data-act="voice"><b>🎤</b><span><b style="font-size:14px">Speak instead of typing</b><br>Tap the green <b style="font-size:13px">🎤</b> button and just speak. Talk in English — it's written up in proper English and filled into this form for you.</span></div>` : ''}
   ${d.type === 'EMD' && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⇄</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Moving out?</b><br>Copy the item list from the move-in declaration, then check what is leaving.</span><button class="btn sm pri" data-act="pickmovein">Copy from move-in</button></div>` : ''}
   ${(d.type === 'PR' || d.type === 'MM') && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⤓</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Fill from daily reports</b><br>Copies ${d.type === 'PR' ? 'weather, ' : ''}manpower and machinery for this period from the daily site reports.</span><button class="btn sm pri" data-act="fillpr">Fill now</button></div>` : ''}
   <div class="form">${html}</div>
@@ -1995,7 +2081,7 @@ function startListening(){
   const t = $('#vtext'); if(!t) return;
   let rec;
   try { rec = new SR(); } catch(e){ S.srBlocked = true; return focusVoice(); }
-  rec.lang = S.voiceLang || 'ms-MY'; rec.continuous = true; rec.interimResults = true;
+  rec.lang = 'en-MY'; rec.continuous = true; rec.interimResults = true;
   LIVE.rec = rec; LIVE.base = t.value.trim() ? t.value.trim() + ' ' : '';
   let finals = '';
   rec.onresult = ev => {
@@ -2019,7 +2105,7 @@ function startListening(){
   rec.onend = () => { if(LIVE.on && LIVE.rec === rec){ try { rec.start(); return; } catch(e){} } stopListening(true); };
   try { rec.start(); LIVE.on = true; } catch(e){ S.srBlocked = true; return focusVoice(); }
   const b = $('#vbtn'); if(b){ b.classList.remove('send'); b.classList.add('live'); b.innerHTML = STOP_SVG; b.setAttribute('aria-label','Stop listening'); }
-  const tip = $('#vtip'); if(tip){ tip.innerHTML = '🔴 Listening… speak now in Bahasa Melayu or English. Tap ■ to stop.'; tip.classList.add('on'); }
+  const tip = $('#vtip'); if(tip){ tip.innerHTML = '🔴 Listening… speak now in English. Tap ■ to stop.'; tip.classList.add('on'); }
 }
 function stopListening(silent){
   const rec = LIVE.rec; LIVE.on = false; LIVE.rec = null;
@@ -2055,8 +2141,8 @@ function renderVoice(){
         return `<div class="vchg"><div class="h">${esc(f.l)}</div><div class="b">${esc(valueText(f, v)) || '<span class="muted">(cleared)</span>'}</div></div>`; }).join('')
       : `<p class="muted">Nothing in the note matched this form. Try adding more detail.</p>`}`;
   } else {
-    body = `<div class="vhint"><b>🎤</b><span>${SR && !S.srBlocked ? 'Tap the green <b style="font-size:13px">🎤</b> and just speak — Bahasa Melayu, English or mixed. Tap ■ to stop, then ➤ to fill in the form.' : 'Tap the green <b style="font-size:13px">🎤 button</b>, then the <b style="font-size:13px">mic on your keyboard</b> (Gboard: top-right · Samsung: toolbar above the letters). Speak in <b style="font-size:13px">Bahasa Melayu or English</b>, then tap <b style="font-size:13px">➤</b>.'}</span></div>
-      ${SR && !S.srBlocked ? `<div class="langsw"><button data-act="vlang" data-l="ms-MY" class="${(S.voiceLang||'ms-MY')==='ms-MY'?'on':''}">Bahasa Melayu</button><button data-act="vlang" data-l="en-MY" class="${S.voiceLang==='en-MY'?'on':''}">English</button></div>` : ''}<div class="composer"><textarea id="vtext" class="vbox" rows="2" placeholder="${esc(voicePlaceholder(T.code))}">${esc(V.text)}</textarea><button class="micbtn ${V.text.trim()?'send':''}" id="vbtn" data-act="vmic" aria-label="Speak">${V.text.trim()?SEND_SVG:MIC_SVG}</button></div><div class="vtip" id="vtip">⌨️ Keyboard is open — now tap the <b>🎤 mic on your keyboard</b> and speak. Tap ➤ when done.</div>
+    body = `<div class="vhint"><b>🎤</b><span>${SR && !S.srBlocked ? 'Tap the green <b style="font-size:13px">🎤</b> and just speak in English. Tap ■ to stop, then ➤ to fill in the form.' : 'Tap the green <b style="font-size:13px">🎤 button</b>, then the <b style="font-size:13px">mic on your keyboard</b> (Gboard: top-right · Samsung: toolbar above the letters). Speak in <b style="font-size:13px">English</b>, then tap <b style="font-size:13px">➤</b>.'}</span></div>
+      <div class="composer"><textarea id="vtext" class="vbox" rows="2" placeholder="${esc(voicePlaceholder(T.code))}">${esc(V.text)}</textarea><button class="micbtn ${V.text.trim()?'send':''}" id="vbtn" data-act="vmic" aria-label="Speak">${V.text.trim()?SEND_SVG:MIC_SVG}</button></div><div class="vtip" id="vtip">⌨️ Keyboard is open — now tap the <b>🎤 mic on your keyboard</b> and speak. Tap ➤ when done.</div>
       <div class="small muted" style="margin-top:6px">🔒 Voice only changes what's written in the form — the report layout, sections and table columns always stay the same.<br>Commands also work: <i>"tukar general worker jadi 15 orang"</i>, <i>"tipper lorry tak ada hari ni"</i>, <i>"add 2 gas cutters"</i>, <i>"tulis semula work done lebih formal"</i>.</div>`;
   }
   const foot = V.busy ? `<button class="btn" data-act="vstop">Stop</button>`
