@@ -225,6 +225,7 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .metat{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:13.5px}
 .metat td{border:1px solid var(--line);padding:6px 9px;vertical-align:top}
 .metat td.k{background:#faf8f4;font-weight:600;width:19%;font-size:12.5px;color:#4a4e53}
+.mrestored{background:#fff6d6;border:1px solid #f0d77a;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:13.5px;display:flex;gap:10px;align-items:center;justify-content:space-between}
 .dsec{margin-top:18px}
 .dsec h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;background:var(--steel);color:#fff;padding:5px 9px;margin-bottom:0;border-radius:2px}
 .dsec .body{border:1px solid var(--line);border-top:0;padding:9px 11px;white-space:pre-wrap;font-size:14px;min-height:20px}
@@ -1992,7 +1993,7 @@ async function makeDocx(id){
     const body = [];
     const kvTable = pairs => { const rows = []; for(let i = 0; i < pairs.length; i += 2) rows.push(pairs.slice(i, i + 2));
       const w = widths([36, 49, 36, 49]);
-      return table(w, rows.map(r => row([cell(r[0][0], w[0], {bold: true, fill: LIGHT}), cell(r[0][1], w[1]), cell(r[1] ? r[1][0] : '', w[2], {bold: true, fill: r[1] ? LIGHT : undefined}), cell(r[1] ? r[1][1] : '', w[3])]))); };
+      return table(w, rows.map(r => row([cell(r[0][0], w[0], {bold: true, fill: LIGHT}), ...(r[1] ? [cell(r[0][1], w[1]), cell(r[1][0], w[2], {bold: true, fill: LIGHT}), cell(r[1][1], w[3])] : [cell(r[0][1], w[1] + w[2] + w[3], {span: 3})])]))); };
     const sigTable = async () => { const sigs = d.signatures || [], n = T.sigs.length, w = widths([26, ...T.sigs.map(() => 144 / n)]);
       const imgs = await Promise.all(T.sigs.map(async (s, i) => sigs[i] ? new ImageRun({type: 'png', data: durl2u8((await imgData(sigs[i].img, 600, 'png')).url), transformation: {width: 120, height: 40}}) : null));
       return table(w, [row([cell('', w[0], {fill: GREEN}), ...T.sigs.map((s, i) => cell(s.role.toUpperCase(), w[i + 1], {bold: true, fill: GREEN, align: AlignmentType.CENTER}))], {head: true}),
@@ -2169,7 +2170,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z6) · Excel-picture manpower import, readable day grids, Nil sections</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z7) · pop-ups keep what you typed, full layout check</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -2459,6 +2460,7 @@ function letterHTML(d){
     ${lines(x.cc).length ? `<p style="margin:0"><b>${L.ccL}</b><br>${lines(x.cc).map(esc).join('<br>')}</p>` : ''}
   </div>`;
 }
+function fitTxt(doc, t, w){ t = String(t || ''); if(doc.getTextWidth(t) <= w) return t; while(t.length > 1 && doc.getTextWidth(t + '…') > w) t = t.slice(0, -1); return t.trimEnd() + '…'; }
 async function letterPdf(d){
   const L = ltrParts(d), x = L.x, sig = (d.signatures || [])[0];
   const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4'});
@@ -2471,7 +2473,9 @@ async function letterPdf(d){
     ls.forEach(ln => { need(LH); doc.text(ln, LX + ind, y + 3.6); if(o.u){ const tw = doc.getTextWidth(ln); doc.setLineWidth(0.25); doc.setDrawColor(...INK); doc.line(LX + ind, y + 4.4, LX + ind + tw, y + 4.4); } y += LH; }); };
   const hang = (pre, t, ind, at) => { font(false); const ls = doc.splitTextToSize(pt(t), CW - at); need(LH); doc.text(pt(pre), LX + ind, y + 3.6); ls.forEach((ln, i) => { if(i) need(LH); doc.text(ln, LX + at, y + 3.6); y += LH; }); };
   // header lines
-  font(false); doc.text(pt(L.refL + ': ' + L.ref), LX, y + 3.6); if(x.marking){ font(true); doc.text(pt(x.marking), LX + CW, y + 3.6, {align:'right'}); } y += LH;
+  { font(true); const mw = x.marking ? doc.getTextWidth(pt(x.marking)) + 6 : 0; font(false); const rw = doc.getTextWidth(pt(L.refL + ': ' + L.ref));
+    if(x.marking && rw > CW - mw){ font(true); doc.text(pt(x.marking), LX + CW, y + 3.6, {align:'right'}); y += LH; write(L.refL + ': ' + L.ref); }
+    else { font(false); doc.text(pt(L.refL + ': ' + L.ref), LX, y + 3.6); if(x.marking){ font(true); doc.text(pt(x.marking), LX + CW, y + 3.6, {align:'right'}); } y += LH; } }
   if(x.yourRef) write(L.yrefL + ': ' + x.yourRef);
   write(L.dateL + ': ' + L.date); y += 4;
   write(String(x.toName || '').toUpperCase(), {bold: true});
@@ -2486,7 +2490,7 @@ async function letterPdf(d){
     const ls = para.split('\n'); need(LH * 2);
     ls.forEach((ln, i) => {
       let m;
-      if(i === 0 && (m = ln.match(/^(\d+[.)])\s+(.*)$/))) hang(m[1], m[2], 0, 9);
+      if((m = ln.match(/^(\d+[.)])\s+(.*)$/))) hang(m[1], m[2], 0, 9);
       else if((m = ln.match(/^\s+([a-z][.)]|[ivx]+[.)]|[-•])\s+(.*)$/i))) hang(m[1], m[2], 9, 16);
       else if(/^\s{2,}/.test(ln)){ const t = ln.trim(), kv = t.match(/^([^:]{2,40}):\s{2,}(.*)$/); if(kv){ font(true); need(LH); doc.text(pt(kv[1]), LX + 9, y + 3.6); font(false); const vs = doc.splitTextToSize(pt(kv[2]), CW - 62); vs.forEach((v, j) => { if(j) need(LH); doc.text(v, LX + 62, y + 3.6); y += LH; }); } else write(t, {ind: 9}); }
       else write(ln, {ind: /^\d+[.)]/.test(ls[0]) && i ? 9 : 0});
@@ -2510,7 +2514,7 @@ async function letterPdf(d){
     try { doc.addImage(LHd.url, 'JPEG', LX, HS.LH_Y, 170, 170 * LHd.h / LHd.w); } catch(e){}
     doc.setDrawColor(...GRID); doc.setLineWidth(0.2); doc.line(LX, HS.H - 13, LX + CW, HS.H - 13);
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102);
-    doc.text(pt(L.refL + ': ' + L.ref), LX, HS.H - 8.5); doc.text(`Page ${i} of ${pages}`, LX + CW, HS.H - 8.5, {align:'right'}); }
+    doc.text(fitTxt(doc, pt(L.refL + ': ' + L.ref), CW - 28), LX, HS.H - 8.5); doc.text(`Page ${i} of ${pages}`, LX + CW, HS.H - 8.5, {align:'right'}); }
   const name = `${L.ref.replace(/\//g, '_')} ${x.subject || 'Letter'}`.replace(/[\\/:*?"<>|]/g, '-').slice(0, 120) + '.pdf';
   return {blob: doc.output('blob'), name};
 }
@@ -3000,14 +3004,22 @@ async function makePDF(id, opt){
       headStyles:{fillColor:GREEN_HEAD, textColor:INK, fontStyle:'bold', fontSize:8.2, halign:'center'},
       footStyles:{fillColor:TOTAL_FILL, textColor:INK, fontStyle:'bold'}};
     const after = () => { y = doc.lastAutoTable.finalY; };
-    const need = h => { if(y + h > BOTTOM){ doc.addPage(); y = TOP; } };
+    const need = h => { if(y + h > BOTTOM) breakPage(); };
     const toc = [];
     const heading = (title, room = 18) => {
       secNo++; y += secNo === 1 ? 0 : 6; need(room); toc.push([String(secNo), title, doc.getCurrentPageInfo().pageNumber]);
-      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...INK);
-      doc.text(pt(secNo + '.  ' + title.toUpperCase()), L, y + 4);
-      doc.setDrawColor(...GREEN_LINE); doc.setLineWidth(0.6); doc.line(L, y + 6, L + CW, y + 6); y += 9;
+      const mark = (doc.internal.pages[doc.getCurrentPageInfo().pageNumber] || []).length;
+      drawHead(secNo + '.  ' + title.toUpperCase());
+      lastHead = {mark, page: doc.getCurrentPageInfo().pageNumber, y0: y - 9, y1: y, txt: secNo + '.  ' + title.toUpperCase(), ti: toc.length - 1};
     };
+    let lastHead = null;
+    const drawHead = t => { doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(pt(t), L, y + 4);
+      doc.setDrawColor(...GREEN_LINE); doc.setLineWidth(0.6); doc.line(L, y + 6, L + CW, y + 6); y += 9; };
+    // new page; a section heading with nothing under it yet moves to the new page with its content
+    const breakPage = () => { const pg = doc.getCurrentPageInfo().pageNumber, orphan = lastHead && lastHead.page === pg && Math.abs(lastHead.y1 - y) < 0.6;
+      if(orphan){ const ops = doc.internal.pages[pg]; if(ops && lastHead.mark != null && ops.length >= lastHead.mark) ops.length = lastHead.mark; else { doc.setFillColor(255, 255, 255); doc.rect(L - 1, lastHead.y0 - 0.5, CW + 2, 10, 'F'); } }
+      doc.addPage(); y = TOP;
+      if(orphan){ drawHead(lastHead.txt); toc[lastHead.ti][2] = doc.getCurrentPageInfo().pageNumber; lastHead = {...lastHead, mark: null, page: doc.getCurrentPageInfo().pageNumber, y0: TOP, y1: y}; } };
     const subLabel = s => { need(26); doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(...INK); doc.text(pt(s), L, y + 3.5); y += 5; };
     const isDT = T.fields.find(f => f.k === T.dateField)?.t === 'datetime';
     const docDateTxt = pt(isDT ? fmtDT(docDate(d)) : fmtDate(docDate(d)));
@@ -3035,14 +3047,14 @@ async function makePDF(id, opt){
     // ---- first page: cover (progress report) or title block ----
     if(T.cover){
       doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...INK);
-      doc.text(pt(docName(T, data).toUpperCase()), HS.W/2, y + 6, {align:'center'});
+      doc.text(fitTxt(doc, pt(docName(T, data).toUpperCase()), CW), HS.W/2, y + 6, {align:'center'});
       doc.setFont('helvetica','normal'); doc.setFontSize(11);
-      doc.text(pt('Report No. ' + (data.reportNo || d.seq || '') + '     |     Period: ' + periodTxt), HS.W/2, y + 13, {align:'center'});
+      doc.text(fitTxt(doc, pt('Report No. ' + (data.reportNo || d.seq || '') + '     |     Period: ' + periodTxt), CW), HS.W/2, y + 13, {align:'center'});
       doc.setFont('helvetica','bold'); doc.setFontSize(11);
       const pl = doc.splitTextToSize(pt(String(data._title || p.name || '').toUpperCase()), CW - 10);
       doc.text(pl, HS.W/2, y + 22, {align:'center'}); y += 22 + pl.length * 5 + 4;
       const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0] || (data.photosBefore || [])[0];
-      if(cov){ try { const I = await imgData(await photoData(cov.id), 1400); const bw = 150, bh = 100, r = Math.min(bw/I.w, bh/I.h); doc.addImage(I.url, 'JPEG', (HS.W - I.w*r)/2, y, I.w*r, I.h*r); y += I.h*r + 8; } catch(e){} }
+      if(cov){ try { const I = await imgData(await photoData(cov.id), 1400); const bw = 150, bh = Math.max(40, Math.min(100, BOTTOM - 60 - y)), r = Math.min(bw/I.w, bh/I.h); doc.addImage(I.url, 'JPEG', (HS.W - I.w*r)/2, y, I.w*r, I.h*r); y += I.h*r + 8; } catch(e){} }
       y = Math.max(y, BOTTOM - 52);
       await sigTable();
       doc.addPage(); var tocPage = doc.getCurrentPageInfo().pageNumber;
@@ -3058,7 +3070,7 @@ async function makePDF(id, opt){
       doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...INK);
       doc.text(pt(T.name.toUpperCase()), HS.W/2, y + 5, {align:'center'});
       doc.setFont('helvetica','normal'); doc.setFontSize(10);
-      doc.text(pt('No. ' + d.number + '     |     ' + ((data.from && data.to) ? 'Period: ' : 'Date: ') + periodTxt + '     |     Status: ' + st.label), HS.W/2, y + 11, {align:'center'});
+      doc.text(fitTxt(doc, pt('No. ' + d.number + '     |     ' + ((data.from && data.to) ? 'Period: ' : 'Date: ') + periodTxt + '     |     Status: ' + st.label), CW), HS.W/2, y + 11, {align:'center'});
       y += 16;
       doc.autoTable({...base, startY:y, body:[
         ['PROJECT', pt(p.name || ''), 'DOC NO.', pt(d.number)],
@@ -3071,7 +3083,7 @@ async function makePDF(id, opt){
 
     // ---- sections ----
     let kv = [];
-    const flush = () => { if(!kv.length) return; const rows = []; for(let i = 0; i < kv.length; i += 2) rows.push([kv[i][0], kv[i][1], kv[i+1]?.[0] || '', kv[i+1]?.[1] || '']);
+    const flush = () => { if(!kv.length) return; const rows = []; for(let i = 0; i < kv.length; i += 2) rows.push(kv[i+1] ? [kv[i][0], kv[i][1], kv[i+1][0], kv[i+1][1]] : [kv[i][0], {content: kv[i][1], colSpan: 3}]);
       doc.autoTable({...base, startY:y + 1, body:rows, columnStyles:{0:{cellWidth:36, fontStyle:'bold', fillColor:LABEL_FILL}, 2:{cellWidth:36, fontStyle:'bold', fillColor:LABEL_FILL}}}); after(); kv = []; };
     let started = false, pendingSub = null;
     // reports with a cover: leave out sections that have nothing in them
@@ -3153,9 +3165,9 @@ async function makePDF(id, opt){
           foot = [[...(f.num ? [''] : []), ...cols.map(cc => cc.day != null ? String(sums[dayCols.indexOf(cc)]) : (cc === cols[0] ? 'TOTAL' : '')), ...(f.rowTotal ? [String(sums.reduce((a, b) => a + b, 0))] : [])]];
         }
         // label above the table is drawn only after deciding where the table goes (never left alone at the bottom of a page)
-        const preH = (f.sub !== false ? 5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
+        const preH = (f.sub !== false ? 6.5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
         const drawPre = () => {
-          if(f.sub !== false){ doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), L, y + 3.5); y += 5; }
+          if(f.sub !== false){ y += 1.5; doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), L, y + 3.5); y += 5; }
           if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(data.from + 'T00:00:00'), m2 = new Date((data.to || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + ')'), L, y + 3); } y += 5; } };
         const colStyles = {}; let ci = 0;
         if(f.num) colStyles[ci++] = {cellWidth:12, halign:'center'};
@@ -3168,8 +3180,8 @@ async function makePDF(id, opt){
         if(!grpOn){
           // short tables are never split: move the whole table to the next page if it doesn't fit
           const h = (body.length <= 25 ? measure(body, true, true) : 9999) + preH;
-          if(h <= pageH && y + h > BOTTOM){ doc.addPage(); y = TOP; }
-          else if(h > pageH && y + 30 + preH > BOTTOM){ doc.addPage(); y = TOP; }
+          if(h <= pageH && y + h > BOTTOM) breakPage();
+          else if(h > pageH && y + 30 + preH > BOTTOM) breakPage();
           drawPre();
           doc.autoTable({...tOpt, startY:y, head:[head], body, foot, showFoot:'lastPage'}); after();
         } else {
@@ -3179,7 +3191,7 @@ async function makePDF(id, opt){
           const chunks = []; body.forEach((r, i) => { if(i === 0 || (Array.isArray(r) && r.some(c => c && c.colSpan > 1))) chunks.push([]); chunks[chunks.length - 1].push(r); });
           chunks.forEach((part, ci) => { const last = ci === chunks.length - 1, first = ci === 0;
             let h = measure(part, first, last) + (first ? preH : 0);
-            if(h <= pageH && y + h > BOTTOM){ doc.addPage(); y = TOP; h = 0; }
+            if(h <= pageH && y + h > BOTTOM){ breakPage(); h = 0; }
             if(first) drawPre();
             const atTop = Math.abs(y - TOP) < 0.5;
             doc.autoTable({...tOpt, startY: y, head: [head], body: part, foot: last ? foot : undefined, showFoot: 'lastPage', showHead: (first || atTop) ? 'everyPage' : 'never'}); after(); });
@@ -3207,9 +3219,9 @@ async function makePDF(id, opt){
           const groups = []; ph.forEach(p => { const g = groups[groups.length - 1]; if(g && g.cap === p.caption) g.items.push(p); else groups.push({cap: p.caption, items: [p]}); });
           const pw = CW / 3, ih = 42;
           for(const g of groups){
-            if(y + 6.5 + ih > BOTTOM){ doc.addPage(); y = TOP; }
+            if(y + 6.5 + ih > BOTTOM)breakPage();
             doc.setFillColor(...GREEN_HEAD); doc.setDrawColor(...GRID); doc.rect(L, y, CW, 6.5, 'FD'); doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...INK); doc.text(pt(g.cap.toUpperCase()), L + CW/2, y + 4.4, {align:'center'}); y += 6.5;
-            for(let i = 0; i < g.items.length; i++){ const col = i % 3; if(col === 0 && y + ih > BOTTOM){ doc.addPage(); y = TOP; }
+            for(let i = 0; i < g.items.length; i++){ const col = i % 3; if(col === 0 && y + ih > BOTTOM)breakPage();
               const x = L + col * pw; doc.setDrawColor(...GRID); doc.rect(x, y, pw, ih);
               try { const I = await imgCover(await photoData(g.items[i].id), (pw - 3) / (ih - 3)); doc.addImage(I.url, 'JPEG', x + 1.5, y + 1.5, pw - 3, ih - 3); } catch(e){}
               if(col === 2 || i === g.items.length - 1){ for(let k = col + 1; k < 3; k++) doc.rect(L + k * pw, y, pw, ih); y += ih; } }
@@ -3218,7 +3230,7 @@ async function makePDF(id, opt){
         const pw = CW / 3, ih = 40, chh = 7;
         for(let i = 0; i < ph.length; i++){
           const col = i % 3;
-          if(col === 0){ if(y + ih + chh > BOTTOM){ doc.addPage(); y = TOP; } }
+          if(col === 0){ if(y + ih + chh > BOTTOM)breakPage(); }
           const x = L + col * pw;
           doc.setDrawColor(...GRID); doc.rect(x, y, pw, ih + chh);
           try { const I = await imgCover(await photoData(ph[i].id), (pw - 3) / (ih - 3)); doc.addImage(I.url, 'JPEG', x + 1.5, y + 1.5, pw - 3, ih - 3); }
@@ -3247,7 +3259,7 @@ async function makePDF(id, opt){
       try { doc.addImage(LH.url, 'JPEG', L, HS.LH_Y, 170, 170 * LH.h / LH.w); } catch(e){}  // letterhead is always 170 mm wide
       doc.setDrawColor(...GRID); doc.setLineWidth(0.2); doc.line(L, HS.H - 13, L + CW, HS.H - 13);
       doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102);
-      doc.text(pt(docName(T, data) + ' ' + (T.cover ? 'No. ' + (data.reportNo || d.seq || '') : d.number) + '  |  ' + periodTxt), L, HS.H - 8.5);
+      doc.text(fitTxt(doc, pt(docName(T, data) + ' ' + (T.cover ? 'No. ' + (data.reportNo || d.seq || '') : d.number) + '  |  ' + periodTxt), CW - 28), L, HS.H - 8.5);
       doc.text(`Page ${i} of ${pages}`, L + CW, HS.H - 8.5, {align:'right'});
     }
     const blob = doc.output('blob');
@@ -3320,8 +3332,27 @@ async function saveProject(id){
 /* ---------- modal helpers ---------- */
 function showModal(html){ S.modalOpen = true; $('#modal').innerHTML = `<div class="modal" data-act="backdrop">${html}</div>`;
   // every window closes only with its ✕ (or Cancel / Save) — never by tapping outside
-  const mh = $('#modal .mh'); if(mh && !mh.querySelector('.xclose')){ mh.style.position = 'relative'; mh.insertAdjacentHTML('beforeend', '<button class="xclose" data-act="closemodal" title="Close" aria-label="Close">✕</button>'); } }
-function closeModal(){ if(LIVE.on) stopListening(true); S.modalOpen = false; $('#modal').innerHTML = ''; PAD = null; }
+  const mh = $('#modal .mh'); if(mh && !mh.querySelector('.xclose')){ mh.style.position = 'relative'; mh.insertAdjacentHTML('beforeend', '<button class="xclose" data-act="closemodal" title="Close" aria-label="Close">✕</button>'); }
+  // anything typed in a window is kept until it is saved, even if the window closes by mistake
+  const pri = $('#modal .mf .btn.pri'); S.modalKey = ($('#modal .mh h3')?.textContent || '').trim() + '|' + (pri ? (pri.dataset.act || '') + ':' + (pri.dataset.id || pri.dataset.p || '') : '');
+  const saved = MDRAFT.get(S.modalKey);
+  if(saved && Object.keys(saved).length){ let n = 0;
+    mFields().forEach(([k, el]) => { if(saved[k] == null) return; if(el.type === 'checkbox') el.checked = !!saved[k]; else if(el.value !== saved[k]){ el.value = saved[k]; n++; } });
+    if(n){ const mb = $('#modal .mb'); if(mb) mb.insertAdjacentHTML('afterbegin', `<div class="mrestored">↺ Your unsaved entries were brought back. <button type="button" class="btn sm ghost" data-act="mdraftclear">Clear them</button></div>`); } }
+}
+function mFields(){ const seen = {}; return [...$('#modal').querySelectorAll('input:not([type=file]):not([type=password]):not([type=hidden]), select, textarea')].map((el, i) => {
+  const da = [...el.attributes].find(a => a.name.startsWith('data-') && a.name !== 'data-act'); let k = el.id || (da ? da.name + '=' + da.value : 'i' + i);
+  seen[k] = (seen[k] || 0) + 1; if(seen[k] > 1) k += '#' + seen[k]; return [k, el]; }); }
+const MDRAFT = { all: (() => { try { return JSON.parse(localStorage.getItem('sde-mdraft') || '{}'); } catch(e){ return {}; } })(),
+  get(k){ return this.all[k]; },
+  put(k, v){ this.all[k] = v; this.store(); }, drop(k){ if(k in this.all){ delete this.all[k]; this.store(); } },
+  store(){ try { localStorage.setItem('sde-mdraft', JSON.stringify(this.all)); } catch(e){} } };
+function mSnap(){ if(!S.modalOpen || !S.modalKey) return; const o = {}; let any = false;
+  mFields().forEach(([k, el]) => { const v = el.type === 'checkbox' ? el.checked : el.value; o[k] = v; if(el.type !== 'checkbox' && el.tagName !== 'SELECT' && String(v).trim() && v !== el.defaultValue) any = true; });
+  if(any) MDRAFT.put(S.modalKey, o); else MDRAFT.drop(S.modalKey); }
+document.addEventListener('input', e => { if(e.target.closest && e.target.closest('#modal')) mSnap(); });
+document.addEventListener('change', e => { if(e.target.closest && e.target.closest('#modal')) mSnap(); });
+function closeModal(keep){ if(LIVE.on) stopListening(true); if(keep !== true && S.modalKey) MDRAFT.drop(S.modalKey); S.modalKey = ''; S.modalOpen = false; $('#modal').innerHTML = ''; PAD = null; }
 let CONFIRM_CB = null;
 function confirmBox(title, msg, okLabel, cb, danger){
   CONFIRM_CB = cb;
@@ -3674,7 +3705,8 @@ document.addEventListener('click', async e => {
     case 'sign': openSign(id, +el.dataset.i); break;
     case 'sgclear': if(PAD){ PAD.g.clearRect(0,0,PAD.c.width,PAD.c.height); Object.assign(PAD,{strokes:0,minX:1e9,minY:1e9,maxX:-1,maxY:-1}); } break;
     case 'sgdo': doSign(id, +el.dataset.i); break;
-    case 'closemodal': closeModal(); render(); break;
+    case 'closemodal': closeModal(true); render(); break;
+    case 'mdraftclear': { MDRAFT.drop(S.modalKey); const k = S.modalKey; mFields().forEach(([, el]) => { if(el.type === 'checkbox') el.checked = el.defaultChecked; else if(el.tagName === 'SELECT'){ const o = [...el.options].find(o => o.defaultSelected); el.value = o ? o.value : el.options[0]?.value; } else el.value = el.defaultValue; }); el.closest('.mrestored')?.remove(); S.modalKey = k; break; }
     case 'confirmok': { const cb = CONFIRM_CB; CONFIRM_CB = null; closeModal(); cb && cb(); break; }
     case 'pdf': makePDF(id); break;
     case 'docx': makeDocx(id); break;
@@ -3740,7 +3772,7 @@ document.addEventListener('change', async e => {
     catch(err){ dbErr(err); }
   }
 });
-window.addEventListener('beforeunload', e => { if(S.dirty){ e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if(S.dirty || (S.modalOpen && S.modalKey && MDRAFT.get(S.modalKey))){ e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- boot ---------- */
 /* ============================================================
