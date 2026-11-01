@@ -706,7 +706,7 @@ const TYPES = {
     name: 'Document Transmittal', code: 'TR', blurb: 'Documents & drawings sent out',
     sigs: [
       {role:'Sent by', hint:'Sadhana'},
-      {role:'Received by', hint:'Recipient'}
+      {role:'Received by', hint:'Recipient', needsResponse:1, wait:'Awaiting receipt'}
     ],
     done: 'Received',
     title: d => 'Transmittal to ' + (d.to || '—'),
@@ -725,7 +725,10 @@ const TYPES = {
         def: () => [{remarks:'Original'}]},
       {k:'remarks', l:'Remarks', t:'textarea', def:'Please note that the documents above supersede any previous revisions.'},
       {sec:'Purpose'},
-      {k:'purpose', l:'Purpose', t:'checks', o:['For information / record','For approval','For comment','For action','As required'], def: () => ['For information / record']}
+      {k:'purpose', l:'Purpose', t:'checks', o:['For information / record','For approval','For comment','For action','As required'], def: () => ['For information / record']},
+      {sec:'Proof of Receipt', phase:'response'},
+      {k:'respDate', l:'Date received', t:'date', phase:'response', w:'half', def: () => today()},
+      {k:'response', l:'Photo of the stamped / endorsed copy', t:'photos', phase:'response', hint:'Take a photo of the receiver\'s stamp and signature on our transmittal (or their acknowledgement slip). Several photos are fine.'}
     ]
   },
   LTR: {
@@ -1347,7 +1350,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (U) · full company name</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (V) · transmittal proof of receipt</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1718,7 +1721,7 @@ function docView(id){
     <aside class="side">
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
         ${st.next===0 && S.canWrite ? `<button class="btn pri" data-act="edit" data-id="${esc(d.id)}">Edit draft</button>`:''}
-        ${needResp && S.canWrite ? `<button class="btn ${respFilled?'':'pri'}" data-act="respond" data-id="${esc(d.id)}">${respFilled?'Edit':'Add'} ${T.code==='PTW'?'close-out':'response'}</button>`:''}
+        ${needResp && S.canWrite ? `<button class="btn ${respFilled?'':'pri'}" data-act="respond" data-id="${esc(d.id)}">${T.code==='TR' ? (isEmpty(d.data?.response) ? '📷 Add proof of receipt' : '📷 Edit proof of receipt') : (respFilled?'Edit':'Add') + ' ' + (T.code==='PTW'?'close-out':'response')}</button>`:''}
         ${st.next>0 && S.canWrite && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF</button>
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
@@ -1930,7 +1933,7 @@ function editView(){
   <div class="actbar"><div class="in">
     <button class="btn ghost" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">Cancel</button><div class="sp"></div>
     ${S.sample ? `<button class="btn voice" data-act="voice">🎤 Voice</button>` : ''}
-    ${resp ? `<button class="btn pri" data-act="saveresp">Save ${T.code==='PTW'?'close-out':'response'}</button>` :
+    ${resp ? `<button class="btn pri" data-act="saveresp">Save ${T.code==='PTW'?'close-out':T.code==='TR'?'proof of receipt':'response'}</button>` :
       `${S.draft.type === 'DSR' ? `<button class="btn" data-act="wadraft" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp</button>` : ''}<button class="btn" data-act="save">Save draft</button><button class="btn pri" data-act="savesign">✍ Sign & submit</button>`}
   </div></div>`;
 }
