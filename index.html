@@ -1187,7 +1187,7 @@ function projectView(id, tab){
   </div>
   ${folders}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><label class="btn sm" style="margin:0" title="Upload a sub-contractor report made with the Sadhana template">⇪ Import sub-contractor report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -1292,6 +1292,103 @@ async function isoIndexPdf(index, o){
     doc.text(pt('ISO Audit Record Index  |  ' + period), L, HS.H - 8.5); doc.text(`Page ${i} of ${pages}`, L + CW, HS.H - 8.5, {align:'right'}); }
   return doc.output('blob');
 }
+/* ---------- import a sub-contractor report (filled-in Sadhana Word template, no logo) ---------- */
+function impDate(v, withTime){
+  v = String(v || '').trim(); if(!v) return '';
+  let m, d, mo, y, hh = '', mi = '';
+  const tm = v.match(/(\d{1,2})[:.](\d{2})\s*(am|pm)?/i);
+  if(tm){ hh = +tm[1]; mi = tm[2]; if(/pm/i.test(tm[3] || '') && hh < 12) hh += 12; if(/am/i.test(tm[3] || '') && hh === 12) hh = 0; }
+  if((m = v.match(/(\d{4})-(\d{1,2})-(\d{1,2})/))) [y, mo, d] = [m[1], m[2], m[3]];
+  else if((m = v.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/))) [d, mo, y] = [m[1], m[2], m[3]];
+  else if((m = v.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,})\.?,?\s+(\d{4})/))){ d = m[1]; y = m[3]; const k = m[2].slice(0, 3).toLowerCase(); const ix = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(k); const ms = ['jan','feb','mac','apr','mei','jun','jul','ogo','sep','okt','nov','dis'].indexOf(k); mo = (ix >= 0 ? ix : ms) + 1; if(mo < 1) return ''; }
+  else return '';
+  if(String(y).length === 2) y = '20' + y;
+  const iso = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  return withTime ? iso + 'T' + String(hh === '' ? 8 : hh).padStart(2, '0') + ':' + (mi || '00') : iso;
+}
+// which options are ticked in text like "☒ Sunny  ☐ Cloudy"
+function impTicks(text, opts){
+  text = String(text || '');
+  if(!/[☐☒☑✔✓■⊠]/.test(text)){ const hit = opts.filter(o => text.toLowerCase().includes(o.toLowerCase())); return hit.length ? hit : []; }
+  return opts.filter(o => { const i = text.indexOf(o); if(i < 0) return false; const before = text.slice(Math.max(0, i - 3), i); return /[☒☑✔✓■⊠xX]/.test(before) && !/☐/.test(before.slice(-2)); });
+}
+async function importSubconDocx(file, pid){
+  const Z = await jszip(); const zip = await Z.loadAsync(await file.arrayBuffer());
+  const xml = async n => zip.file(n) ? new DOMParser().parseFromString(await zip.file(n).async('string'), 'application/xml') : null;
+  const doc = await xml('word/document.xml'); if(!doc) throw new Error('This is not a Word (.docx) file.');
+  // find the form code in the footer: "Form SDE-DSR-SC v1"
+  let code = '', variant = '';
+  for(const n of Object.keys(zip.files).filter(n => /word\/footer\d*\.xml$/.test(n))){ const m = (await zip.file(n).async('string')).replace(/<[^>]+>/g, '').match(/SDE-([A-Z]+)(?:-(WEEKLY|FORTNIGHTLY|MONTHLY))?-SC/); if(m){ code = m[1]; variant = m[2] || ''; break; } }
+  const txt = el => [...el.getElementsByTagName('w:p')].map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim();
+  const body = doc.getElementsByTagName('w:body')[0];
+  const blocks = [...body.children].filter(e => e.tagName === 'w:p' || e.tagName === 'w:tbl');
+  if(!code){ const title = blocks.filter(b => b.tagName === 'w:p').map(txt).find(t => t && TYPE_KEYS.some(k => t.toUpperCase().includes(TYPE_ORIG[k].name.toUpperCase()))) || ''; code = TYPE_KEYS.find(k => title.toUpperCase().includes(TYPE_ORIG[k].name.toUpperCase())) || ''; }
+  if(!code || !TYPES[code] || TYPES[code].letter) throw new Error('Could not recognise the form. Please use the Sadhana sub-contractor template without changing it.');
+  const T = TYPES[code], draft = newDraft(pid, code), x = draft.data;
+  if(code === 'PR' && variant) x.period = variant.charAt(0) + variant.slice(1).toLowerCase();
+  const rels = await xml('word/_rels/document.xml.rels'); const relMap = {};
+  if(rels) [...rels.getElementsByTagName('Relationship')].forEach(r => relMap[r.getAttribute('Id')] = r.getAttribute('Target'));
+  const U = s => String(s || '').replace(/\s+/g, ' ').replace(/[*:]+$/, '').trim().toUpperCase();
+  const kvFields = {}; T.fields.forEach(f => { if(f.k && ['date','datetime','text','number','select'].includes(f.t)) kvFields[U(f.l)] = f; });
+  const setVal = (f, v) => { v = String(v || '').trim(); if(!v || /^_+$/.test(v)) return;
+    if(f.t === 'date') { const d = impDate(v); if(d) x[f.k] = d; }
+    else if(f.t === 'datetime') { const d = impDate(v, true); if(d) x[f.k] = d; }
+    else if(f.t === 'number') x[f.k] = String(numv(v));
+    else if(f.t === 'select') { const tk = impTicks(v, f.o); if(tk.length) x[f.k] = tk[0]; }
+    else if(f.t === 'checks') { const tk = impTicks(v, f.o); if(tk.length) x[f.k] = tk; }
+    else x[f.k] = v.replace(/\s*\n\s*/g, f.t === 'textarea' ? '\n' : ' '); };
+  const info = {subcon: '', by: '', photos: {}};
+  let usedTables = new Set(), lastLabel = '';
+  for(const b of blocks){
+    if(b.tagName === 'w:p'){ const t = txt(b);
+      const rn = t.match(/Report No\.?:\s*([^\s]+)/i), pd = t.match(/Period:\s*(.+?)\s+to\s+(.+)$/i);
+      if(rn && !/_/.test(rn[1])) x.reportNo = rn[1];
+      if(pd){ const a = impDate(pd[1]), z = impDate(pd[2]); if(a) x.from = a; if(z) x.to = z; }
+      if(t) lastLabel = U(t); continue; }
+    const rows = [...b.getElementsByTagName('w:tr')].filter(r => r.parentNode === b).map(r => [...r.children].filter(c => c.tagName === 'w:tc'));
+    const cells = rows.map(r => r.map(txt));
+    if(!cells.length) continue;
+    const h = cells[0].map(U);
+    // photos table: green band + images
+    const pf = T.fields.find(f => f.t === 'photos' && h.length === 1 && h[0] === U(f.l));
+    if(pf){ const ids = [...b.getElementsByTagName('a:blip')].map(e => e.getAttribute('r:embed')).filter(Boolean);
+      info.photos[pf.k] = ids.map(id => relMap[id]).filter(Boolean).map(t => 'word/' + t.replace(/^\.?\//, '')); continue; }
+    // single box: textarea / checks / long select
+    const box = T.fields.find(f => ['textarea','checks','select'].includes(f.t) && h.length === 1 && h[0] === U(f.l));
+    if(box){ setVal(box, cells.slice(1).map(r => r.join('\n')).join('\n')); continue; }
+    // data tables
+    const tf = T.fields.find(f => { if(f.t !== 'table') return false; const first = U(f.cols[0].l), off = f.num ? 1 : 0; return h[off] === first && (h.length >= 2) && (!f.num || h[0] === U(f.numLabel || 'ITEM')); });
+    if(tf && !usedTables.has(tf.k) && cells.length > 1){ usedTables.add(tf.k);
+      const off = tf.num ? 1 : 0, days = periodDays(x, tf.maxDays || 7); const cols = tf.cols.filter(c => c.day == null || c.day < (code === 'PR' && variant ? ({WEEKLY:7, FORTNIGHTLY:14, MONTHLY:31})[variant] : days) );
+      const out = [];
+      cells.slice(1).forEach(r => { if(U(r[off] || '') === 'TOTAL' || U(r[0] || '') === 'TOTAL') return; const o = {};
+        cols.forEach((c, i) => { const v = (r[i + off] || '').trim(); if(!v) return; if(c.o){ const tk = impTicks(v, c.o); if(tk.length) o[c.k] = tk[0]; } else o[c.k] = c.n ? String(numv(v)) : v.replace(/\s*\n\s*/g, ' '); });
+        if(Object.keys(o).length) out.push(o); });
+      if(out.length){ out.forEach(r => calcRow(tf, r)); x[tf.k] = tf.keepRows ? out : out; }
+      continue; }
+    // label / value tables (2 or 4 columns)
+    cells.forEach(r => { for(let i = 0; i + 1 < r.length; i += 2){ const L = U(r[i]), v = r[i + 1];
+      if(L === 'SUB-CONTRACTOR') info.subcon = v.trim(); else if(L === 'PREPARED BY') info.by = v.trim();
+      else if(kvFields[L]) setVal(kvFields[L], v); } });
+    // signature table: names of sub-contractor signers
+    if(h[0] === '' && cells.some(r => U(r[0]) === 'NAME')){ const nm = cells.find(r => U(r[0]) === 'NAME').slice(1).filter(Boolean); if(nm.length && !info.by) info.by = nm[0]; }
+  }
+  x._subcon = info.subcon; x._subconBy = info.by; x._source = file.name;
+  return {draft, info, zip};
+}
+async function runSubconImport(file, pid){
+  toast('Reading ' + file.name + '…');
+  try {
+    const {draft, info, zip} = await importSubconDocx(file, pid);
+    S.draft = draft; S.respMode = false; S.dirty = true; go('edit');
+    for(const [k, paths] of Object.entries(info.photos)){ const files = [];
+      for(const pth of paths){ const f = zip.file(pth); if(f){ const blob = await f.async('blob'); files.push(new File([blob], pth.split('/').pop(), {type: /png$/i.test(pth) ? 'image/png' : 'image/jpeg'})); } }
+      if(files.length) uploadPhotos(k, files); }
+    toast(`Imported from ${info.subcon || 'sub-contractor'} — check the details, then sign to issue it with the Sadhana letterhead.`);
+    // keep the original file in Project files (if allowed)
+    try { await uploadOne(pid, file, {category: 'Sub-contractor submissions', folder: 'Sub-contractor submissions', title: file.name.replace(/\.[^.]+$/, ''), refNo: '', date: today(), expiry: '', notes: 'Original from ' + (info.subcon || 'sub-contractor')}); } catch(e){ console.warn('original not kept', e); }
+  } catch(e){ console.error(e); toast(e.message || 'Could not read this file.', true); }
+}
 function registerView(){
   const rows = [...S.docs].filter(d => projById(d.projectId)).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return `<div class="pagehead"><div><div class="eyebrow">All projects</div><h1>Document register</h1></div><div class="sp"></div>${S.dl?'<button class="btn pri" data-act="isopack">📦 ISO audit pack</button><button class="btn" data-act="csv">Export CSV</button>':''}</div>
@@ -1350,7 +1447,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (V) · transmittal proof of receipt</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (W) · sub-contractor import</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1708,7 +1805,7 @@ function docView(id){
     .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b><br><span class="muted">${fmtDT(sigs[i].at)}</span></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('');
   return `
   <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
-  <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
+  <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}${d.data?._subcon ? ` <span class="pill draft">From sub-contractor: ${esc(d.data._subcon)}</span>` : ''}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
   <div class="docwrap">
     <div class="sheet" id="sheet">
       ${letterheadHTML(d)}
@@ -2200,7 +2297,8 @@ async function makePDF(id, opt){
       doc.autoTable({...base, startY:y, body:[
         ['PROJECT', pt(p.name || '')], ['CLIENT / OWNER', pt(p.client || '-')], ['CONSULTANT', pt(p.consultant || '-')],
         ['CONTRACTOR', pt(c.name)], ['LOCATION', pt(p.location || '-')], ['CONTRACT / LOA NO.', pt(p.contractNo || '-')],
-        ['DATE OF START', pt(fmtDate(p.start))], ['DATE OF COMPLETION', pt(fmtDate(p.end))], ['INSURANCE POLICIES', pt(p.insurance || '-')]
+        ['DATE OF START', pt(fmtDate(p.start))], ['DATE OF COMPLETION', pt(fmtDate(p.end))], ['INSURANCE POLICIES', pt(p.insurance || '-')],
+        ...(data._subcon ? [['PREPARED BY (SUB-CONTRACTOR)', pt(data._subcon + (data._subconBy ? ' — ' + data._subconBy : ''))]] : [])
       ], columnStyles:{0:{cellWidth:45, fontStyle:'bold', fillColor:LABEL_FILL}}}); after();
     } else {
       doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...INK);
@@ -2211,7 +2309,8 @@ async function makePDF(id, opt){
       doc.autoTable({...base, startY:y, body:[
         ['PROJECT', pt(p.name || ''), 'DOC NO.', pt(d.number)],
         ['CLIENT', pt(p.client || '-'), 'DATE', docDateTxt],
-        ['LOCATION', pt(p.location || '-'), 'CONTRACT NO.', pt(p.contractNo || '-')]
+        ['LOCATION', pt(p.location || '-'), 'CONTRACT NO.', pt(p.contractNo || '-')],
+        ...(data._subcon ? [['SUBCON', pt(data._subcon), 'PREPARED BY', pt(data._subconBy || '-')]] : [])
       ], columnStyles:{0:{cellWidth:26, fontStyle:'bold', fillColor:LABEL_FILL}, 2:{cellWidth:26, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth:36}}}); after();
       y += 2;
     }
@@ -2764,6 +2863,7 @@ document.addEventListener('change', async e => {
   if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
   if(t.dataset.bulk && t.files?.length){ const fs = [...t.files]; const isFolder = t.dataset.bulk === 'folder'; prepareBulk(t.dataset.p, fs.map(f => ({file: f, path: isFolder ? (f.webkitRelativePath || f.name).split('/').slice(1).join('/') : f.name}))); t.value = ''; }
   if(t.dataset.photos && t.files?.length){ uploadPhotos(t.dataset.photos, t.files); t.value = ''; }
+  if(t.dataset.subcon && t.files?.length){ runSubconImport(t.files[0], t.dataset.subcon); t.value = ''; }
   if(t.matches('[data-filter]')) applyRegFilter();
   if(t.hasAttribute('data-lhfile') && t.files?.[0]){
     try { const blob = await compress(t.files[0], 1600, .9); const r = await S.assets.upload(blob); await S.db.doc('settings/company').set({...company(), letterheadId:r.id}); toast('Letterhead updated'); }
