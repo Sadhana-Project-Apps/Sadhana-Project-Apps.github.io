@@ -32,7 +32,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .brand{display:flex;align-items:center;gap:10px;cursor:pointer;min-width:0}
 .mark{width:36px;height:36px;border-radius:7px;background:#fff;display:grid;place-items:center;font:800 14px Archivo;letter-spacing:.02em;flex:none;overflow:hidden}
 .mark img{width:100%;height:100%;object-fit:contain;background:#fff}
-.brand b{font:700 15px Archivo;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand b{font:700 15px Archivo;display:block;line-height:1.25}
+@media (max-width:640px){ .brand b{font-size:13.5px} .brand small{font-size:10.5px} }
 .brand small{display:block;font-size:11.5px;opacity:.7;letter-spacing:.06em;text-transform:uppercase}
 .nav{margin-left:auto;display:flex;gap:4px}
 .nav button{background:none;border:0;color:#cfd3d8;padding:8px 12px;border-radius:7px;cursor:pointer;font-weight:500}
@@ -326,7 +327,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
 </head>
 <body>
 <header class="top"><div class="top-in">
-  <div class="brand" data-act="nav" data-v="home"><div class="mark" id="logoMark"></div><div style="min-width:0"><b id="coName">Sadhana Demolition &amp; Engineering</b><small>Operation &amp; Safety</small></div></div>
+  <div class="brand" data-act="nav" data-v="home"><div class="mark" id="logoMark"></div><div style="min-width:0"><b id="coName">Sadhana Demolition &amp; Engineering Sdn Bhd</b><small>Operation &amp; Safety</small></div></div>
   <nav class="nav" id="nav">
     <button data-act="nav" data-v="home">Projects</button>
     <button data-act="nav" data-v="register">Document register</button>
@@ -1010,7 +1011,7 @@ function render(){
   document.querySelectorAll('[data-act=nav]').forEach(b => b.classList.toggle('on', b.dataset.v === (v.name==='project'||v.name==='doc'||v.name==='edit'||v.name==='files' ? 'home' : v.name)));
   if(window.innerWidth <= 640){ const bn = $('#bnav'); if(bn) bn.querySelectorAll('button').forEach(x=>x.style.flex='1'); }
   const c = company();
-  $('#coName').textContent = c.name.replace(/\s+Sdn\.? Bhd\.?$/i,'');
+  $('#coName').textContent = c.name;
   $('#logoMark').innerHTML = c.logoId ? `<img ${photoAttr(c.logoId)} alt="">` : `<img src="${LOGO_PNG}" alt="Sadhana">`;
   document.querySelectorAll('.adminonly').forEach(b => b.style.display = S.canEdit ? '' : 'none');
   const signedIn = S.authState === 'in';
@@ -1346,7 +1347,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 31 Oct 2026 (T) · letters</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (U) · full company name</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
