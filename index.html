@@ -225,6 +225,12 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .metat{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:13.5px}
 .metat td{border:1px solid var(--line);padding:6px 9px;vertical-align:top}
 .metat td.k{background:#faf8f4;font-weight:600;width:19%;font-size:12.5px;color:#4a4e53}
+.alerts .al{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:14px}
+.alerts .al .ai{width:22px;text-align:center;flex:none}.alerts .al .at{flex:1;min-width:0}.alerts .al .btn{flex:none}
+.alerts .al.red{background:#fff1f0;border-left:4px solid #d92d20}.alerts .al.amber{background:#fffaeb;border-left:4px solid #f79009}.alerts .al.info{background:#f2f7f2;border-left:4px solid #2E7D32}
+.alerts .al.more{cursor:pointer;color:#555}
+.alerts .alph{padding:9px 12px 6px;cursor:pointer;border-top:1px solid var(--line)}.alerts.ok{border-left:4px solid #2E7D32;margin-bottom:16px}
+@media(max-width:640px){.alerts .al{flex-wrap:wrap}.alerts .al .btn{margin-left:32px}}
 .podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end;margin:14px 0}
 .pod{text-align:center;background:var(--card,#fff);border:1px solid var(--line);border-radius:10px;padding:10px 6px 0;overflow:hidden}
 .pod.empty{visibility:hidden}.pod .pm{font-size:30px;line-height:1}.pod .pn{font-weight:800;margin-top:4px;word-break:break-word}.pod .pp{font-size:13px;color:#555;margin-bottom:8px}
@@ -1235,6 +1241,7 @@ function homeView(){
     ${S.canWrite ? `<button class="btn pri" data-act="newproj">+ New project</button>` : ''}</div>
   ${installBanner()}
   ${(() => { const mr = myRequests(); return mr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--warn)"><div class="sechead"><h3>✍ Waiting for your signature</h3><div class="sp"></div><span class="pill pending"><span class="dot"></span>${mr.length}</span></div><div class="list">${mr.map(({d, r, p}) => `<div class="it" data-act="open" data-id="${esc(d.id)}"><span class="pill type">${esc(d.type)}</span><div class="t"><b>${esc(d.number)} — ${esc(docTitle(d))}</b><span>${esc(p.code)} · ${esc(r.role)} · asked by ${esc(r.fromName || '')}${r.note ? ' — “' + esc(r.note) + '”' : ''}</span></div><button class="btn sm pri" data-act="open" data-id="${esc(d.id)}">Sign</button></div>`).join('')}</div></div>` : ''; })()}
+  ${(() => { try { return alertsHome(); } catch(e){ console.error(e); return ''; } })()}
   <div class="kpis">
     <div class="card kpi"><span class="eyebrow">Active projects</span><b>${active.length}</b></div>
     <div class="card kpi ${todayDone.length<active.length?'alert':''}"><span class="eyebrow">Daily reports today</span><b>${todayDone.length}/${active.length}</b></div>
@@ -1273,7 +1280,7 @@ function projCard(p){
   const ds = S.docs.filter(d => d.projectId === p.id);
   const c = k => ds.filter(d => d.type === k).length;
   return `<div class="card proj" data-s="${esc(p.status||'Active')}" data-act="proj" data-id="${esc(p.id)}">
-    <span class="pill type">${esc(p.code)}</span>${(p.status&&p.status!=='Active')?` <span class="pill draft">${esc(p.status)}</span>`:''}
+    <span class="pill type">${esc(p.code)}</span>${(p.status&&p.status!=='Active')?` <span class="pill draft">${esc(p.status)}</span>`:''}${(() => { try { const A = projAlerts(p), r = A.filter(a => a.lvl === 'red').length, m = A.filter(a => a.lvl === 'amber').length; return r ? ` <span class="pill" style="background:#fde2e1;color:#b42318">⚠ ${r} urgent</span>` : m ? ` <span class="pill pending">⚠ ${m} to watch</span>` : ''; } catch(e){ return ''; } })()}
     <h3>${esc(p.name)}</h3>
     <div class="meta">${esc(p.client||'—')}${p.location?' · '+esc(p.location):''}</div>
     ${(p.status||'Active') === 'Active' ? `<div style="margin:10px 0 2px">${countdownHTML(p, true)}</div>` : ''}
@@ -1345,6 +1352,7 @@ function projectView(id, tab){
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
   ${S.canWrite?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
   ${(() => { const ex = expiringFiles().filter(x => x.f.projectId === id); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
+  ${(() => { try { const A = projAlerts(p); return A.length ? `<div class="card alerts" style="margin-bottom:14px">${alertLines(A)}</div>` : ''; } catch(e){ return ''; } })()}
   <div class="card projinfo">
     <div><span>Client</span>${esc(p.client||'—')}</div><div><span>Consultant</span>${esc(p.consultant||'—')}</div>
     <div><span>Location</span>${esc(p.location||'—')}</div><div><span>Contract no.</span>${esc(p.contractNo||'—')}</div>
@@ -2183,7 +2191,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z8) · team ranking & year-end award race</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z9) · project warnings & EOT reminders</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3663,6 +3671,10 @@ document.addEventListener('click', async e => {
     case 'chathide': confirmBox('Remove this message?', 'It will be hidden from the chat.', 'Remove', async () => { try { await S.db.doc('counters/' + id).update({hidden: true}); } catch(e){ dbErr(e); } }); break;
     case 'feedback': S.chatWhere = el.dataset.w || ''; go('chat'); break;
     case 'rankper': S.rankPer = el.dataset.p; render(); break;
+    case 'neweot': { const p = projById(el.dataset.p); if(!p) break; S.draft = newDraft(p.id, 'LTR'); const x = S.draft.data; x.category = LTR_CATS.find(c => c.k === 'EOTN').l; x.origEnd = p.end || ''; x.subject = '';
+      x.reTitle = x.reTitle || (p.name || '').toUpperCase(); S.respMode = false; go('edit'); toast('EOT notice started — fill in the cause of delay, then "Draft the letter"'); break; }
+    case 'open-proj': go('project', {id: el.dataset.id}); break;
+    case 'alertshare': { const tx = alertsText(); if(navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)){ try { await navigator.share({text: tx}); } catch(e){} } else window.open('https://wa.me/?text=' + encodeURIComponent(tx), '_blank'); break; }
     case 'rankcsv': rankCsv(); break;
     case 'fmtedit': fmtEditor(el.dataset.p, el.dataset.t); break;
     case 'fmtmove': case 'fmtadd': case 'fmtdel': case 'fmtsigadd': case 'fmtsigdel': case 'fmtreset': case 'fmtsave': fmtAction(a, el); break;
@@ -4005,6 +4017,78 @@ async function emailAuth(form){
 }
 
 /* --- team management (admin) --- */
+
+/* ---------- ⚠ Project health warnings ---------- */
+const ALERT_CFG = {eotNotice: 14, eotWarn: 30, behindRed: 10, behindAmber: 5, prGap: 14, dsrAmber: 3, dsrRed: 7, signOld: 3};
+const dDiff = (a, b) => Math.round((new Date(String(a).slice(0, 10) + 'T00:00:00') - new Date(String(b).slice(0, 10) + 'T00:00:00')) / 86400000);
+function workDaysSince(d0, t){ let n = 0, x = addDays(d0, 1); while(x <= t){ if(new Date(x + 'T00:00:00').getDay() !== 0) n++; x = addDays(x, 1); } return n; }
+function projAlerts(p){
+  const A = [], t = today(), st = p.status || 'Active';
+  if(st !== 'Active') return A;
+  const docs = S.docs.filter(d => d.projectId === p.id);
+  const prs = docs.filter(d => d.type === 'PR' && d.data && (d.data.to || d.data.from)).sort((a, b) => String(b.data.to || b.data.from).localeCompare(String(a.data.to || a.data.from)));
+  const pr = prs[0], actual = pr && pr.data.actual !== '' && pr.data.actual != null ? numv(pr.data.actual) : null, planned = pr && pr.data.planned ? numv(pr.data.planned) : null;
+  const done = actual != null && actual >= 100;
+  const add = (lvl, icon, text, act) => A.push({lvl, icon, text, act});
+  if(!p.end){ add('info', 'ℹ', 'No completion date set — add it in "Edit project" so the app can warn you about EOT deadlines.', {act: 'editproj', id: p.id, l: 'Edit project'}); }
+  // ---- EOT notice: must go out 14 days before the completion date ----
+  if(p.end && !done){
+    const due = addDays(p.end, -ALERT_CFG.eotNotice), toDue = dDiff(due, t), toEnd = dDiff(p.end, t);
+    const eot = docs.filter(d => d.type === 'LTR' && /Extension of Time/.test(d.data?.category || '') && (d.signatures || [])[0] && (!d.data.origEnd || d.data.origEnd === p.end))
+      .sort((a, b) => String(b.data.date).localeCompare(String(a.data.date)))[0];
+    const eotDraft = !eot && docs.find(d => d.type === 'LTR' && /Extension of Time/.test(d.data?.category || '') && !(d.signatures || [])[0]);
+    const behind = (planned != null && actual != null && actual < planned) || (actual != null && p.start && p.end && actual < elapsedPct(p, t) - 5);
+    const wr = {act: 'neweot', p: p.id, l: '✉ Write EOT notice'};
+    if(eot){ if(toEnd <= ALERT_CFG.eotWarn) add('info', '✉', `EOT ${/Application/.test(eot.data.category) ? 'application' : 'notice'} issued ${fmtDate(eot.data.date)} (${ltrRef(eot)}). When the extension is approved, update the completion date in "Edit project".`, {act: 'open', id: eot.id, l: 'View letter'}); }
+    else if(toEnd < 0) add('red', '⛔', `Project is <b>${-toEnd} day${toEnd === -1 ? '' : 's'} past</b> the completion date (${fmtDate(p.end)})${actual != null ? ` at ${actual}% complete` : ''} and no EOT letter has been issued.`, wr);
+    else if(toDue < 0) add('red', '⏰', `EOT notice deadline <b>passed ${-toDue} day${toDue === -1 ? '' : 's'} ago</b> (due ${fmtDate(due)}, 14 days before completion on ${fmtDate(p.end)}). Issue the notice now.`, eotDraft ? {act: 'edit', id: eotDraft.id, l: 'Finish EOT draft'} : wr);
+    else if(toDue <= 7) add('red', '⏰', `EOT notice due in <b>${toDue} day${toDue === 1 ? '' : 's'}</b> (by ${fmtDate(due)}) — completion date ${fmtDate(p.end)}.`, eotDraft ? {act: 'edit', id: eotDraft.id, l: 'Finish EOT draft'} : wr);
+    else if(toDue <= ALERT_CFG.eotNotice || (toDue <= ALERT_CFG.eotWarn && behind)) add('amber', '⏰', `EOT notice deadline in <b>${toDue} days</b> (${fmtDate(due)}). ${behind ? 'Progress is behind — an extension may be needed.' : 'Check whether the works will finish on time.'}`, eotDraft ? {act: 'edit', id: eotDraft.id, l: 'Finish EOT draft'} : wr);
+  }
+  // ---- progress against plan ----
+  if(pr && actual != null && !done){
+    if(planned != null){ const v = +(actual - planned).toFixed(1);
+      if(v <= -ALERT_CFG.behindRed) add('red', '📉', `Behind schedule by <b>${-v}%</b> (actual ${actual}% vs planned ${planned}%) — progress report ${fmtDate(pr.data.to || pr.data.from)}.`, {act: 'open', id: pr.id, l: 'View report'});
+      else if(v <= -ALERT_CFG.behindAmber) add('amber', '📉', `Slightly behind schedule: <b>${-v}%</b> (actual ${actual}% vs planned ${planned}%).`, {act: 'open', id: pr.id, l: 'View report'}); }
+    // forecast at the current rate of work
+    if(p.start && p.end && actual > 0){ const used = dDiff(pr.data.to || t, p.start) + 1; if(used > 7){ const finish = addDays(p.start, Math.ceil(used * 100 / actual)), late = dDiff(finish, p.end);
+      if(late > 7) add(late > 30 ? 'red' : 'amber', '📆', `At the current rate the works finish around <b>${fmtDate(finish)}</b> — about ${late} days after the completion date.`, null); } }
+  } else if(!pr && p.start && p.end && dDiff(t, p.start) > 21 && planned == null){
+    add('amber', '📊', 'No progress report yet — the app cannot check progress against the programme.', {act: 'new', p: p.id, t: 'PR', l: '+ Progress report'});
+  }
+  if(pr && dDiff(t, pr.data.to || pr.data.from) > ALERT_CFG.prGap && !done) add('amber', '📊', `Last progress report covers up to ${fmtDate(pr.data.to || pr.data.from)} (${dDiff(t, pr.data.to || pr.data.from)} days ago).`, {act: 'new', p: p.id, t: 'PR', l: '+ Progress report'});
+  // open issues in the latest progress report
+  if(pr){ const iss = (pr.data.issues || []).filter(r => r && (r.issue || r.desc) && !/^(closed|done|resolved|completed|selesai)/i.test(String(r.status || '').trim()));
+    if(iss.length) add('amber', '⚠', `${iss.length} open issue${iss.length > 1 ? 's' : ''} affecting progress: ${esc(iss.slice(0, 2).map(r => r.issue || r.desc).join('; '))}${iss.length > 2 ? '…' : ''}`, {act: 'open', id: pr.id, l: 'View'}); }
+  // ---- daily site reports ----
+  if(p.start && t > p.start && (!p.end || t <= addDays(p.end, 60))){
+    const dsrs = docs.filter(d => d.type === 'DSR' && d.data?.date && (d.signatures || [])[0]).map(d => d.data.date).sort();
+    const last = dsrs[dsrs.length - 1] || addDays(p.start, -1), gap = workDaysSince(last, addDays(t, -1));
+    if(gap >= ALERT_CFG.dsrAmber) add(gap >= ALERT_CFG.dsrRed ? 'red' : 'amber', '📋', dsrs.length ? `No signed daily site report for <b>${gap} working days</b> (last: ${fmtDate(last)}).` : `No daily site report submitted since the start (${fmtDate(p.start)}).`, {act: 'new', p: p.id, t: 'DSR', l: '+ Daily report'});
+  }
+  // ---- signatures waiting too long ----
+  const old = docs.filter(d => statusOf(d).cls === 'pending' && (d.signatures || []).filter(Boolean).length && dDiff(t, (d.signatures.filter(Boolean).pop() || {}).at || d.createdAt) > ALERT_CFG.signOld);
+  if(old.length) add('amber', '✍', `${old.length} document${old.length > 1 ? 's have' : ' has'} been waiting for signature for more than ${ALERT_CFG.signOld} days.`, {act: 'open', id: old[0].id, l: 'Open first'});
+  const rank = {red: 0, amber: 1, info: 2}; A.sort((a, b) => rank[a.lvl] - rank[b.lvl]);
+  return A;
+}
+function elapsedPct(p, t){ const tot = dDiff(p.end, p.start), u = dDiff(t, p.start); return tot > 0 ? Math.max(0, Math.min(100, u / tot * 100)) : 0; }
+function alertBtn(a){ if(!a) return ''; const ds = Object.entries(a).filter(([k]) => k !== 'l').map(([k, v]) => k === 'act' ? `data-act="${esc(v)}"` : `data-${k}="${esc(v)}"`).join(' '); return `<button class="btn sm" ${ds}>${esc(a.l)}</button>`; }
+function alertLines(A){ return A.map(a => `<div class="al ${a.lvl}"><span class="ai">${a.icon}</span><span class="at">${a.text}</span>${S.canWrite || a.act?.act === 'open' ? alertBtn(a.act) : ''}</div>`).join(''); }
+function alertsHome(){
+  const rows = S.projects.map(p => ({p, A: projAlerts(p).filter(a => a.lvl !== 'info')})).filter(x => x.A.length)
+    .sort((a, b) => b.A.filter(x => x.lvl === 'red').length - a.A.filter(x => x.lvl === 'red').length || b.A.length - a.A.length);
+  if(!rows.length) return S.projects.some(p => (p.status || 'Active') === 'Active') ? `<div class="card pad alerts ok"><b>✅ All active projects on track</b> <span class="small muted">— no EOT deadlines, delays or missing reports found.</span></div>` : '';
+  const nr = rows.reduce((a, x) => a + x.A.filter(y => y.lvl === 'red').length, 0), na = rows.reduce((a, x) => a + x.A.filter(y => y.lvl === 'amber').length, 0);
+  return `<div class="card alerts" style="margin-bottom:16px"><div class="sechead"><h3>⚠ Project warnings</h3><div class="sp"></div>${nr ? `<span class="pill" style="background:#fde2e1;color:#b42318">${nr} urgent</span>` : ''} ${na ? `<span class="pill pending">${na} to watch</span>` : ''}${S.canEdit ? ` <button class="btn sm ghost" data-act="alertshare">📤 Share</button>` : ''}</div>
+    ${rows.map(({p, A}) => `<div class="alp"><div class="alph" data-act="open-proj" data-id="${esc(p.id)}"><span class="pill type">${esc(p.code)}</span> <b>${esc(p.name)}</b></div>${alertLines(A.slice(0, 3))}${A.length > 3 ? `<div class="al more" data-act="open-proj" data-id="${esc(p.id)}"><span class="ai"></span><span class="at small">+ ${A.length - 3} more — open the project →</span></div>` : ''}</div>`).join('')}</div>`;
+}
+function alertsText(){
+  const lines = ['*Sadhana — project warnings ' + fmtDate(today()) + '*'];
+  S.projects.forEach(p => { const A = projAlerts(p).filter(a => a.lvl !== 'info'); if(!A.length) return; lines.push('', '*' + p.code + '* ' + p.name);
+    A.forEach(a => lines.push((a.lvl === 'red' ? '🔴 ' : '🟠 ') + a.text.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&'))); });
+  return lines.join('\n');
+}
 
 /* ---------- 🏆 Team ranking (points from what people already do in the app) ---------- */
 const RANK_PTS = {rec: {PR: 30, SW: 25, MM: 15, LTR: 15, DSR: 10}, recDef: 10, sign: 5, photo: 1, photoMax: 10, onTime: 5, day: 3,
