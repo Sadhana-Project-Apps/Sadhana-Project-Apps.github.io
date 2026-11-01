@@ -228,6 +228,13 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .dsec{margin-top:18px}
 .dsec h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;background:var(--steel);color:#fff;padding:5px 9px;margin-bottom:0;border-radius:2px}
 .dsec .body{border:1px solid var(--line);border-top:0;padding:9px 11px;white-space:pre-wrap;font-size:14px;min-height:20px}
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.dsec table.daygrid{width:auto;min-width:100%;font-size:12px}
+.dsec table.daygrid th,.dsec table.daygrid td{padding:4px 5px;text-align:center;min-width:24px;white-space:nowrap}
+.dsec table.daygrid th:first-child,.dsec table.daygrid td:first-child{text-align:left;white-space:nowrap;min-width:130px;position:sticky;left:0;background:#fff;z-index:1}
+.dsec table.daygrid th:first-child{background:#faf8f4}
+.dsec table tr.grp td{background:#E2EFDA;font-weight:700}
+.dsec table tr.tot td{background:#FFE699;font-weight:700}
 .dsec table{width:100%;border-collapse:collapse;font-size:13.5px}
 .dsec table th{background:#faf8f4;font-size:12px;text-align:left;padding:6px 8px;border:1px solid var(--line)}
 .dsec table td{padding:6px 8px;border:1px solid var(--line)}
@@ -590,7 +597,7 @@ const TYPES = {
       {sec:'Look-Ahead (Next Period)'},
       {k:'lookahead', l:'Planned works for the next period', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description'},{k:'start',l:'Est. start',w:110,center:1,pw:40}], def: () => [{},{},{}]},
       {sec:'Major Issues Affecting Progress'},
-      {k:'issues', l:'Issues', t:'table', num:1, sub:false, cols:[{k:'issue',l:'Issue',pw:36},{k:'desc',l:'Description',pw:38},{k:'by',l:'Action by',w:90,center:1,pw:22},{k:'status',l:'Status'}], def: () => [{},{}]},
+      {k:'issues', l:'Issues', t:'table', num:1, sub:false, nil:1, cols:[{k:'issue',l:'Issue',pw:36},{k:'desc',l:'Description',pw:38},{k:'by',l:'Action by',w:90,center:1,pw:22},{k:'status',l:'Status'}], def: () => [{},{}]},
       {sec:'Weather Report'},
       {k:'weather', l:'Weather', t:'table', sub:false, sumCols:['rain'], cols:[{k:'date',l:'Date',center:1,pw:26},{k:'am',l:'Morning',center:1},{k:'pm',l:'Afternoon',center:1},{k:'rain',l:'Rain hours',n:1,w:80,pw:24},{k:'remarks',l:'Remarks'}], def: () => []},
       {sec:'Manpower at Site'},
@@ -991,7 +998,7 @@ function buildType(type, fmt){
   const sorted = [secs[0], ...secs.slice(1).map((s, i) => ({s, i})).sort((a, b) => { const ia = order.indexOf(a.s.sec), ib = order.indexOf(b.s.sec); return (ia < 0 ? 999 + a.i : ia) - (ib < 0 ? 999 + b.i : ib); }).map(x => x.s)];
   const fields = [];
   sorted.forEach(s => { if(s.sec && hide.has('sec:' + s.sec)) return;
-    const fs = s.fields.filter(f => !hide.has(f.k)).map(f => labels[f.k] ? {...f, l: labels[f.k]} : f);
+    const nil = new Set(fmt.nil || []); const fs = s.fields.filter(f => !hide.has(f.k)).map(f => labels[f.k] ? {...f, l: labels[f.k]} : f).map(f => nil.has(f.k) ? {...f, nil: 1} : f);
     if(s.sec && !fs.length) return;
     if(s.f) fields.push(labels['sec:' + s.sec] ? {...s.f, sec: labels['sec:' + s.sec]} : s.f);
     fields.push(...fs); });
@@ -1715,17 +1722,45 @@ const COL_SYN = {desc: ['DESCRIPTION', 'ACTIVITY', 'WORK', 'WORKS', 'ITEM DESCRI
   qty: ['QTY', 'NO', 'NO.', 'QUANTITY'], pct: ['PROGRESS %', 'PROGRESS', '%', 'PERCENT', '% COMPLETE'], kg: ['WEIGHT KG', 'WEIGHT', 'KG']};
 const KV_SYN = {planned: ['SCHEDULE', 'SCHEDULED PROGRESS', 'PLANNED', 'SCHEDULED'], actual: ['ACTUAL', 'ACTUAL PROGRESS']};
 function colMatch(head, col){ const h = normH(head), names = [normH(col.l), ...((COL_SYN[col.k] || []).map(normH))]; return names.some(n => n && (h === n || (n.length > 3 && h.startsWith(n)))); }
+/* Excel range pasted into Word as a picture (EMF): rebuild the grid from its text records */
+function emfGrid(u8){
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), items = []; let off = 0;
+  if(dv.getUint32(0, true) !== 1) return null;
+  while(off + 8 <= u8.length){ const typ = dv.getUint32(off, true), size = dv.getUint32(off + 4, true); if(size < 8 || off + size > u8.length) break;
+    if(typ === 84 && size >= 76){ const x = dv.getInt32(off + 36, true), y = dv.getInt32(off + 40, true), n = dv.getUint32(off + 44, true), so = dv.getUint32(off + 48, true);
+      let t = ''; for(let i = 0; i < n && off + so + i * 2 + 1 < off + size; i++) t += String.fromCharCode(dv.getUint16(off + so + i * 2, true));
+      t = t.trim(); if(t) items.push({x, y, t}); }
+    off += size; }
+  if(!items.length) return null;
+  const lines = []; items.sort((a, b) => a.y - b.y || a.x - b.x).forEach(it => { const l = lines.find(l => Math.abs(l.y - it.y) <= 3); if(l) l.c.push(it); else lines.push({y: it.y, c: [it]}); });
+  lines.forEach(l => l.c.sort((a, b) => a.x - b.x));
+  const hi = lines.findIndex(l => { const nums = l.c.filter(c => /^\d{1,2}$/.test(c.t)).map(c => +c.t); return nums.length >= 5 && nums[0] === 1 && nums.every((v, i) => v === i + 1); });
+  if(hi < 0) return null;
+  const hdr = lines[hi], dayX = hdr.c.filter(c => /^\d{1,2}$/.test(c.t)), firstX = dayX[0].x, gap = dayX.length > 1 ? (dayX[dayX.length - 1].x - firstX) / (dayX.length - 1) : 50;
+  const label0 = hdr.c.filter(c => c.x < firstX - gap / 2).map(c => c.t).join(' ');
+  const title = lines.slice(0, hi).map(l => l.c.map(c => c.t).join(' ')).join(' ');
+  const dm = title.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/), MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  let month = dm ? +dm[2] : 0, year = dm ? +dm[3] : 0; if(!month){ const mm = title.toUpperCase().match(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/); if(mm) month = MON.indexOf(mm[1]) + 1; const yy = title.match(/20\d\d/); if(yy) year = +yy[0]; }
+  const rows = [];
+  lines.slice(hi + 1).forEach(l => { const name = l.c.filter(c => c.x < firstX - gap / 2).map(c => c.t).join(' ').trim(); if(!name) return;
+    const vals = {}; l.c.filter(c => c.x >= firstX - gap / 2).forEach(c => { let best = 0, bd = 1e9; dayX.forEach(d => { const dd = Math.abs(d.x - c.x); if(dd < bd){ bd = dd; best = +d.t; } }); if(bd <= gap * 0.6 && /^-?[\d.]+$/.test(c.t)) vals[best] = c.t; });
+    rows.push({name, vals, total: /^TOTAL\b/i.test(name)}); });
+  return {title, label0, month, year, days: dayX.length, rows: rows.filter(r => !r.total)};
+}
 async function readWordBlocks(zip){
   const xml = async n => zip.file(n) ? new DOMParser().parseFromString(await zip.file(n).async('string'), 'application/xml') : null;
   const doc = await xml('word/document.xml'), rels = await xml('word/_rels/document.xml.rels'), relMap = {};
   if(rels) [...rels.getElementsByTagName('Relationship')].forEach(r => relMap[r.getAttribute('Id')] = 'word/' + r.getAttribute('Target').replace(/^\.?\//, ''));
   const txt = el => (el.tagName === 'w:p' ? [el] : [...el.getElementsByTagName('w:p')]).map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim();
-  const imgs = el => [...el.getElementsByTagName('a:blip')].map(b => relMap[b.getAttribute('r:embed')]).filter(p => p && /\.(jpe?g|png)$/i.test(p));
+  const allImgs = el => [...el.getElementsByTagName('a:blip')].map(b => relMap[b.getAttribute('r:embed')]).concat([...el.getElementsByTagName('v:imagedata')].map(b => relMap[b.getAttribute('r:id')]));
+  const imgs = el => allImgs(el).filter(p => p && /\.(jpe?g|png)$/i.test(p));
+  // tables pasted from Excel as pictures (EMF): read the text inside them
+  const emfs = async el => { const out = []; for(const p of allImgs(el).filter(p => p && /\.emf$/i.test(p))){ try { const g = emfGrid(await zip.file(p).async('uint8array')); if(g) out.push(g); } catch(e){} } return out; };
   const out = [];
   for(const el of doc.getElementsByTagName('w:body')[0].children){
     if(el.tagName === 'w:p'){ const t = txt(el); const bold = !!el.getElementsByTagName('w:b').length, num = !!el.getElementsByTagName('w:numPr').length, st = (el.getElementsByTagName('w:pStyle')[0] || {getAttribute: () => ''}).getAttribute('w:val') || '';
       const head = t && t.length < 110 && ((num && bold) || /^heading/i.test(st) || (bold && /^\d+[.)]\s+\S/.test(t)) || (bold && t === t.toUpperCase() && /[A-Z]{3}/.test(t) && !/:\s*\S/.test(t)));
-      out.push({k: head ? 'h' : 'p', t, imgs: imgs(el).map(src => ({src, cap: ''}))}); }
+      out.push({k: head ? 'h' : 'p', t, imgs: imgs(el).map(src => ({src, cap: ''})), emf: await emfs(el)}); }
     else if(el.tagName === 'w:tbl'){ const rows = [...el.children].filter(r => r.tagName === 'w:tr').map(r => [...r.children].filter(c => c.tagName === 'w:tc'));
       const span = c => { const g = c.getElementsByTagName('w:gridSpan')[0]; return g ? (+g.getAttribute('w:val') || 1) : 1; };
       const cells = rows.map(r => r.flatMap(c => { const t = txt(c).replace(/\s*\n\s*/g, ' ').trim(); return [t, ...Array(span(c) - 1).fill('')]; }));
@@ -1733,7 +1768,7 @@ async function readWordBlocks(zip){
       const im = []; let band = '';
       rows.forEach(r => { const ri = r.map(c => imgs(c)); if(ri.every(x => !x.length)){ const t = r.map(c => txt(c).replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean); if(t.length) band = t[0]; return; }
         r.forEach((c, i) => { const cap = txt(c).replace(/\s*\n\s*/g, ' ').trim() || band; ri[i].forEach(src => im.push({src, cap})); }); });
-      out.push({k: 't', cells, imgs: im, widths: rows.map(r => r.length)}); }
+      out.push({k: 't', cells, imgs: im, widths: rows.map(r => r.length), emf: await emfs(el)}); }
   }
   return out;
 }
@@ -1767,11 +1802,12 @@ async function smartImport(file, pid, forced){
   const projMap = {'PROJECT': 'name', 'CLIENT': 'client', 'CLIENT OWNER': 'client', 'OWNER': 'client', 'CONSULTANT': 'consultant', 'LOCATION': 'location', 'CONTRACT NO': 'contractNo', 'CONTRACT LOA NO': 'contractNo', 'LOA NO': 'contractNo', 'DATE OF START': 'start', 'COMMENCEMENT DATE': 'start', 'DATE OF COMPLETION': 'end', 'COMPLETION DATE': 'end', 'INSURANCE POLICY': 'insurance', 'INSURANCE POLICIES': 'insurance'};
   const used = new Set(), cfg = clone(projFmt(pid, code) || {}), extras = cfg.extra = cfg.extra || [], photosFor = {}, seenHeads = [];
   const tableFields = base.fields.filter(f => f.t === 'table' && !f.cols.some(c => c.day != null));
-  let head = '', seenTable = false; const secPos = {};
+  let head = '', seenTable = false; const secPos = {}, emfQ = []; let unhid = false;
   const secOf0 = f => (base.fields.filter(g => g.sec && base.fields.indexOf(g) < base.fields.indexOf(f)).pop() || {}).sec;
   const slug = s => 'x_' + normH(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 24);
   for(const b of blocks){
     if(b.k === 'h'){ head = b.t.replace(/^\s*\d+[.)]\s*/, '').trim(); if(!/^CONTENTS?$/i.test(head)) seenHeads.push(head); }
+    (b.emf || []).forEach(g => emfQ.push({g, head, at: seenHeads.length - 1}));
     if(b.k === 'p' || b.k === 'h'){ const m = b.t.match(/^([^:]{2,40}):\s*(.+)$/); if(m) setKV(m[1], m[2]); }
     if(b.imgs.length && !seenTable && base.fields.some(f => f.k === 'coverPhoto') && !(photosFor.coverPhoto || []).length){ (photosFor.coverPhoto = []).push(b.imgs[0]); continue; }
     if(b.imgs.length){ const H = normH(head); let k;
@@ -1832,6 +1868,33 @@ async function smartImport(file, pid, forced){
     rows.forEach((r, ri) => { if(bands[ri]){ prev.push({c0: bandText(r).toUpperCase(), _g: 1}); return; } const o = {}; exCols.forEach((c, i) => { if(r[i]) o['c' + i] = r[i]; }); if(Object.keys(o).length) prev.push(o); });
     x[k] = prev;
   }
+  // manpower / machinery grids that were pasted from Excel as pictures
+  if(emfQ.length){
+    const dayF = base.fields.filter(f => f.t === 'table' && f.cols.some(c => c.day != null));
+    const kindOf = (g, h) => { const t = (g.label0 + ' ' + h).toUpperCase(); return /MACHIN|PLANT|EQUIP/.test(g.label0.toUpperCase()) ? 'mach' : /PERSON|MANPOWER|LABOU?R|WORKER|TRADE|STAFF/.test(t) ? 'man' : /MACHIN|PLANT|EQUIP/.test(t) ? 'mach' : ''; };
+    const nm = v => String(v || '').toUpperCase().replace(/\bEX\b\.?/g, 'EXCAVATOR').replace(/C\/W|W\/|[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const nDays = periodDays(x, 31), got = {};
+    emfQ.forEach(({g, head: h, at}) => { const kind = kindOf(g, h); const f = dayF.find(f => kind === 'mach' ? /machin/i.test(f.k) : kind === 'man' ? /man|labour|person/i.test(f.k) : false); if(!f || !x.from) return;
+      const nk = f.cols.find(c => c.day == null).k, dcols = f.cols.filter(c => c.day != null);
+      if(!got[f.k]){ got[f.k] = 0; x[f.k] = (x[f.k] && x[f.k].length ? x[f.k] : (f.def ? f.def() : [])).map(r => ({...r})); }
+      const rowsT = x[f.k];
+      const start = new Date(x.from + 'T00:00:00'); let hit = 0;
+      g.rows.forEach(gr => { if(!Object.keys(gr.vals).length) return;
+        const n = nm(gr.name), tok = n.split(' ');
+        let r = rowsT.find(r => nm(r[nk]) === n) || rowsT.find(r => { const m = nm(r[nk]).split(' '); return tok.every(w => m.some(v => v.startsWith(w) || w.startsWith(v))) && m.filter(v => v.length > 2).every(v => tok.some(w => w.startsWith(v) || v.startsWith(w))); })
+          || rowsT.find(r => { const m = nm(r[nk]).split(' '); return tok.length && tok.every(w => m.some(v => v.startsWith(w) || w.startsWith(v))); });
+        let wrote = false;
+        for(let i = 0; i < Math.min(nDays, dcols.length); i++){ const dt = new Date(start); dt.setDate(dt.getDate() + i);
+          if(g.month && (dt.getMonth() + 1 !== g.month || (g.year && dt.getFullYear() !== g.year))) continue;
+          const v = gr.vals[dt.getDate()]; if(v == null) continue;
+          if(!r){ r = {[nk]: titleCase(gr.name)}; rowsT.push(r); }
+          r[dcols[i].k] = String(numv(v)); wrote = true; }
+        if(wrote) hit++; });
+      if(hit){ got[f.k] += hit; const sc = secOf0(f); if(sc && secPos[sc] == null) secPos[sc] = at + 0.01 * Object.keys(secPos).length; } });
+    Object.keys(got).forEach(k => { const f = dayF.find(f => f.k === k); if(!got[k]) return; found.push(f.l + ' (from the Excel pictures, ' + got[k] + ' rows)');
+      // an earlier import may have hidden this section: show it again
+      const sc = secOf0(f); if(!firstTime && cfg.hide && (cfg.hide.includes('sec:' + sc) || cfg.hide.includes(k))){ cfg.hide = cfg.hide.filter(h => h !== 'sec:' + sc && h !== k); unhid = true; } });
+  }
   // first import for this project: follow the report's order and hide what it doesn't use
   const secOf = f => (base.fields.filter(g => g.sec && base.fields.indexOf(g) < base.fields.indexOf(f)).pop() || {}).sec;
   if(firstTime){
@@ -1840,7 +1903,8 @@ async function smartImport(file, pid, forced){
     secs.forEach(s => { const fs = base.fields.filter(f => f.k && !f.sec && secOf(f) === s && f.t !== 'auto' && f.t !== 'calc');
       const has = fs.some(f => f.t === 'table' ? (x[f.k] || []).length && found.some(z => z.startsWith(f.l)) : f.t === 'photos' ? (photosFor[f.k] || []).length : found.includes(f.l));
       const named = secPos[s] != null || seenHeads.some(h => { const a = normH(h), c = normH(s); if(!a || !c) return false; if(a.includes(c) || c.includes(a)) return true; const ct = c.split(' ').filter(w => w.length > 3); return ct.length && ct.filter(w => a.split(' ').some(v => v.startsWith(w.slice(0, 5)))).length / ct.length >= 0.6; });
-      if(!has && !named){ hide.add('sec:' + s); hidden.push(s); } });
+      if(!has && !named){ hide.add('sec:' + s); hidden.push(s); }
+      else if(!has && named) fs.filter(f => f.t === 'table').forEach(f => { cfg.nil = [...new Set([...(cfg.nil || []), f.k])]; }); });
     cfg.hide = [...hide]; draft._hidden = hidden;
     // order: sections in the order their content first appears in the report
     const pos = s => { if(secPos[s] != null) return secPos[s]; const i = seenHeads.findIndex(h => { const a = normH(h), c = normH(s); return a && c && (a.includes(c) || c.includes(a)); }); return i < 0 ? 999 : i; };
@@ -1848,7 +1912,7 @@ async function smartImport(file, pid, forced){
   }
   if(!cfg.extra.length) delete cfg.extra;
   draft.fmt = cfg; x._source = file.name;
-  return {draft, zip, found, added, hidden: draft._hidden || [], projUpd, code, photosFor, saveFmt: firstTime || added.length};
+  return {draft, zip, found, added, hidden: draft._hidden || [], projUpd, code, photosFor, saveFmt: firstTime || added.length || unhid};
 }
 async function runSmartImport(file, pid, forced){
   toast('Reading ' + file.name + '…');
@@ -1971,7 +2035,7 @@ async function makeDocx(id){
         body.push(kvTable([['PROJECT', p.name || ''], ['DOC NO.', d.number], ['CLIENT', p.client || '-'], ['DATE', fmtDate(docDate(d))], ['LOCATION', p.location || '-'], ['CONTRACT NO.', p.contractNo || '-'], ...(data._subcon ? [['SUBCON', data._subcon], ['PREPARED BY', data._subconBy || '-']] : [])]));
       }
       const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase === 'response' && !isEmpty(data[f.k]));
-      const hasC = f => { const v = data[f.k]; if(f.t === 'table') return (v || []).some(r => r && f.cols.some((cc, i) => (f.keepRows ? i > 0 : true) && !isEmpty(r[cc.k]))); if(f.t === 'photos') return (v || []).length > 0; return f.t === 'calc' || f.t === 'auto' || !isEmpty(v); };
+      const hasC = f => { const v = data[f.k]; if(f.t === 'table' && f.nil) return true; if(f.t === 'table') return (v || []).some(r => r && f.cols.some((cc, i) => (f.keepRows ? i > 0 : true) && !isEmpty(r[cc.k]))); if(f.t === 'photos') return (v || []).length > 0; return f.t === 'calc' || f.t === 'auto' || !isEmpty(v); };
       let kv = [], skip = false;
       const flush = () => { if(kv.length){ body.push(kvTable(kv)); kv = []; } };
       for(let fi = 0; fi < T.fields.length; fi++){ const f = T.fields[fi];
@@ -2012,7 +2076,7 @@ async function makeDocx(id){
           const sk = f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? dayCols.map(cc => cc.k) : [];
           if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
             out.push(row(vals.map((v, k) => cell(v, w[k], {bold: true, fill: YEL, size: small, align: k ? AlignmentType.CENTER : undefined})))); }
-          if(!rows.length) out.push(row([cell('-', CW, {span: head.length})]));
+          if(!rows.length) out.push(row([cell(f.nil ? 'Nil' : '-', CW, {span: head.length, align: AlignmentType.CENTER})]));
           body.push(table(w, out), P('', {after: 80}));
         } else if(f.t === 'photos'){ const ph = data[f.k] || []; if(!ph.length) continue;
           const w = widths([1, 1, 1]), capd = ph.every(q => q.caption);
@@ -2105,7 +2169,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z5) · Word download, safe windows, feedback layout</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z6) · Excel-picture manpower import, readable day grids, Nil sections</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -2324,8 +2388,7 @@ function docBodyHTML(d){
     if(f.t === 'textarea' || f.t === 'checks'){
       out += wrapStart + head + `<div class="body">${esc(valueText(f, data[f.k])) || '<span class="muted">—</span>'}</div>` + wrapEnd;
     } else if(f.t === 'table'){
-      const rows = cleanRows(f, data[f.k]);
-      out += wrapStart + head + (rows.length ? `<table><thead><tr>${f.cols.map(c=>`<th>${esc(c.day!=null ? dayLabel(data.from, c.day) : c.l)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${f.cols.map(c=>`<td>${esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : r[c.k])}</td>`).join('')}</tr>`).join('')}${tableTotals(f, rows)}</tbody></table>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
+      out += wrapStart + head + viewTable(f, data) + wrapEnd;
     } else if(f.t === 'calc' && f.calc === 'scrap'){
       const c = scrapCum(d);
       out += wrapStart + head + (c.rows.length ? `<table><thead><tr>${c.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}<tr style="font-weight:700;background:#fff6d6">${c.total.map(x => `<td>${esc(x)}</td>`).join('')}</tr></tbody></table><div class="small muted" style="padding:6px 10px">Includes ${c.records} record${c.records === 1 ? '' : 's'} up to and including this one.</div>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
@@ -2345,6 +2408,22 @@ function docBodyHTML(d){
       <div class="prog"><i style="width:${Math.min(100,a)}%"></i>${pl?`<s style="left:${Math.min(100,pl)}%"></s>`:''}</div></div></div>` + out;
   }
   return out;
+}
+function viewTable(f, data){
+  const days = periodDays(data, f.maxDays || 7), cols = f.cols.filter(c => c.day == null || c.day < days), dayCols = cols.filter(c => c.day != null);
+  let rows = cleanRows(f, data[f.k]);
+  if(dayCols.length) rows = rows.filter(r => r._g || cols.slice(1).some(c => c.day != null ? numv(r[c.k]) : !isEmpty(r[c.k])));
+  if(!rows.length) return `<div class="body"><span class="muted">Nil</span></div>`;
+  const grid = dayCols.length > 0, rt = f.rowTotal && dayCols.length;
+  const cellv = (c, r) => esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : (c.dp || c.fmt) && !isEmpty(r[c.k]) ? fmtN(r[c.k], c.dp) : r[c.k]);
+  const th = cols.map(c => `<th>${esc(c.day != null ? dayLabel(data.from, c.day).slice(0, dayCols.length > 14 ? 2 : 5) : c.l)}</th>`).join('') + (rt ? '<th>Total</th>' : '');
+  const body = rows.map(r => r._g ? `<tr class="grp"><td colspan="${cols.length + (rt ? 1 : 0)}">${esc(r[cols[0].k] || '')}</td></tr>`
+    : `<tr>${cols.map(c => `<td>${cellv(c, r)}</td>`).join('')}${rt ? `<td><b>${dayCols.reduce((a, c) => a + numv(r[c.k]), 0)}</b></td>` : ''}</tr>`).join('');
+  let foot = '';
+  if(f.colTotal && dayCols.length){ const real = rows.filter(r => !r._g);
+    foot = `<tr class="tot"><td>Total</td>${cols.slice(1).map(c => c.day != null ? `<td>${real.reduce((a, r) => a + numv(r[c.k]), 0) || ''}</td>` : '<td></td>').join('')}${rt ? `<td>${real.reduce((a, r) => a + dayCols.reduce((b, c) => b + numv(r[c.k]), 0), 0)}</td>` : ''}</tr>`; }
+  else foot = tableTotals({...f, cols}, rows.filter(r => !r._g));
+  return `<div class="tscroll"><table class="${grid ? 'daygrid' : ''}"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div>${dayCols.length > 7 ? `<div class="small muted" style="padding:4px 2px">${esc(dayLabel(data.from, 0))} – ${esc(dayLabel(data.from, days - 1))} · swipe sideways to see all days</div>` : ''}`;
 }
 function tableTotals(f, rows){
   const numCols = f.sumCols ? f.cols.filter(c => f.sumCols.includes(c.k)) : f.cols.filter(c => c.n && !/%/.test(c.l));
@@ -2997,6 +3076,7 @@ async function makePDF(id, opt){
     let started = false, pendingSub = null;
     // reports with a cover: leave out sections that have nothing in them
     const hasC = f => { const v = data[f.k];
+      if(f.t === 'table' && f.nil) return true;
       if(f.t === 'table'){ const rows = v || []; return rows.some(r => r && f.cols.some((c, i) => (f.keepRows ? i > 0 : true) && !isEmpty(r[c.k]))); }
       if(f.t === 'photos') return (v || []).length > 0;
       if(f.t === 'calc' || f.t === 'auto') return true;
@@ -3062,7 +3142,7 @@ async function makePDF(id, opt){
           if(f.rowTotal) out.push(String(dayCols.reduce((a, cc) => a + (parseFloat(r[cc.k]) || 0), 0)));
           return out;
         });
-        if(!body.length) body.push([{content:'-', colSpan:head.length}]);
+        if(!body.length) body.push([{content: f.nil ? 'Nil' : '-', colSpan:head.length, styles:{halign:'center'}}]);
         let foot;
         if(f.sumCols && f.sumCols.length && rows.length){
           foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : ''))]];
@@ -3076,7 +3156,7 @@ async function makePDF(id, opt){
         const preH = (f.sub !== false ? 5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
         const drawPre = () => {
           if(f.sub !== false){ doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), L, y + 3.5); y += 5; }
-          if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); doc.text(pt('Days of ' + new Date(data.from + 'T00:00:00').toLocaleDateString('en-GB', {month:'long', year:'numeric'}) + ' (' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + ')'), L, y + 3); y += 5; } };
+          if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(data.from + 'T00:00:00'), m2 = new Date((data.to || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + ')'), L, y + 3); } y += 5; } };
         const colStyles = {}; let ci = 0;
         if(f.num) colStyles[ci++] = {cellWidth:12, halign:'center'};
         cols.forEach(cc => { colStyles[ci] = {...(cc.n || cc.day != null || cc.center ? {halign:'center'} : {}), ...(cc.pw ? {cellWidth:cc.pw} : {})}; ci++; });
