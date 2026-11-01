@@ -93,6 +93,17 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .present .pbody{flex:1;overflow:auto;padding:16px;-webkit-overflow-scrolling:touch}
 .present .pres-sheet{max-width:900px;margin:0 auto;background:#fff;border-radius:6px;box-shadow:0 6px 30px rgba(0,0,0,.35)}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px}
+.chatbox{display:flex;flex-direction:column}
+.chatlist{max-height:60vh;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:#faf8f4}
+.cmsg{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;max-width:85%}
+.cmsg.mine{align-self:flex-end;background:#e9f6ee;border-color:#cfe8d6}
+.cmeta{font-size:12px;color:var(--muted);margin-bottom:4px}
+.ctext{white-space:pre-wrap;font-size:15px}
+.cquote{font-size:12px;color:var(--muted);border-left:3px solid var(--line);padding:2px 8px;margin:4px 0}
+.cact{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.cact select{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:13px}
+.ccompose{border-top:1px solid var(--line);padding:12px}
+[data-v=chat][data-badge]:not([data-badge=""])::after{content:attr(data-badge);display:inline-block;margin-left:6px;background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;line-height:18px}
 .folders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
 .folder{display:flex;gap:10px;align-items:center;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
 .folder .fi{font-size:24px;line-height:1}
@@ -338,6 +349,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
   <nav class="nav" id="nav">
     <button data-act="nav" data-v="home">Projects</button>
     <button data-act="nav" data-v="register">Document register</button>
+    <button data-act="nav" data-v="chat">Feedback</button>
     <button data-act="nav" data-v="team" class="adminonly">Team</button>
     <button data-act="nav" data-v="settings">Settings</button>
   </nav>
@@ -346,6 +358,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
 <nav class="bnav" id="bnav">
   <button data-act="nav" data-v="home">Projects</button>
   <button data-act="nav" data-v="register">Register</button>
+  <button data-act="nav" data-v="chat">Feedback</button>
   <button data-act="nav" data-v="team" class="adminonly">Team</button>
   <button data-act="nav" data-v="settings">Settings</button>
 </nav>
@@ -946,6 +959,109 @@ const TYPES = {
 };
 
 const TYPE_KEYS = Object.keys(TYPES);
+/* ---------- per-project report formats ----------
+   Each project can hide, rename, reorder and add sections/fields and change the signatories of any
+   document type. The format is copied into each new document (d.fmt), so old records keep the format
+   they were made with. */
+const _ttCache = new Map();
+function buildType(type, fmt){
+  const base = TYPES[type]; if(!base || !fmt) return base;
+  const key = type + JSON.stringify(fmt); if(_ttCache.has(key)) return _ttCache.get(key);
+  const hide = new Set(fmt.hide || []), labels = fmt.labels || {};
+  const secs = []; let cur = {sec: null, f: null, fields: []}; secs.push(cur);
+  base.fields.forEach(f => { if(f.sec){ cur = {sec: f.sec, f, fields: []}; secs.push(cur); } else cur.fields.push(f); });
+  (fmt.extra || []).forEach(e => {
+    let fd;
+    if(e.t === 'table'){ const cols = String(e.cols || 'Description').split(',').map(s => s.trim()).filter(Boolean); fd = {k: e.k, l: e.l, t: 'table', num: 1, sub: false, cols: cols.map((c, i) => ({k: 'c' + i, l: c})), def: () => [{}, {}, {}], custom: 1}; }
+    else if(e.t === 'yesno') fd = {k: e.k, l: e.l, t: 'select', o: ['Yes', 'No', 'N/A'], w: 'half', custom: 1};
+    else fd = {k: e.k, l: e.l, t: e.t, w: (e.t === 'textarea') ? undefined : 'half', custom: 1};
+    if(e.req) fd.req = 1;
+    let s = secs.find(x => x.sec === e.sec); if(!s){ s = {sec: e.sec || 'Additional Information', f: {sec: e.sec || 'Additional Information'}, fields: []}; secs.push(s); }
+    s.fields.push(fd); });
+  const order = fmt.order || [];
+  const sorted = [secs[0], ...secs.slice(1).map((s, i) => ({s, i})).sort((a, b) => { const ia = order.indexOf(a.s.sec), ib = order.indexOf(b.s.sec); return (ia < 0 ? 999 + a.i : ia) - (ib < 0 ? 999 + b.i : ib); }).map(x => x.s)];
+  const fields = [];
+  sorted.forEach(s => { if(s.sec && hide.has('sec:' + s.sec)) return;
+    const fs = s.fields.filter(f => !hide.has(f.k)).map(f => labels[f.k] ? {...f, l: labels[f.k]} : f);
+    if(s.sec && !fs.length) return;
+    if(s.f) fields.push(labels['sec:' + s.sec] ? {...s.f, sec: labels['sec:' + s.sec]} : s.f);
+    fields.push(...fs); });
+  const T = {...base, fields, name: fmt.name || base.name, sigs: (fmt.sigs && fmt.sigs.length) ? fmt.sigs.map((s, i) => ({...(base.sigs[i] || {}), role: s.role, hint: s.hint || ''})) : base.sigs};
+  if(fmt.name) T.nameFn = undefined;
+  _ttCache.set(key, T); return T;
+}
+const TT = d => buildType(d.type, d.fmt);
+const projFmt = (pid, type) => ((projById(pid) || {}).formCfg || {})[type] || null;
+
+function fmtEditor(pid, type){
+  const p = projById(pid); if(!p || !S.canEdit) return;
+  type = type || S.fmtType || 'DSR'; S.fmtType = type;
+  const base = TYPES[type], cfg = clone(projFmt(pid, type) || {}); S.fmtCfg = cfg; S.fmtPid = pid;
+  fmtEditorRender();
+}
+function fmtEditorRender(){
+  const pid = S.fmtPid, type = S.fmtType, cfg = S.fmtCfg, base = TYPES[type], p = projById(pid);
+  const T = buildType(type, Object.keys(cfg).length ? cfg : null) || base;
+  const hide = new Set(cfg.hide || []), labels = cfg.labels || {};
+  // sections in current order, including hidden ones
+  const secs = []; let cur = null;
+  base.fields.forEach(f => { if(f.sec){ cur = {sec: f.sec, fields: []}; secs.push(cur); } else if(cur && f.k && !['auto','draftbtn','calc'].includes(f.t)) cur.fields.push(f); });
+  (cfg.extra || []).forEach(e => { let s = secs.find(x => x.sec === e.sec); if(!s){ s = {sec: e.sec || 'Additional Information', fields: []}; secs.push(s); } s.fields.push({k: e.k, l: e.l, t: e.t, custom: 1}); });
+  const order = cfg.order || [];
+  secs.sort((a, b) => { const ia = order.indexOf(a.sec), ib = order.indexOf(b.sec); return (ia < 0 ? 999 + secs.indexOf(a) : ia) - (ib < 0 ? 999 + secs.indexOf(b) : ib); });
+  S.fmtSecs = secs.map(s => s.sec);
+  const sigs = cfg.sigs || base.sigs.map(s => ({role: s.role, hint: s.hint}));
+  const tl = {text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', yesno: 'Yes / No / N/A', table: 'Table'};
+  showModal(`<div class="box" style="max-width:760px"><div class="mh"><h3>⚙ Report format — ${esc(p.code)}</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0">Changes apply to <b>new</b> documents of this project only. Other projects and earlier records are not affected.</p>
+    <div class="fgrid"><div class="fld half"><label>Document</label><select id="fmtType">${TYPE_KEYS.filter(k => !TYPES[k].letter).map(k => `<option value="${k}" ${k === type ? 'selected' : ''}>${esc(TYPES[k].name)}</option>`).join('')}</select></div>
+    <div class="fld half"><label>Document title for this project</label><input id="fmtName" value="${esc(cfg.name || '')}" placeholder="${esc(base.name)}"></div></div>
+    ${secs.map((s, si) => `<div class="card" style="box-shadow:none;margin:12px 0 0"><div class="sechead" style="gap:6px;flex-wrap:wrap">
+        <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="checkbox" data-fh="sec:${esc(s.sec)}" ${hide.has('sec:' + s.sec) ? '' : 'checked'}>Section</label>
+        <input data-fl="sec:${esc(s.sec)}" value="${esc(labels['sec:' + s.sec] || '')}" placeholder="${esc(s.sec)}" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-weight:700">
+        <button class="btn sm ghost" data-act="fmtmove" data-i="${si}" data-d="-1" ${si === 0 ? 'disabled' : ''}>↑</button><button class="btn sm ghost" data-act="fmtmove" data-i="${si}" data-d="1" ${si === secs.length - 1 ? 'disabled' : ''}>↓</button></div>
+      <div style="padding:6px 12px 10px">${s.fields.map(f => `<div class="row" style="gap:8px;margin:4px 0;flex-wrap:nowrap"><input type="checkbox" data-fh="${esc(f.k)}" ${hide.has(f.k) ? '' : 'checked'} title="Show">
+        <input data-fl="${esc(f.k)}" value="${esc(labels[f.k] || '')}" placeholder="${esc(f.l)}" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:6px 8px">
+        <span class="small muted" style="white-space:nowrap">${f.custom ? `${esc(tl[f.t] || f.t)} <button class="btn sm ghost danger" data-act="fmtdel" data-k="${esc(f.k)}">✕</button>` : esc(f.t)}</span></div>`).join('')}</div></div>`).join('')}
+    <div class="card pad" style="box-shadow:none;margin-top:12px"><b>+ Add a field</b><div class="fgrid" style="margin-top:8px">
+      <div class="fld half"><label>Label</label><input id="fxL" placeholder="e.g. Noise level (dB)"></div>
+      <div class="fld half"><label>Type</label><select id="fxT">${Object.entries(tl).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+      <div class="fld half"><label>In section</label><select id="fxS">${secs.map(s => `<option>${esc(s.sec)}</option>`).join('')}<option value="__new">New section…</option></select></div>
+      <div class="fld half"><label>New section name / table columns</label><input id="fxX" placeholder="e.g. Location, Reading, Remarks (for tables)"></div>
+    </div><button class="btn sm" data-act="fmtadd">Add field</button></div>
+    <div class="card pad" style="box-shadow:none;margin-top:12px"><b>Signatures</b><div style="margin-top:8px">${sigs.map((g, i) => `<div class="row" style="gap:8px;margin:4px 0;flex-wrap:nowrap"><input data-sr="${i}" value="${esc(g.role)}" placeholder="Role e.g. Checked by" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:6px 8px"><input data-sh="${i}" value="${esc(g.hint || '')}" placeholder="Who e.g. Project Manager" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:6px 8px">${sigs.length > 1 ? `<button class="btn sm ghost danger" data-act="fmtsigdel" data-i="${i}">✕</button>` : ''}</div>`).join('')}
+      <button class="btn sm ghost" data-act="fmtsigadd">+ Add signature</button></div></div>
+  </div><div class="mf"><button class="btn ghost danger" data-act="fmtreset" style="margin-right:auto">Reset to standard</button><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="fmtsave">Save format</button></div></div>`);
+}
+// read the inputs back into S.fmtCfg
+function fmtCollect(){
+  const cfg = S.fmtCfg;
+  cfg.hide = [...document.querySelectorAll('[data-fh]')].filter(i => !i.checked).map(i => i.dataset.fh);
+  cfg.labels = {}; document.querySelectorAll('[data-fl]').forEach(i => { if(i.value.trim()) cfg.labels[i.dataset.fl] = i.value.trim(); });
+  const n = ($('#fmtName') || {}).value; if(n && n.trim()) cfg.name = n.trim(); else delete cfg.name;
+  const rs = [...document.querySelectorAll('[data-sr]')]; if(rs.length){ cfg.sigs = rs.map(i => ({role: i.value.trim() || 'Signed by', hint: ($(`[data-sh="${i.dataset.sr}"]`) || {}).value || ''})); }
+  cfg.order = S.fmtSecs.slice();
+  return cfg;
+}
+async function fmtAction(a, el){
+  const cfg = fmtCollect();
+  if(a === 'fmtmove'){ const i = +el.dataset.i, j = i + +el.dataset.d; const o = S.fmtSecs; [o[i], o[j]] = [o[j], o[i]]; cfg.order = o.slice(); fmtEditorRender(); }
+  else if(a === 'fmtadd'){ const l = $('#fxL').value.trim(); if(!l){ toast('Enter a label for the new field.', true); return; }
+    let sec = $('#fxS').value, t = $('#fxT').value, x = $('#fxX').value.trim(); if(sec === '__new') sec = x && t !== 'table' ? x : 'Additional Information';
+    (cfg.extra = cfg.extra || []).push({k: 'x_' + Date.now().toString(36), l, t, sec, cols: t === 'table' ? (x || 'Description, Remarks') : undefined}); fmtEditorRender(); }
+  else if(a === 'fmtdel'){ cfg.extra = (cfg.extra || []).filter(e => e.k !== el.dataset.k); fmtEditorRender(); }
+  else if(a === 'fmtsigadd'){ (cfg.sigs = cfg.sigs || TYPES[S.fmtType].sigs.map(s => ({role: s.role, hint: s.hint}))).push({role: 'Approved by', hint: ''}); fmtEditorRender(); }
+  else if(a === 'fmtsigdel'){ cfg.sigs.splice(+el.dataset.i, 1); fmtEditorRender(); }
+  else if(a === 'fmtreset' || a === 'fmtsave'){
+    const clean = a === 'fmtreset' ? null : (() => { const c = {...cfg}; if(!c.hide?.length) delete c.hide; if(!Object.keys(c.labels || {}).length) delete c.labels; if(!c.extra?.length) delete c.extra;
+      const base = TYPES[S.fmtType]; if(c.sigs && JSON.stringify(c.sigs) === JSON.stringify(base.sigs.map(s => ({role: s.role, hint: s.hint})))) delete c.sigs;
+      const defOrder = base.fields.filter(f => f.sec).map(f => f.sec); if(c.order && JSON.stringify(c.order.filter(s => defOrder.includes(s))) === JSON.stringify(defOrder) && !(c.extra || []).length) delete c.order;
+      return Object.keys(c).length ? c : null; })();
+    try { await S.db.doc('projects/' + S.fmtPid).update({['formCfg.' + S.fmtType]: clean});
+      const p = projById(S.fmtPid); if(p){ p.formCfg = {...(p.formCfg || {}), [S.fmtType]: clean}; }
+      closeModal(); toast(a === 'fmtreset' ? 'Back to the standard format' : 'Format saved — new ' + (clean?.name || TYPES[S.fmtType].name) + 's for this project use it'); render(); } catch(e){ dbErr(e); } }
+}
+
 TYPE_KEYS.forEach(k => { let cur = null; TYPES[k].fields.forEach(f => { if(f.sec) cur = f.when || null; else if(cur && !f.when) f.when = cur; }); });
 const shown = (f, data) => !f.when || f.when(data || {});
 // Admin can rename document types (Settings → company.typeNames). Originals kept so names can be reset.
@@ -980,16 +1096,16 @@ const projById = id => S.projects.find(p => p.id === id);
 const docById = id => S.docs.find(d => d.id === id);
 const company = () => ({...COMPANY_DEFAULT, ...S.company});
 
-function nextSigIndex(d){ const T = TYPES[d.type]; const s = d.signatures || []; for(let i=0;i<T.sigs.length;i++) if(!s[i]) return i; return -1; }
+function nextSigIndex(d){ const T = TT(d); const s = d.signatures || []; for(let i=0;i<T.sigs.length;i++) if(!s[i]) return i; return -1; }
 function statusOf(d){
-  const T = TYPES[d.type]; const n = nextSigIndex(d);
+  const T = TT(d); const n = nextSigIndex(d);
   if(n === 0) return {label:'Draft', cls:'draft', next:0};
   if(n === -1) return {label:T.done, cls:'done', next:-1};
   return {label: T.sigs[n].wait || ('Pending ' + T.sigs[n].hint.split(/ — | \/ /)[0]), full:'Awaiting: '+T.sigs[n].role+' ('+T.sigs[n].hint+')', cls:'pending', next:n};
 }
 const pill = d => { const s = statusOf(d); return `<span class="pill ${s.cls}"><span class="dot"></span>${esc(s.label)}</span>`; };
-const docDate = d => d.data?.[TYPES[d.type].dateField] || d.createdAt;
-const docTitle = d => { if(d.customTitle) return d.customTitle; try { return swapTypeName(d.type, TYPES[d.type].title(d.data || {})); } catch(e){ return TYPES[d.type].name; } };
+const docDate = d => d.data?.[TT(d).dateField] || d.createdAt;
+const docTitle = d => { if(d.customTitle) return d.customTitle; try { return swapTypeName(d.type, TT(d).title(d.data || {})); } catch(e){ return TT(d).name; } };
 const nameOf = id => (id && S.names[id]) || 'Team member';
 
 async function resolveNames(ids){
@@ -1048,6 +1164,7 @@ function render(){
       case 'edit': html = editView(); break;
       case 'register': html = registerView(); break;
       case 'settings': html = settingsView(); break;
+      case 'chat': html = chatView(); break;
       case 'team': html = teamView(); break;
       case 'files': html = filesView(v.id); break;
       default: html = homeView();
@@ -1205,7 +1322,7 @@ function projectView(id, tab){
   </div>
   ${folders}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a sub-contractor report made with the Sadhana template">⇪ Import sub-contractor report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${TYPES[k].name}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a sub-contractor report made with the Sadhana template">⇪ Import sub-contractor report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${esc(projFmt(id, k)?.name || TYPES[k].name)}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -1256,9 +1373,9 @@ async function makeIsoPack(btn){
     for(const j of jobs){
       const p = projById(j.d.projectId) || {}, r = pdfCache[j.d.id];
       const stName = ISO_STDS.find(x => x.k === j.st).name;
-      const path = `${root}/${safeName(stName)}/${safeName(j.clause + ' - ' + TYPES[j.d.type].name)}/${safeName(p.code)}/${r ? r.name : safeName(j.d.number) + '.pdf'}`;
+      const path = `${root}/${safeName(stName)}/${safeName(j.clause + ' - ' + TT(j.d).name)}/${safeName(p.code)}/${r ? r.name : safeName(j.d.number) + '.pdf'}`;
       if(r) zip.file(path, r.blob);
-      index.push([stName, j.clause, TYPES[j.d.type].name, p.code || '', j.d.number, fmtDate(docDate(j.d)), statusOf(j.d).label, (j.d.signatures || []).map(g => g.name).join(', '), r ? path.slice(root.length + 1) : 'PDF could not be created']);
+      index.push([stName, j.clause, TT(j.d).name, p.code || '', j.d.number, fmtDate(docDate(j.d)), statusOf(j.d).label, (j.d.signatures || []).map(g => g.name).join(', '), r ? path.slice(root.length + 1) : 'PDF could not be created']);
     }
     let fileCount = 0;
     if(withFiles){
@@ -1340,9 +1457,11 @@ async function importSubconDocx(file, pid){
   const txt = el => [...el.getElementsByTagName('w:p')].map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim();
   const body = doc.getElementsByTagName('w:body')[0];
   const blocks = [...body.children].filter(e => e.tagName === 'w:p' || e.tagName === 'w:tbl');
-  if(!code){ const title = blocks.filter(b => b.tagName === 'w:p').map(txt).find(t => t && TYPE_KEYS.some(k => t.toUpperCase().includes(TYPE_ORIG[k].name.toUpperCase()))) || ''; code = TYPE_KEYS.find(k => title.toUpperCase().includes(TYPE_ORIG[k].name.toUpperCase())) || ''; }
-  if(!code || !TYPES[code] || TYPES[code].letter) throw new Error('Could not recognise the form. Please use the Sadhana sub-contractor template without changing it.');
-  const T = TYPES[code], draft = newDraft(pid, code), x = draft.data;
+  if(!code){ const names = k => [TYPE_ORIG[k].name, TYPES[k].name, ...(k === 'TBT' ? ['SAFETY INDUCTION', 'TOOLBOX'] : []), ...(k === 'PR' ? ['PROGRESS REPORT'] : []), ...(k === 'DSR' ? ['DAILY REPORT', 'SITE DIARY'] : [])].map(n => n.toUpperCase());
+    const heads = [...doc.getElementsByTagName('w:p')].slice(0, 60).map(txt).filter(Boolean).map(t => t.toUpperCase());
+    for(const t of heads){ code = TYPE_KEYS.filter(k => !TYPES[k].letter).find(k => names(k).some(n => t.includes(n))) || ''; if(code) break; } }
+  if(!code || !TYPES[code] || TYPES[code].letter) throw new Error('Could not recognise this file as one of our forms. Please use a form from “📄 Sub-contractor forms” — the sub-contractor fills it in without changing the layout.');
+  const draft = newDraft(pid, code), T = TT(draft), x = draft.data;
   if(code === 'PR' && variant) x.period = variant.charAt(0) + variant.slice(1).toLowerCase();
   const rels = await xml('word/_rels/document.xml.rels'); const relMap = {};
   if(rels) [...rels.getElementsByTagName('Relationship')].forEach(r => relMap[r.getAttribute('Id')] = r.getAttribute('Target'));
@@ -1463,7 +1582,7 @@ async function scAction(act, el){
 const sigReqOf = d => ((projById(d.projectId) || {}).sigReq || {})[d.id] || null;
 const appLink = d => location.origin + location.pathname + '#doc=' + d.id + '&p=' + d.projectId;
 function askSignForm(id){
-  const d = docById(id); if(!d) return; const T = TYPES[d.type], st = statusOf(d), slot = T.sigs[st.next];
+  const d = docById(id); if(!d) return; const T = TT(d), st = statusOf(d), slot = T.sigs[st.next];
   const people = (S.users || []).filter(u => (u.role === 'staff' || u.role === 'admin') && u.id !== S.me).sort((a, b) => String(a.name).localeCompare(String(b.name)));
   showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Ask someone to sign</h3></div><div class="mb"><div class="fgrid">
     <div class="fld"><label>Signature needed</label><div class="autobox"><span>${esc(slot.role)} — ${esc(slot.hint)}</span></div></div>
@@ -1474,13 +1593,13 @@ function askSignForm(id){
 }
 async function askSignSend(btn){
   const d = docById(btn.dataset.id); if(!d) return; const who = $('#askWho').value; if(!who){ toast('Choose who should sign.', true); return; }
-  const T = TYPES[d.type], st = statusOf(d), u = (S.users || []).find(x => x.id === who) || {};
+  const T = TT(d), st = statusOf(d), u = (S.users || []).find(x => x.id === who) || {};
   const req = {to: who, toName: u.name || u.email || '', from: S.me, fromName: S.names[S.me] || '', slot: st.next, role: T.sigs[st.next].role, note: $('#askNote').value.trim(), at: new Date().toISOString()};
   btn.disabled = true;
   try {
     await S.db.doc('projects/' + d.projectId).update({['sigReq.' + d.id]: req});
     const p = projById(d.projectId); if(p){ p.sigReq = {...(p.sigReq || {}), [d.id]: req}; }
-    const msg = `Hi ${req.toName}, please sign (${req.role}) the ${TYPES[d.type].name} ${d.number}${p ? ' for ' + p.code : ''}.${req.note ? '\n' + req.note : ''}\n${appLink(d)}`;
+    const msg = `Hi ${req.toName}, please sign (${req.role}) the ${TT(d).name} ${d.number}${p ? ' for ' + p.code : ''}.${req.note ? '\n' + req.note : ''}\n${appLink(d)}`;
     showModal(`<div class="box" style="max-width:460px"><div class="mh"><h3>Request sent ✓</h3></div><div class="mb"><p style="margin-top:0">${esc(req.toName)} will see it on their home screen.</p>
       <textarea id="waText" style="width:100%;min-height:110px">${esc(msg)}</textarea></div>
       <div class="mf"><button class="btn ghost" data-act="closemodal">Done</button><button class="btn pri" data-act="wasend" style="background:#25D366;border-color:#25D366">Send WhatsApp reminder</button></div></div>`);
@@ -1506,7 +1625,7 @@ function presentDoc(id){
   document.body.appendChild(ov); document.body.style.overflow = 'hidden';
   try { ov.requestFullscreen && ov.requestFullscreen().catch(() => {}); } catch(e){}
 }
-function presentSigs(d){ const T = TYPES[d.type], sigs = d.signatures || [];
+function presentSigs(d){ const T = TT(d), sigs = d.signatures || [];
   return `<div style="display:grid;grid-template-columns:repeat(${Math.min(T.sigs.length, 4)},minmax(0,1fr));gap:10px">${T.sigs.map((s, i) => { const g = sigs[i];
     return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center"><div class="small muted" style="text-transform:uppercase;letter-spacing:.05em">${esc(s.role)}</div>${g ? `<img src="${esc(g.img)}" alt="" style="max-height:56px;max-width:100%"><div><b>${esc(g.name)}</b></div><div class="small muted">${esc(g.designation || '')} · ${fmtDT(g.at)}</div>` : '<div class="muted small" style="padding:20px 0">Pending</div>'}</div>`; }).join('')}</div>`; }
 function presentProject(pid){
@@ -1533,6 +1652,49 @@ function presentProject(pid){
   try { ov.requestFullscreen && ov.requestFullscreen().catch(() => {}); } catch(e){}
 }
 function closePresent(){ document.querySelectorAll('.present').forEach(x => x.remove()); document.body.style.overflow = ''; try { if(document.fullscreenElement) document.exitFullscreen(); } catch(e){} }
+/* ---------- Feedback chat: staff report errors and suggestions ----------
+   Messages are small records (kind: 'chat') kept with the app's other shared records. */
+S.chat = [];
+const CHAT_KINDS = {err: {l: 'Error', c: '#b3261e', i: '🐞'}, idea: {l: 'Suggestion', c: '#2e7a4c', i: '💡'}, q: {l: 'Question', c: '#0d2b63', i: '❓'}, msg: {l: 'Message', c: '#5b6470', i: '💬'}};
+const CHAT_STATUS = ['New', 'Noted', 'In progress', 'Done'];
+const chatUnread = () => { let seen = ''; try { seen = localStorage.getItem('sde-chat-seen') || ''; } catch(e){} return S.chat.filter(m => !m.hidden && m.at > seen && m.by !== S.me).length; };
+function chatView(){
+  const f = S.chatFilter || 'all';
+  const list = S.chat.filter(m => !m.hidden && (f === 'all' || (f === 'open' ? m.kind !== 'msg' && m.status !== 'Done' : m.kind === f))).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  try { localStorage.setItem('sde-chat-seen', new Date().toISOString()); } catch(e){}
+  setTimeout(() => { const b = $('#chatlist'); if(b) b.scrollTop = b.scrollHeight; updateChatBadge(); }, 0);
+  const byId = id => S.chat.find(m => m.id === id);
+  return `<div class="pagehead"><div><div class="eyebrow">Help us improve the app</div><h1>Feedback chat</h1></div></div>
+  <div class="tabs">${[['all', 'All'], ['open', 'Open issues'], ['err', '🐞 Errors'], ['idea', '💡 Suggestions'], ['q', '❓ Questions']].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="chatf" data-f="${k}">${l}</button>`).join('')}</div>
+  <div class="card chatbox"><div id="chatlist" class="chatlist">${list.length ? list.map(m => { const K = CHAT_KINDS[m.kind] || CHAT_KINDS.msg, mine = m.by === S.me, re = m.replyTo && byId(m.replyTo);
+    return `<div class="cmsg ${mine ? 'mine' : ''}"><div class="cmeta"><b>${esc(m.name || '')}</b> · ${fmtDT(m.at)}${m.kind !== 'msg' ? ` · <span style="color:${K.c};font-weight:700">${K.i} ${K.l}</span>` : ''}${m.kind !== 'msg' ? ` · <span class="pill ${m.status === 'Done' ? 'done' : m.status === 'New' ? 'pending' : 'draft'}">${esc(m.status || 'New')}</span>` : ''}</div>
+      ${re ? `<div class="cquote">↪ ${esc(re.name || '')}: ${esc(String(re.text || '').slice(0, 90))}</div>` : ''}
+      <div class="ctext">${esc(m.text || '')}</div>${m.where ? `<div class="small muted">Page: ${esc(m.where)}</div>` : ''}
+      ${(m.photos || []).length ? `<div class="dphotos" style="margin-top:6px">${m.photos.map(ph => `<figure><img ${photoAttr(ph)} data-act="zoom" data-zid="${esc(ph)}" alt=""></figure>`).join('')}</div>` : ''}
+      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${S.canEdit && m.kind !== 'msg' ? `<select data-chatst="${esc(m.id)}">${CHAT_STATUS.map(s => `<option ${s === (m.status || 'New') ? 'selected' : ''}>${s}</option>`).join('')}</select>` : ''}${(S.canEdit || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
+  <div class="ccompose">${S.chatReply && byId(S.chatReply) ? `<div class="cquote">Replying to ${esc(byId(S.chatReply).name)} <button class="btn sm ghost" data-act="chatreply" data-id="">✕</button></div>` : ''}
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.entries(CHAT_KINDS).map(([k, K]) => `<button class="btn sm ${(S.chatKind || 'err') === k ? 'pri' : 'ghost'}" data-act="chatkind" data-k="${k}">${K.i} ${K.l}</button>`).join('')}</div>
+    <div class="dict"><textarea id="chatText" placeholder="Describe the error or suggestion — what you were doing, which page, what happened…" style="min-height:70px">${esc(S.chatDraft || '')}</textarea>${micBtn('chatText')}</div>
+    <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><label class="btn sm" style="margin:0">📷 Add screenshot / photo<input type="file" accept="image/*" multiple hidden id="chatPh"></label><span class="small muted" id="chatPhN">${(S.chatPhotos || []).length ? (S.chatPhotos.length + ' photo(s) attached') : ''}</span><div class="sp"></div><button class="btn pri" data-act="chatsend">Send</button></div></div></div>`;
+}
+async function chatSend(btn){
+  const text = $('#chatText').value.trim(); if(!text && !(S.chatPhotos || []).length){ toast('Write a message first.', true); return; }
+  btn.disabled = true;
+  try {
+    const id = 'chat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), kind = S.chatKind || 'err';
+    const m = {kind: 'chat', ck: kind, text: polishText ? text : text, by: S.me, name: S.names[S.me] || '', at: new Date().toISOString(), status: kind === 'msg' ? '' : 'New', photos: S.chatPhotos || [], replyTo: S.chatReply || '', where: S.chatWhere || ''};
+    await S.db.doc('counters/' + id).set(m);
+    S.chatDraft = ''; S.chatPhotos = []; S.chatReply = ''; S.chatWhere = '';
+    toast('Sent — thank you!'); render();
+  } catch(e){ btn.disabled = false; dbErr(e); }
+}
+function updateChatBadge(){ const n = chatUnread(); document.querySelectorAll('[data-v=chat]').forEach(b => { b.dataset.badge = n ? String(n) : ''; }); }
+function startChat(db){
+  return db.collection('counters').where('kind', '==', 'chat').onSnapshot(s => {
+    S.chat = s.docs.filter(x => x.data().kind === 'chat').map(x => { const d = x.data(); return {id: x.id, ...d, kind: d.ck || 'msg'}; });
+    updateChatBadge(); if(S.view.name === 'chat') softRender();
+  }, e => console.warn('chat', e));
+}
 function registerView(){
   const rows = [...S.docs].filter(d => projById(d.projectId)).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return `<div class="pagehead"><div><div class="eyebrow">All projects</div><h1>Document register</h1></div><div class="sp"></div>${S.dl?'<button class="btn pri" data-act="isopack">📦 ISO audit pack</button><button class="btn" data-act="csv">Export CSV</button>':''}</div>
@@ -1564,7 +1726,7 @@ async function exportCSV(){
   const lines = [['Doc no.','Type','Title','Project code','Project','Date','Status','Prepared by','Created'].map(q).join(',')];
   [...S.docs].filter(d=>projById(d.projectId)).sort((a,b)=>String(a.number).localeCompare(String(b.number))).forEach(d => {
     const p = projById(d.projectId);
-    lines.push([d.number, TYPES[d.type].name, docTitle(d), p.code, p.name, docDate(d), statusOf(d).label, d.signatures?.[0]?.name||'', d.createdAt].map(q).join(','));
+    lines.push([d.number, TT(d).name, docTitle(d), p.code, p.name, docDate(d), statusOf(d).label, d.signatures?.[0]?.name||'', d.createdAt].map(q).join(','));
   });
   try { await S.dl.save({filename:'Sadhana-document-register-'+today()+'.csv', data:'﻿'+lines.join('\r\n')}); }
   catch(e){ if(e?.code !== 'declined') toast('Could not save the file.', true); }
@@ -1591,7 +1753,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (X) · forms, sign requests, present</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Y) · project formats + feedback chat</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -1616,10 +1778,10 @@ function valueText(f, v){
 function cleanRows(f, rows){ return (rows||[]).filter(r => f.cols.some(c => !isEmpty(r?.[c.k]))); }
 // fill in calculated columns (e.g. value = weight x rate)
 function autoValue(f, d){ try { return f.calc(d.data || {}, d, projById(d.projectId) || {}) ?? ''; } catch(e){ return ''; } }
-function withAutos(d){ const T = TYPES[d.type], out = {...(d.data || {})}; T.fields.forEach(f => { if(f.t === 'auto') out[f.k] = autoValue(f, {...d, data: out}); }); return out; }
+function withAutos(d){ const T = TT(d), out = {...(d.data || {})}; T.fields.forEach(f => { if(f.t === 'auto') out[f.k] = autoValue(f, {...d, data: out}); }); return out; }
 // recompute every automatic value in the open form
 function refreshAutos(){
-  const d = S.draft; if(!d) return; const T = TYPES[d.type];
+  const d = S.draft; if(!d) return; const T = TT(d);
   T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc || c.mul)) (d.data[f.k] || []).forEach(r => calcRow(f, r)); });
   T.fields.forEach(f => { if(f.t === 'auto'){ d.data[f.k] = autoValue(f, d); const el = document.querySelector(`[data-auto="${f.k}"]`); if(el) el.textContent = d.data[f.k] || '—'; } });
   document.querySelectorAll('[data-calc]').forEach(o => { const r = (d.data[o.dataset.calc] || [])[+o.dataset.row]; if(r) o.value = r[o.dataset.col] || ''; });
@@ -1785,8 +1947,8 @@ function salvageSummary(data){
     return [label, String(rows.length), rows.reduce((a, r) => a + (parseFloat(String(r.kg || '').replace(/,/g, '')) || 0), 0).toLocaleString('en-MY')]; });
 }
 function docBodyHTML(d){
-  if(TYPES[d.type].letter) return letterHTML(d);
-  const T = TYPES[d.type], data = withAutos(d);
+  if(TT(d).letter) return letterHTML(d);
+  const T = TT(d), data = withAutos(d);
   const st = statusOf(d);
   const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase==='response' && !isEmpty(data[f.k]));
   let out = '', kv = [];
@@ -1922,7 +2084,7 @@ async function letterPdf(d){
   return {blob: doc.output('blob'), name};
 }
 function letterheadHTML(d){
-  const c = company(), T = TYPES[d.type];
+  const c = company(), T = TT(d);
   if(T.letter) return `<img ${c.letterheadId ? photoAttr(c.letterheadId) : `src="${LETTERHEAD_JPG}"`} alt="${esc(c.name)}" style="width:100%;display:block;margin-bottom:10px">`;
   return `<img ${c.letterheadId ? photoAttr(c.letterheadId) : `src="${LETTERHEAD_JPG}"`} alt="${esc(c.name)}" style="width:100%;display:block;margin-bottom:10px">
     <div style="text-align:center;margin:6px 0 4px"><div style="font:800 17px Archivo;text-transform:uppercase">${esc(docName(T, d.data))}</div><div class="mono small" style="color:var(--hazard-d)">${esc(d.number)}</div></div>`;
@@ -1934,7 +2096,7 @@ function docView(id){
   const d = docById(id);
   if(d){ S.lastCat = S.lastCat || {}; S.lastCat[d.projectId] = catOfType(d.type).k; }
   if(!d) return `<div class="card empty">Document not found — it may have been deleted. <button class="btn sm" data-act="nav" data-v="home">Back</button></div>`;
-  const T = TYPES[d.type], p = projById(d.projectId) || {}, st = statusOf(d), sigs = d.signatures || [];
+  const T = TT(d), p = projById(d.projectId) || {}, st = statusOf(d), sigs = d.signatures || [];
   const needResp = st.next >= 0 && T.sigs[st.next].needsResponse;
   const respFilled = T.fields.filter(f => f.phase==='response' && f.req).every(f => !isEmpty(d.data?.[f.k]));
   const cols = Math.min(T.sigs.length, 4);
@@ -1980,7 +2142,7 @@ function docView(id){
 
 /* ---------- EDITOR ---------- */
 function newDraft(pid, type){
-  const T = TYPES[type], data = {};
+  const fmt0 = projFmt(pid, type), T = buildType(type, fmt0), data = {};
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
   const prevOf = t => S.docs.filter(x => x.type === t && x.projectId === pid).sort((a, b) => (b.seq || 0) - (a.seq || 0));
   if(type === 'PR' || type === 'SW'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
@@ -2003,7 +2165,7 @@ function newDraft(pid, type){
   if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); } data.to = addDays(data.from, 6); }
   T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
   if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); if(u <= n) u.setTime(n.getTime() + 8 * 3600000); data.until = iso(u); }
-  return {projectId:pid, type, data, signatures:[]};
+  return {projectId:pid, type, data, signatures:[], ...(fmt0 ? {fmt: clone(fmt0)} : {})};
 }
 const MIC_SMALL = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg>';
 function micBtn(k){ return (!S.sample && SR) ? `<button type="button" class="fmic" data-act="dictate" data-k="${k}" aria-label="Speak into this box">${MIC_SMALL}</button>` : ''; }
@@ -2104,7 +2266,7 @@ function stopDictation(){
 function startDictation(k, btn){
   if(DICT.k === k){ stopDictation(); return; }
   stopDictation();
-  const el = document.querySelector(`[data-f="${k}"]`); if(!el) return;
+  const el = document.querySelector(`[data-f="${k}"]`) || document.getElementById(k); if(!el) return;
   let rec; try { rec = new SR(); } catch(e){ toast('Voice typing isn\'t supported in this browser — use Chrome.', true); return; }
   rec.lang = 'en-MY'; rec.continuous = true; rec.interimResults = true;
   const base = el.value.replace(/\s+$/,''); let finals = '';
@@ -2114,10 +2276,10 @@ function startDictation(k, btn){
     for(let i = ev.resultIndex; i < ev.results.length; i++){ const r = ev.results[i]; if(r.isFinal) finals += r[0].transcript.trim() + ' '; else interim += r[0].transcript; }
     const said = cap((polishText(finals) + ' ' + interim).replace(/[ \t]+/g,' ').trim());
     el.value = base + (said ? sep + said : '');
-    S.draft.data[k] = el.value; S.dirty = true; el.closest('.fld')?.classList.remove('err');
+    if(S.draft && el.dataset.f){ S.draft.data[k] = el.value; S.dirty = true; } el.closest('.fld')?.classList.remove('err');
   };
   const sep = !base ? '' : (el.tagName === 'TEXTAREA' ? '\n' : (/[.!?,]$/.test(base) ? ' ' : '. '));
-  DICT.fin = () => { const said = polishText(finals); el.value = base + (said ? sep + (el.tagName === 'TEXTAREA' ? said : said.replace(/\n/g, ' ')) : ''); if(S.draft){ S.draft.data[k] = el.value; } if(typeof refreshAutos === 'function') refreshAutos(); };
+  DICT.fin = () => { const said = polishText(finals); el.value = base + (said ? sep + (el.tagName === 'TEXTAREA' ? said : said.replace(/\n/g, ' ')) : ''); if(S.draft && el.dataset.f){ S.draft.data[k] = el.value; if(typeof refreshAutos === 'function') refreshAutos(); } };
   rec.onerror = ev => {
     if(['not-allowed','service-not-allowed','audio-capture'].includes(ev.error)){ toast('Microphone is blocked — tap the icon beside the web address → Permissions → allow Microphone.', true); stopDictation(); }
     else if(ev.error !== 'no-speech' && ev.error !== 'aborted'){ toast('Voice stopped (' + ev.error + ').', true); stopDictation(); }
@@ -2158,7 +2320,7 @@ function fieldInput(f, v){
 function editView(){
   const d = S.draft; if(!d) return '';
   if(S.fixDoc !== d){ S.fixUndo = {}; S.fixDoc = d; }
-  const T = TYPES[d.type], p = projById(d.projectId) || {}, resp = S.respMode;
+  const T = TT(d), p = projById(d.projectId) || {}, resp = S.respMode;
   let html = '', open = false;
   const fields = T.fields.filter(f => f.t !== 'calc' && (resp ? f.phase === 'response' : f.phase !== 'response'));
   for(const f of fields){
@@ -2185,7 +2347,7 @@ function editView(){
   </div></div>`;
 }
 function missingRequired(d, phase){
-  const T = TYPES[d.type];
+  const T = TT(d);
   return T.fields.filter(f => f.k && f.req && (phase==='response' ? f.phase==='response' : f.phase!=='response'))
     .filter(f => shown(f, d.data))
     .filter(f => f.t==='table' ? !cleanRows(f, d.data[f.k]).length : isEmpty(d.data[f.k]));
@@ -2201,7 +2363,7 @@ async function saveDraft(){
   const d = S.draft; const now = new Date().toISOString();
   if(Object.values(S.uploads).some(n=>n>0)) { toast('Wait for photos to finish uploading.', true); return false; }
   // tidy empty table rows
-  const T = TYPES[d.type];
+  const T = TT(d);
   const data = clone(d.data);
   T.fields.forEach(f => { if(f.t==='table'){ const r = cleanRows(f, data[f.k]); r.forEach(x => calcRow(f, x)); data[f.k] = r; } });
   if(d.type === 'LTR'){ if(!data.subject) data.subject = ltrSubject(data); if(!String(data.body || '').trim()) data.body = draftLetter({...d, data});
@@ -2219,13 +2381,13 @@ async function saveDraft(){
     const cur = await S.db.doc('docs/'+d.id).get();
     if(cur.exists && (cur.data().signatures||[]).some(Boolean)){ toast('This document has already been signed and is locked.', true); go('doc',{id:d.id}); return false; }
   }
-  const body = {projectId:d.projectId, type:d.type, seq:d.seq, number:d.number, data, signatures:[], createdBy:d.createdBy, createdAt:d.createdAt, updatedAt:now, updatedBy:S.me||null};
+  const body = {projectId:d.projectId, type:d.type, seq:d.seq, number:d.number, data, signatures:[], createdBy:d.createdBy, createdAt:d.createdAt, updatedAt:now, updatedBy:S.me||null, ...(d.fmt ? {fmt: d.fmt} : {})};
   await S.db.doc('docs/'+d.id).set(body);
   S.dirty = false;
   return true;
 }
 async function saveResponse(){
-  const d = S.draft, T = TYPES[d.type];
+  const d = S.draft, T = TT(d);
   const miss = missingRequired(d, 'response'); if(miss.length){ flagMissing(miss); return; }
   const upd = {}; T.fields.filter(f => f.phase==='response' && f.k).forEach(f => upd['data.'+f.k] = d.data[f.k] ?? '');
   try { await S.db.doc('docs/'+d.id).update({...upd, updatedAt:new Date().toISOString(), updatedBy:S.me||null}); S.dirty=false; toast('Saved'); go('doc',{id:d.id}); }
@@ -2247,7 +2409,7 @@ function fillFromDailyReports(){
   const idx = ds => Math.round((new Date(ds + 'T00:00:00') - new Date(data.from + 'T00:00:00')) / 86400000);
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if(d.type === 'PR') data.weather = dsr.map(x => ({date: fmtDate(x.data.date), am: x.data.weatherAM || '', pm: x.data.weatherPM || '', rain: x.data.rainHours || '', remarks: ''}));
-  const maxD = (TYPES[d.type].fields.find(f => f.k === 'manpower')?.maxDays) || 7;
+  const maxD = (TT(d).fields.find(f => f.k === 'manpower')?.maxDays) || 7;
   const merge = (key, srcKey, nameKey) => {
     const rows = (data[key] || []).filter(r => r && !isEmpty(r.name)).map(r => { const o = {name: r.name}; for(let i = 0; i < maxD; i++) o['d' + i] = ''; return o; });
     dsr.forEach(x => { const di = idx(x.data.date); if(di < 0 || di >= maxD) return;
@@ -2287,7 +2449,7 @@ async function uploadPhotos(k, files){
 }
 function rerenderEditorField(k){
   if(S.view.name !== 'edit') return;
-  const T = TYPES[S.draft.type], f = T.fields.find(x => x.k === k), el = $('#fld_'+k);
+  const T = TT(S.draft), f = T.fields.find(x => x.k === k), el = $('#fld_'+k);
   if(!f || !el) return;
   el.innerHTML = `<label>${esc(f.l)}${f.req?' <em>*</em>':''}</label>${fieldInput(f, S.draft.data[k])}${f.hint?`<div class="hint">${esc(f.hint)}</div>`:''}`;
 }
@@ -2295,7 +2457,7 @@ function rerenderEditorField(k){
 /* ---------- signatures ---------- */
 function openSign(docId, idx){
   const d = docById(docId) || (S.draft && S.draft.id===docId ? S.draft : null); if(!d) return;
-  const T = TYPES[d.type], slot = T.sigs[idx];
+  const T = TT(d), slot = T.sigs[idx];
   const myName = S.names[S.me] || '';
   showModal(`<div class="box"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>${esc(slot.role)}</h3></div></div>
     <div class="mb">
@@ -2342,7 +2504,7 @@ async function doSign(docId, idx){
   try {
     const ref = S.db.doc('docs/'+docId); const snap = await ref.get();
     if(!snap.exists) throw {code:'gone'};
-    const cur = snap.data(), T = TYPES[cur.type];
+    const cur = snap.data(), T = TT(cur);
     const sigs = [...(cur.signatures || [])];
     if(sigs[idx]){ closeModal(); toast('Someone has already signed this slot.', true); return; }
     for(let i=0;i<idx;i++) if(!sigs[i]){ closeModal(); toast('Earlier signatures are still missing.', true); return; }
@@ -2387,8 +2549,8 @@ async function makePDF(id, opt){
   if(!S.dl && !opt.blob){ toast('Downloads aren\'t available in this view.', true); return; }
   const btn = opt.blob ? null : document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
-    if(TYPES[d.type].letter){ const r = await letterPdf(d); if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
-    const T = TYPES[d.type], p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
+    if(TT(d).letter){ const r = await letterPdf(d); if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
+    const T = TT(d), p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
     const {jsPDF} = window.jspdf; const doc = new jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'});
     Object.assign(HS, T.landscape ? {W:297, H:210, CW:257, BOTTOM:190} : {W:210, H:297, CW:170, BOTTOM:277});
     const {L, CW, TOP, BOTTOM} = HS;
@@ -2654,7 +2816,7 @@ function aiErr(e){
   toast('The assistant could not finish — please try again.', true);
 }
 function editableFields(){
-  const T = TYPES[S.draft.type];
+  const T = TT(S.draft);
   return T.fields.filter(f => f.k && f.t !== 'photos' && (S.respMode ? f.phase === 'response' : f.phase !== 'response'));
 }
 function coerceVal(f, v){
@@ -2782,7 +2944,7 @@ function syncVoiceBtn(force){
   b.classList.toggle('send', has); b.innerHTML = has ? SEND_SVG : MIC_SVG; b.setAttribute('aria-label', has ? 'Fill in form' : 'Speak');
 }
 function renderVoice(){
-  const V = S.voice, T = TYPES[S.draft.type];
+  const V = S.voice, T = TT(S.draft);
   let body;
   if(V.busy){
     body = `<div class="loading" style="min-height:180px"><div><div class="spin"></div>Understanding your note and writing it in proper English…</div></div>`;
@@ -2812,7 +2974,7 @@ async function runVoice(){
   const schema = fl.map(f => { const o = {key:f.k, label:f.l, type:f.t}; if(f.o) o.options = f.o; if(f.cols) o.columns = f.cols.map(c => ({key:c.k, label:c.l})); return o; });
   const cur = {}; fl.forEach(f => cur[f.k] = S.draft.data[f.k] ?? '');
   const p = projById(S.draft.projectId) || {};
-  const prompt = AI_CONTEXT + '\nThey are filling in a "' + TYPES[S.draft.type].name + '" for the project "' + (p.name || '') + '". Today is ' + today() + ' (current time ' + new Date().toTimeString().slice(0,5) + ').\n\n' + LANG_RULES + `
+  const prompt = AI_CONTEXT + '\nThey are filling in a "' + TT(S.draft).name + '" for the project "' + (p.name || '') + '". Today is ' + today() + ' (current time ' + new Date().toTimeString().slice(0,5) + ').\n\n' + LANG_RULES + `
 
 IMPORTANT: The report format is fixed and must never change. You may only change the CONTENT written inside the existing fields listed below. You cannot add, remove, rename or reorder fields, sections, headings or table columns, and you cannot change layout, fonts, styling, the letterhead, document number, signatures or photos. Do not use Markdown (no **bold**, # headings or tables) inside values. If the note asks for any of these format changes, ignore that part and explain in "unclear" that the report format cannot be changed by voice. In tables, the standard rows already in the form (e.g. trades and equipment) must stay with their names unchanged; to show something is not on site, clear its numbers instead of removing the row.
 
@@ -2851,7 +3013,7 @@ function applyVoice(){
   closeModal(); render(); toast(`${n} field${n>1?'s':''} updated — please check before signing`);
 }
 async function fixField(k, btn){
-  const T = TYPES[S.draft.type], f = T.fields.find(x => x.k === k), v = (S.draft.data[k] || '').trim();
+  const T = TT(S.draft), f = T.fields.find(x => x.k === k), v = (S.draft.data[k] || '').trim();
   if(!v){ toast('Nothing to correct yet.', true); return; }
   btn.disabled = true; btn.textContent = '✨ Fixing…';
   try {
@@ -2868,7 +3030,7 @@ async function fixAll(){
   const cur = {}; fl.forEach(f => cur[f.k] = f.t === 'table' ? cleanRows(f, S.draft.data[f.k]) : S.draft.data[f.k]);
   const V = S.voice; V.busy = true; V.ctl = new AbortController(); renderVoice();
   try {
-    const r = await S.sample.json(AI_CONTEXT + '\n' + LANG_RULES + '\n\nBelow are the current values of a ' + TYPES[S.draft.type].name + ' form as JSON (tables are arrays of row objects). Correct every text value into proper English (translating any Malay), keeping meaning, numbers, names and structure exactly the same. Change wording only: do not add, remove or reorder fields or table rows, and do not use Markdown. Leave values that are already correct unchanged, and do not change numeric quantities or table keys.\n\n' + JSON.stringify(cur) + '\n\nReply with only a JSON object containing ONLY the keys whose value you changed, each with its full corrected value.', {signal: V.ctl.signal, cache:false});
+    const r = await S.sample.json(AI_CONTEXT + '\n' + LANG_RULES + '\n\nBelow are the current values of a ' + TT(S.draft).name + ' form as JSON (tables are arrays of row objects). Correct every text value into proper English (translating any Malay), keeping meaning, numbers, names and structure exactly the same. Change wording only: do not add, remove or reorder fields or table rows, and do not use Markdown. Leave values that are already correct unchanged, and do not change numeric quantities or table keys.\n\n' + JSON.stringify(cur) + '\n\nReply with only a JSON object containing ONLY the keys whose value you changed, each with its full corrected value.', {signal: V.ctl.signal, cache:false});
     const changes = {}, summary = [];
     for(const [k, v] of Object.entries(r || {})){ const f = fl.find(x => x.k === k); if(!f) continue; const c = guardValue(f, coerceVal(f, v), S.draft.data[k]); if(c !== undefined && JSON.stringify(c) !== JSON.stringify(cur[k])){ changes[k] = c; summary.push('Corrected English in "' + f.l + '"'); } }
     V.result = {changes, summary: summary.length ? summary : ['Everything already reads well — no corrections needed.'], unclear:''};
@@ -2898,8 +3060,8 @@ document.addEventListener('click', async e => {
     case 'saveproj': saveProject(id); break;
     case 'new': S.draft = newDraft(el.dataset.p, el.dataset.t); S.respMode = false; go('edit'); break;
     case 'edit': { const d = docById(id); if(!d) return; if(nextSigIndex(d)!==0){ toast('Signed documents are locked.', true); return; } S.draft = clone(d); S.respMode = false; go('edit'); break; }
-    case 'respond': { const d = docById(id); if(!d) return; S.draft = clone(d); const T = TYPES[d.type]; T.fields.forEach(f => { if(f.phase==='response' && f.k && isEmpty(S.draft.data[f.k]) && f.def) S.draft.data[f.k] = typeof f.def==='function'?f.def():f.def; }); if(d.type==='PTW' && !S.draft.data.closeTime){ const n=new Date(); S.draft.data.closeTime = n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate())+'T'+pad2(n.getHours())+':'+pad2(n.getMinutes()); } S.respMode = true; go('edit'); break; }
-    case 'dup': { const d = docById(id); if(!d) return; const nd = newDraft(d.projectId, d.type); const T = TYPES[d.type];
+    case 'respond': { const d = docById(id); if(!d) return; S.draft = clone(d); const T = TT(d); T.fields.forEach(f => { if(f.phase==='response' && f.k && isEmpty(S.draft.data[f.k]) && f.def) S.draft.data[f.k] = typeof f.def==='function'?f.def():f.def; }); if(d.type==='PTW' && !S.draft.data.closeTime){ const n=new Date(); S.draft.data.closeTime = n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate())+'T'+pad2(n.getHours())+':'+pad2(n.getMinutes()); } S.respMode = true; go('edit'); break; }
+    case 'dup': { const d = docById(id); if(!d) return; const nd = newDraft(d.projectId, d.type); const T = TT(d);
       T.fields.forEach(f => { if(f.k && f.phase!=='response' && f.t!=='photos' && f.t!=='date' && f.t!=='datetime') nd.data[f.k] = clone(d.data?.[f.k] ?? nd.data[f.k]); });
       S.draft = nd; S.respMode = false; S.view = {name:'edit'}; S.dirty = true; render(); window.scrollTo(0,0); toast('Copied into a new draft — check dates & details'); break; }
     case 'addrow': { const k = el.dataset.k; (S.draft.data[k] = S.draft.data[k] || []).push({}); S.dirty = true; rerenderEditorField(k); document.querySelector(`#fld_${k} tbody tr:last-child input`)?.focus(); break; }
@@ -2923,6 +3085,14 @@ document.addEventListener('click', async e => {
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
     case 'typenames': typeNamesForm(); break;
+    case 'chatsend': S.chatDraft = $('#chatText').value; chatSend(el); break;
+    case 'chatkind': S.chatKind = el.dataset.k; S.chatDraft = $('#chatText').value; render(); break;
+    case 'chatf': S.chatFilter = el.dataset.f; render(); break;
+    case 'chatreply': S.chatReply = el.dataset.id; S.chatDraft = ($('#chatText') || {}).value || ''; render(); setTimeout(() => $('#chatText')?.focus(), 50); break;
+    case 'chathide': confirmBox('Remove this message?', 'It will be hidden from the chat.', 'Remove', async () => { try { await S.db.doc('counters/' + id).update({hidden: true}); } catch(e){ dbErr(e); } }); break;
+    case 'feedback': S.chatWhere = el.dataset.w || ''; go('chat'); break;
+    case 'fmtedit': fmtEditor(el.dataset.p, el.dataset.t); break;
+    case 'fmtmove': case 'fmtadd': case 'fmtdel': case 'fmtsigadd': case 'fmtsigdel': case 'fmtreset': case 'fmtsave': fmtAction(a, el); break;
     case 'scforms': scFormsForm(el.dataset.p); break;
     case 'scdl': case 'scshare': case 'scall': scAction(a, el); break;
     case 'asksign': askSignForm(id); break;
@@ -3021,6 +3191,11 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => { const t = e.target; if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; refreshAutos(); } });
 document.addEventListener('submit', e => { if(e.target.id === 'authForm'){ e.preventDefault(); emailAuth(e.target); } });
 document.addEventListener('change', async e => {
+  if(e.target.dataset && e.target.dataset.chatst){ try { await S.db.doc('counters/' + e.target.dataset.chatst).update({status: e.target.value}); } catch(err){ dbErr(err); } return; }
+  if(e.target.id === 'chatPh' && e.target.files?.length){ S.chatDraft = $('#chatText').value; const fs = [...e.target.files].slice(0, 4); $('#chatPhN').textContent = 'Uploading…';
+    for(const f of fs){ try { const r = await S.assets.upload(await compress(f)); (S.chatPhotos = S.chatPhotos || []).push(r.id); } catch(err){ console.error(err); } }
+    $('#chatPhN').textContent = (S.chatPhotos || []).length + ' photo(s) attached'; return; }
+  if(e.target.id === 'fmtType'){ S.fmtType = e.target.value; S.fmtCfg = clone(projFmt(S.fmtPid, e.target.value) || {}); fmtEditorRender(); return; }
   const t = e.target;
   if(t.dataset.role){ const uid = t.dataset.role, role = t.value; try { await S.db.doc('users/'+uid).update({role, roleBy:S.me, roleAt:new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; }
   if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
@@ -3598,7 +3773,7 @@ async function checkSetup(btn){
 }
 /* ---------- admin: rename a document's title / subject (also after signing) ---------- */
 function renameDocForm(id){
-  const d = docById(id); if(!d || !S.canEdit) return; const T = TYPES[d.type];
+  const d = docById(id); if(!d || !S.canEdit) return; const T = TT(d);
   const flds = T.fields.filter(f => f.t === 'text' && f.phase !== 'response');
   S.renameFields = flds.map(f => f.k);
   showModal(`<div class="box"><div class="mh"><h3>Rename / edit subject</h3></div><div class="mb"><div class="fgrid">
@@ -3713,6 +3888,7 @@ function startData(){
     S.users.forEach(u => { if(u.name) S.names[u.id] = u.name; });
     softRender();
   }, () => {}));
+  unsubs.push(startChat(db));
   unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); softRender(); }, () => {}));
 }
 async function onSignedIn(u){
