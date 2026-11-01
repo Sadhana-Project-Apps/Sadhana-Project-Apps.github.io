@@ -225,6 +225,15 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .metat{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:13.5px}
 .metat td{border:1px solid var(--line);padding:6px 9px;vertical-align:top}
 .metat td.k{background:#faf8f4;font-weight:600;width:19%;font-size:12.5px;color:#4a4e53}
+.podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end;margin:14px 0}
+.pod{text-align:center;background:var(--card,#fff);border:1px solid var(--line);border-radius:10px;padding:10px 6px 0;overflow:hidden}
+.pod.empty{visibility:hidden}.pod .pm{font-size:30px;line-height:1}.pod .pn{font-weight:800;margin-top:4px;word-break:break-word}.pod .pp{font-size:13px;color:#555;margin-bottom:8px}
+.pod .pbar{margin:0 -6px;background:linear-gradient(#2E7D32,#1f5e23)}.pod.p1 .pbar{height:70px}.pod.p2 .pbar{height:48px;opacity:.85}.pod.p3 .pbar{height:32px;opacity:.7}
+.rbar{height:6px;background:#eef1ee;border-radius:3px;margin-top:4px;overflow:hidden}.rbar i{display:block;height:100%;background:#2E7D32}
+.rbadge{display:inline-block;font-size:11.5px;background:#E2EFDA;color:#1f5e23;border-radius:10px;padding:1px 7px;margin:3px 4px 0 0;font-weight:600}
+.rtable tr.meRow td{background:#fffbea}.rme{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.rhow div{margin:4px 0;font-size:14px}.rhome{display:flex;gap:14px;align-items:center;flex-wrap:wrap;cursor:pointer;margin:12px 0;border-left:4px solid #f0b400}
+.sm-only{display:none}@media(max-width:640px){.sm-only{display:block}}
 .mrestored{background:#fff6d6;border:1px solid #f0d77a;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:13.5px;display:flex;gap:10px;align-items:center;justify-content:space-between}
 .dsec{margin-top:18px}
 .dsec h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;background:var(--steel);color:#fff;padding:5px 9px;margin-bottom:0;border-radius:2px}
@@ -367,6 +376,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
     <button data-act="nav" data-v="home">Projects</button>
     <button data-act="nav" data-v="register">Document register</button>
     <button data-act="nav" data-v="chat">Feedback</button>
+    <button data-act="nav" data-v="rank">🏆 Ranking</button>
     <button data-act="nav" data-v="team" class="adminonly">Team</button>
     <button data-act="nav" data-v="settings">Settings</button>
   </nav>
@@ -376,6 +386,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
   <button data-act="nav" data-v="home">Projects</button>
   <button data-act="nav" data-v="register">Register</button>
   <button data-act="nav" data-v="chat">Feedback</button>
+  <button data-act="nav" data-v="rank">Ranking</button>
   <button data-act="nav" data-v="team" class="adminonly">Team</button>
   <button data-act="nav" data-v="settings">Settings</button>
 </nav>
@@ -1183,6 +1194,7 @@ function render(){
       case 'settings': html = settingsView(); break;
       case 'chat': html = chatView(); break;
       case 'team': html = teamView(); break;
+      case 'rank': html = rankView(); break;
       case 'files': html = filesView(v.id); break;
       default: html = homeView();
     }
@@ -1229,6 +1241,7 @@ function homeView(){
     <div class="card kpi ${pending.length?'alert':''}"><span class="eyebrow">Awaiting signature</span><b>${pending.length}</b></div>
     <div class="card kpi"><span class="eyebrow">Documents this month</span><b>${monthDocs}</b></div>
   </div>
+  ${(() => { try { return rankHomeCard(); } catch(e){ return ''; } })()}
   ${(() => { const ex = expiringFiles(); return ex.length ? `<div class="card" style="margin-bottom:16px"><div class="sechead"><h3>Documents expiring</h3><div class="sp"></div><span class="small muted">within 30 days</span></div><div class="list">${ex.slice(0, 8).map(x => `<div class="it" data-act="files" data-id="${esc(x.f.projectId)}"><div class="tick n">!</div><div class="t"><b>${esc(x.f.title)}</b><span>${esc(projById(x.f.projectId)?.name || '')} · ${esc(x.f.category)}</span></div><span class="pill ${x.ex.days < 0 ? '' : 'pending'}" style="${x.ex.days < 0 ? 'background:#fbeeed;color:var(--bad)' : ''}">${esc(x.ex.label)}</span></div>`).join('')}</div></div>` : ''; })()}
   <div class="grid2" style="margin-bottom:22px">
     <div class="card today"><div class="sechead"><h3>Today's daily site reports</h3><div class="sp"></div><span class="small muted">${fmtDate(t)}</span></div><div class="list">${todayList}</div></div>
@@ -2170,7 +2183,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z7) · pop-ups keep what you typed, full layout check</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z8) · team ranking & year-end award race</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3649,6 +3662,8 @@ document.addEventListener('click', async e => {
     case 'chatreply': S.chatReply = el.dataset.id; S.chatDraft = ($('#chatText') || {}).value || ''; render(); setTimeout(() => $('#chatText')?.focus(), 50); break;
     case 'chathide': confirmBox('Remove this message?', 'It will be hidden from the chat.', 'Remove', async () => { try { await S.db.doc('counters/' + id).update({hidden: true}); } catch(e){ dbErr(e); } }); break;
     case 'feedback': S.chatWhere = el.dataset.w || ''; go('chat'); break;
+    case 'rankper': S.rankPer = el.dataset.p; render(); break;
+    case 'rankcsv': rankCsv(); break;
     case 'fmtedit': fmtEditor(el.dataset.p, el.dataset.t); break;
     case 'fmtmove': case 'fmtadd': case 'fmtdel': case 'fmtsigadd': case 'fmtsigdel': case 'fmtreset': case 'fmtsave': fmtAction(a, el); break;
     case 'scforms': scFormsForm(el.dataset.p); break;
@@ -3990,6 +4005,79 @@ async function emailAuth(form){
 }
 
 /* --- team management (admin) --- */
+
+/* ---------- 🏆 Team ranking (points from what people already do in the app) ---------- */
+const RANK_PTS = {rec: {PR: 30, SW: 25, MM: 15, LTR: 15, DSR: 10}, recDef: 10, sign: 5, photo: 1, photoMax: 10, onTime: 5, day: 3,
+  fb: {err: 10, idea: 10, q: 3}, fbDone: 20, reply: 2, msgDayMax: 5};
+const RANK_BADGES = [['rec', '📝', 'Record keeper', 'most records submitted'], ['sign', '✍', 'Sign-off champion', 'most signatures'], ['photo', '📸', 'Photographer', 'most site photos'],
+  ['onTime', '⏱', 'On-time reporter', 'most daily reports signed the same day'], ['idea', '💡', 'Idea maker', 'most suggestions'], ['err', '🐞', 'Bug hunter', 'most errors reported'], ['days', '🔥', 'Most active', 'most active days']];
+function rankRange(per){ const t = today(); if(per === 'month') return [t.slice(0, 7) + '-01', t]; if(per === 'year') return [t.slice(0, 4) + '-01-01', t.slice(0, 4) + '-12-31']; if(per === 'last') { const d = new Date(t.slice(0, 7) + '-01T00:00:00'); d.setDate(0); const e = d.toISOString().slice(0, 10); return [e.slice(0, 7) + '-01', e]; } return ['2000-01-01', '2999-12-31']; }
+function computeRanks(per){
+  const [a, b] = rankRange(per), inR = iso => { const x = String(iso || '').slice(0, 10); return x >= a && x <= b; };
+  const P = {}; const me = id => (P[id] = P[id] || {id, pts: 0, rec: 0, sign: 0, photo: 0, onTime: 0, idea: 0, err: 0, q: 0, done: 0, chat: 0, days: new Set(), dayMsg: {}});
+  const local = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '').slice(0, 10) : d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+  S.docs.forEach(d => { if(!projById(d.projectId)) return; const sigs = d.signatures || [], s0 = sigs[0];
+    // a record counts once it is submitted (first signature) — empty drafts score nothing
+    if(s0 && d.createdBy && inR(local(s0.at))){ const u = me(d.createdBy), T = TT(d);
+      u.rec++; u.pts += RANK_PTS.rec[d.type] || RANK_PTS.recDef; u.days.add(local(s0.at));
+      let ph = 0; T.fields.forEach(f => { if(f.t === 'photos') ph += (d.data?.[f.k] || []).length; }); ph = Math.min(ph, RANK_PTS.photoMax); u.photo += ph; u.pts += ph * RANK_PTS.photo;
+      if(d.type === 'DSR' && d.data?.date && local(s0.at) <= d.data.date){ u.onTime++; u.pts += RANK_PTS.onTime; } }
+    sigs.forEach(sg => { if(sg && sg.uid && inR(local(sg.at))){ const u = me(sg.uid); u.sign++; u.pts += RANK_PTS.sign; u.days.add(local(sg.at)); } }); });
+  S.chat.forEach(m => { if(m.hidden || !m.by || !inR(local(m.at))) return; const u = me(m.by), long = String(m.text || '').trim().length >= 15 || (m.photos || []).length;
+    if(m.kind === 'msg'){ const dk = local(m.at); u.chat++; if(m.replyTo && (u.dayMsg[dk] || 0) < RANK_PTS.msgDayMax){ u.dayMsg[dk] = (u.dayMsg[dk] || 0) + RANK_PTS.reply; u.pts += RANK_PTS.reply; } return; }
+    if(!long) return;
+    u[m.kind] = (u[m.kind] || 0) + 1; u.pts += RANK_PTS.fb[m.kind] || 0;
+    if(m.status === 'Done' && m.kind !== 'q'){ u.done++; u.pts += RANK_PTS.fbDone; } });
+  const people = (S.users.length ? S.users.filter(u => u.role !== 'removed' && u.role !== 'pending').map(u => u.id) : Object.keys(S.names));
+  people.forEach(id => me(id));
+  const list = Object.values(P).filter(u => people.includes(u.id) || u.pts > 0).map(u => { const days = u.days.size; return {...u, days, pts: u.pts + days * RANK_PTS.day}; });
+  list.sort((x, y) => y.pts - x.pts || y.rec - x.rec || nameOf(x.id).localeCompare(nameOf(y.id)));
+  let pos = 0, prev = null; list.forEach((u, i) => { if(u.pts !== prev){ pos = i + 1; prev = u.pts; } u.pos = pos; });
+  const badges = {}; RANK_BADGES.forEach(([k]) => { const top = Math.max(0, ...list.map(u => u[k] || 0)); if(top > 0) badges[k] = list.filter(u => (u[k] || 0) === top).map(u => u.id); });
+  return {list, badges, a, b};
+}
+function rankView(){
+  const per = S.rankPer || 'year';
+  if(!S.allLoaded && !S.rankLoading && !S.rankTried){ S.rankLoading = S.rankTried = true; Promise.resolve(loadAllDocs()).catch(() => {}).finally(() => { S.rankLoading = false; if(S.view.name === 'rank') render(); }); }
+  const R = computeRanks(per), L = R.list, maxP = Math.max(1, ...L.map(u => u.pts));
+  const badgeOf = id => RANK_BADGES.filter(([k]) => (R.badges[k] || []).includes(id)).map(([, i, l]) => `<span class="rbadge" title="${esc(l)}">${i} ${esc(l)}</span>`).join('');
+  const medal = p => p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : '#' + p;
+  const top3 = L.filter(u => u.pts > 0).slice(0, 3), mine = L.find(u => u.id === S.me);
+  const perLbl = {month: 'This month', last: 'Last month', year: 'This year (' + today().slice(0, 4) + ')', all: 'All time'};
+  const daysLeft = Math.ceil((new Date(today().slice(0, 4) + '-12-31T23:59:59') - new Date()) / 86400000);
+  return `<div class="pagehead"><div><div class="eyebrow">Use the app, help make it better</div><h1>🏆 Team ranking</h1></div></div>
+  ${per === 'year' ? `<div class="vhint" style="background:#fff6d6;color:#7a5b00"><b>🎁</b><span><b>Year-end award race</b> — ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go. Top of the table on 31 December wins a special gift from the management.</span></div>` : ''}
+  <div class="tabs">${Object.entries(perLbl).map(([k, l]) => `<button class="${per === k ? 'on' : ''}" data-act="rankper" data-p="${k}">${l}</button>`).join('')}</div>
+  ${S.rankLoading ? `<div class="small muted" style="margin:6px 0">Counting all records…</div>` : ''}
+  ${mine ? `<div class="card pad rme"><div><div class="small muted">You</div><b style="font:800 24px Archivo">${mine.pts ? medal(mine.pos) : '—'}</b></div><div><div class="small muted">Your points</div><b style="font:800 24px Archivo">${mine.pts}</b></div><div style="flex:1;min-width:180px" class="small">${mine.pos > 1 && L[mine.pos - 2] ? `<b>${L.find(u => u.pos === mine.pos - 1)?.pts - mine.pts + 1 || 1}</b> more points to move up. ` : mine.pts ? '<b>You are leading!</b> ' : ''}Tip: submit today's daily report and sign it the same day for bonus points.</div></div>` : ''}
+  ${top3.length ? `<div class="podium">${[top3[1], top3[0], top3[2]].map((u, i) => u ? `<div class="pod p${[2, 1, 3][i]}"><div class="pm">${medal(u.pos)}</div><div class="pn">${esc(nameOf(u.id))}</div><div class="pp">${u.pts} pts</div><div class="pbar"></div></div>` : '<div class="pod empty"></div>').join('')}</div>` : `<div class="card empty">No points yet for ${esc(perLbl[per].toLowerCase())}. Submit a report or share a suggestion to get started!</div>`}
+  <div class="card"><table class="reg rtable"><thead><tr><th style="width:52px">Rank</th><th>Name</th><th>Points</th><th class="hm">📝 Records</th><th class="hm">✍ Signs</th><th class="hm">📸 Photos</th><th class="hm">⏱ On time</th><th class="hm">💡/🐞 Feedback</th><th class="hm">🔥 Days</th></tr></thead><tbody>
+  ${L.map(u => `<tr class="${u.id === S.me ? 'meRow' : ''}"><td><b>${u.pts ? medal(u.pos) : '–'}</b></td><td><b>${esc(nameOf(u.id))}</b>${u.id === S.me ? ' <span class="pill draft">You</span>' : ''}<div>${badgeOf(u.id)}</div><div class="small muted sm-only">📝${u.rec} · ✍${u.sign} · 📸${u.photo} · ⏱${u.onTime} · 💡${u.idea}/🐞${u.err} · 🔥${u.days}</div></td>
+    <td style="min-width:110px"><b>${u.pts}</b><div class="rbar"><i style="width:${Math.round(u.pts / maxP * 100)}%"></i></div></td>
+    <td class="hm">${u.rec}</td><td class="hm">${u.sign}</td><td class="hm">${u.photo}</td><td class="hm">${u.onTime}</td><td class="hm">${u.idea} / ${u.err}${u.done ? ` <span class="small muted">(${u.done} done)</span>` : ''}</td><td class="hm">${u.days}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px">How points work</h3><div class="rhow">
+    <div>📝 Submit a record (first signature): <b>+10</b> · Progress report <b>+30</b> · Salvage &amp; waste <b>+25</b> · Manpower record / letter <b>+15</b></div>
+    <div>✍ Each signature you give: <b>+5</b></div>
+    <div>📸 Photos in your records: <b>+1 each</b> (up to 10 per record)</div>
+    <div>⏱ Daily site report signed on the same day: <b>+5 bonus</b></div>
+    <div>🔥 Each day you are active (submit or sign): <b>+3</b></div>
+    <div>🐞 Report an error / 💡 suggest an improvement in Feedback: <b>+10</b> · when the admin marks it <b>Done</b>: <b>+20 more</b> · ❓ question <b>+3</b> · helpful replies <b>+2</b> (max 5 a day)</div>
+    <div class="small muted" style="margin-top:6px">Empty drafts, deleted records and very short messages don't count. Everyone — including management — is on the table. Badges go to the leader of each category.</div></div>
+    <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-act="feedback">💡 Share a suggestion</button>${S.canEdit ? `<button class="btn" data-act="rankcsv">⤓ Download ranking (CSV)</button>` : ''}</div></div>`;
+}
+async function rankCsv(){
+  const per = S.rankPer || 'year', R = computeRanks(per);
+  const rows = [['Rank', 'Name', 'Points', 'Records', 'Signatures', 'Photos', 'On-time DSR', 'Suggestions', 'Errors reported', 'Feedback done', 'Active days', 'Badges'],
+    ...R.list.map(u => [u.pts ? u.pos : '', nameOf(u.id), u.pts, u.rec, u.sign, u.photo, u.onTime, u.idea, u.err, u.done, u.days, RANK_BADGES.filter(([k]) => (R.badges[k] || []).includes(u.id)).map(x => x[2]).join('; ')])];
+  const csv = rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n');
+  await S.dl.save({filename: `Sadhana team ranking ${R.a} to ${R.b}.csv`, data: '﻿' + csv});
+}
+function rankHomeCard(){
+  const R = computeRanks('month'), L = R.list.filter(u => u.pts > 0), mine = R.list.find(u => u.id === S.me);
+  if(!L.length) return `<div class="card pad rhome" data-act="nav" data-v="rank"><b>🏆 Team ranking</b><span class="small muted">Earn points for every report, signature, photo and suggestion — year-end gift for the top of the table.</span></div>`;
+  return `<div class="card pad rhome" data-act="nav" data-v="rank"><b>🏆 This month</b><span>🥇 ${esc(nameOf(L[0].id))} · ${L[0].pts} pts</span>${mine ? `<span class="small">You: ${mine.pts ? (mine.pos <= 3 ? ['🥇', '🥈', '🥉'][mine.pos - 1] : '#' + mine.pos) + ' · ' + mine.pts + ' pts' : 'no points yet'}</span>` : ''}<span class="small muted" style="margin-left:auto">See ranking →</span></div>`;
+}
 function teamView(){
   if(!S.canEdit) return `<div class="card empty">Only admins can manage the team.</div>`;
   const order = {pending: 0, admin: 1, staff: 2, removed: 3};
