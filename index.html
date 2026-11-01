@@ -974,7 +974,7 @@ function buildType(type, fmt){
     let fd;
     if(e.t === 'table'){ const cols = String(e.cols || 'Description').split(',').map(s => s.trim()).filter(Boolean); fd = {k: e.k, l: e.l, t: 'table', num: 1, sub: false, cols: cols.map((c, i) => ({k: 'c' + i, l: c})), def: () => [{}, {}, {}], custom: 1}; }
     else if(e.t === 'yesno') fd = {k: e.k, l: e.l, t: 'select', o: ['Yes', 'No', 'N/A'], w: 'half', custom: 1};
-    else fd = {k: e.k, l: e.l, t: e.t, w: (e.t === 'textarea') ? undefined : 'half', custom: 1};
+    else fd = {k: e.k, l: e.l, t: e.t, w: (e.t === 'textarea' || e.t === 'photos') ? undefined : 'half', custom: 1};
     if(e.req) fd.req = 1;
     let s = secs.find(x => x.sec === e.sec); if(!s){ s = {sec: e.sec || 'Additional Information', f: {sec: e.sec || 'Additional Information'}, fields: []}; secs.push(s); }
     s.fields.push(fd); });
@@ -1011,7 +1011,7 @@ function fmtEditorRender(){
   secs.sort((a, b) => { const ia = order.indexOf(a.sec), ib = order.indexOf(b.sec); return (ia < 0 ? 999 + secs.indexOf(a) : ia) - (ib < 0 ? 999 + secs.indexOf(b) : ib); });
   S.fmtSecs = secs.map(s => s.sec);
   const sigs = cfg.sigs || base.sigs.map(s => ({role: s.role, hint: s.hint}));
-  const tl = {text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', yesno: 'Yes / No / N/A', table: 'Table'};
+  const tl = {text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', yesno: 'Yes / No / N/A', table: 'Table', photos: 'Photos'};
   showModal(`<div class="box" style="max-width:760px"><div class="mh"><h3>⚙ Report format — ${esc(p.code)}</h3></div><div class="mb">
     <p class="small muted" style="margin-top:0">Changes apply to <b>new</b> documents of this project only. Other projects and earlier records are not affected.</p>
     <div class="fgrid"><div class="fld half"><label>Document</label><select id="fmtType">${TYPE_KEYS.filter(k => !TYPES[k].letter).map(k => `<option value="${k}" ${k === type ? 'selected' : ''}>${esc(TYPES[k].name)}</option>`).join('')}</select></div>
@@ -1322,7 +1322,7 @@ function projectView(id, tab){
   </div>
   ${folders}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a sub-contractor report made with the Sadhana template">⇪ Import sub-contractor report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${esc(projFmt(id, k)?.name || TYPES[k].name)}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a Word report — our sub-contractor forms or your existing project reports">⇪ Import report (Word)<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${esc(projFmt(id, k)?.name || TYPES[k].name)}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -1454,12 +1454,10 @@ async function importSubconDocx(file, pid){
   // find the form code in the footer: "Form SDE-DSR-SC v1"
   let code = '', variant = '';
   for(const n of Object.keys(zip.files).filter(n => /word\/footer\d*\.xml$/.test(n))){ const m = (await zip.file(n).async('string')).replace(/<[^>]+>/g, '').match(/SDE-([A-Z]+)(?:-(WEEKLY|FORTNIGHTLY|MONTHLY))?-SC/); if(m){ code = m[1]; variant = m[2] || ''; break; } }
-  const txt = el => [...el.getElementsByTagName('w:p')].map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim();
+  const txt = el => (el.tagName === 'w:p' ? [el] : [...el.getElementsByTagName('w:p')]).map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim();
   const body = doc.getElementsByTagName('w:body')[0];
   const blocks = [...body.children].filter(e => e.tagName === 'w:p' || e.tagName === 'w:tbl');
-  if(!code){ const names = k => [TYPE_ORIG[k].name, TYPES[k].name, ...(k === 'TBT' ? ['SAFETY INDUCTION', 'TOOLBOX'] : []), ...(k === 'PR' ? ['PROGRESS REPORT'] : []), ...(k === 'DSR' ? ['DAILY REPORT', 'SITE DIARY'] : [])].map(n => n.toUpperCase());
-    const heads = [...doc.getElementsByTagName('w:p')].slice(0, 60).map(txt).filter(Boolean).map(t => t.toUpperCase());
-    for(const t of heads){ code = TYPE_KEYS.filter(k => !TYPES[k].letter).find(k => names(k).some(n => t.includes(n))) || ''; if(code) break; } }
+  // only our own forms (they carry a form code in the footer); anything else goes to the general importer
   if(!code || !TYPES[code] || TYPES[code].letter) throw new Error('Could not recognise this file as one of our forms. Please use a form from “📄 Sub-contractor forms” — the sub-contractor fills it in without changing the layout.');
   const draft = newDraft(pid, code), T = TT(draft), x = draft.data;
   if(code === 'PR' && variant) x.period = variant.charAt(0) + variant.slice(1).toLowerCase();
@@ -1695,6 +1693,170 @@ function startChat(db){
     updateChatBadge(); if(S.view.name === 'chat') softRender();
   }, e => console.warn('chat', e));
 }
+/* ---------- import an existing report in any Word layout (ongoing projects) ----------
+   Reads headings, tables, "Label: value" lines and photos, matches them to the app's form,
+   and adds anything extra (e.g. "Design & Analysis – progress by level") to this project's
+   own report format, so the PDF keeps the same content in the Sadhana layout. */
+const normH = s => String(s || '').toUpperCase().replace(/^\s*\d+[.)]\s*/, '').replace(/\(.*?\)/g, ' ').replace(/[^A-Z0-9%/&]+/g, ' ').replace(/\s+/g, ' ').trim();
+const titleCase = s => String(s || '').toLowerCase().replace(/\b([a-z])/g, m => m.toUpperCase()).replace(/\b(Of|And|At|The|To|For|In|On|By)\b/g, m => m.toLowerCase()).replace(/^./, m => m.toUpperCase());
+const COL_SYN = {desc: ['DESCRIPTION', 'ACTIVITY', 'WORK', 'WORKS', 'ITEM DESCRIPTION', 'WORK ACTIVITY LOCATION', 'DOCUMENT'], start: ['START DATE', 'START', 'EST START', 'ESTIMATED START', 'EST START DATE'],
+  finish: ['FINISH DATE', 'FINISH', 'END DATE', 'COMPLETION DATE'], status: ['STATUS', 'PROGRESS STATUS'], issue: ['ISSUES', 'ISSUE'], by: ['ACTION BY', 'PIC', 'RESPONSIBLE'],
+  date: ['DATE'], sched: ['SCHEDULE %', 'SCHEDULE', 'PLANNED %', 'PLANNED', 'SCHEDULED %'], actual: ['ACTUAL %', 'ACTUAL'], remarks: ['REMARKS', 'REMARK', 'COMMENTS'],
+  qty: ['QTY', 'NO', 'NO.', 'QUANTITY'], pct: ['PROGRESS %', 'PROGRESS', '%', 'PERCENT', '% COMPLETE'], kg: ['WEIGHT KG', 'WEIGHT', 'KG']};
+const KV_SYN = {planned: ['SCHEDULE', 'SCHEDULED PROGRESS', 'PLANNED', 'SCHEDULED'], actual: ['ACTUAL', 'ACTUAL PROGRESS']};
+function colMatch(head, col){ const h = normH(head), names = [normH(col.l), ...((COL_SYN[col.k] || []).map(normH))]; return names.some(n => n && (h === n || (n.length > 3 && h.startsWith(n)))); }
+async function readWordBlocks(zip){
+  const xml = async n => zip.file(n) ? new DOMParser().parseFromString(await zip.file(n).async('string'), 'application/xml') : null;
+  const doc = await xml('word/document.xml'), rels = await xml('word/_rels/document.xml.rels'), relMap = {};
+  if(rels) [...rels.getElementsByTagName('Relationship')].forEach(r => relMap[r.getAttribute('Id')] = 'word/' + r.getAttribute('Target').replace(/^\.?\//, ''));
+  const txt = el => (el.tagName === 'w:p' ? [el] : [...el.getElementsByTagName('w:p')]).map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim();
+  const imgs = el => [...el.getElementsByTagName('a:blip')].map(b => relMap[b.getAttribute('r:embed')]).filter(p => p && /\.(jpe?g|png)$/i.test(p));
+  const out = [];
+  for(const el of doc.getElementsByTagName('w:body')[0].children){
+    if(el.tagName === 'w:p'){ const t = txt(el); const bold = !!el.getElementsByTagName('w:b').length, num = !!el.getElementsByTagName('w:numPr').length, st = (el.getElementsByTagName('w:pStyle')[0] || {getAttribute: () => ''}).getAttribute('w:val') || '';
+      const head = t && t.length < 110 && ((num && bold) || /^heading/i.test(st) || (bold && /^\d+[.)]\s+\S/.test(t)) || (bold && t === t.toUpperCase() && /[A-Z]{3}/.test(t) && !/:\s*\S/.test(t)));
+      out.push({k: head ? 'h' : 'p', t, imgs: imgs(el).map(src => ({src, cap: ''}))}); }
+    else if(el.tagName === 'w:tbl'){ const rows = [...el.children].filter(r => r.tagName === 'w:tr').map(r => [...r.children].filter(c => c.tagName === 'w:tc'));
+      const cells = rows.map(r => r.map(c => txt(c).replace(/\s*\n\s*/g, ' ').trim()));
+      const im = []; rows.forEach(r => r.forEach(c => { const ii = imgs(c); if(ii.length){ const cap = txt(c).replace(/\s*\n\s*/g, ' ').trim(); ii.forEach(src => im.push({src, cap})); } }));
+      out.push({k: 't', cells, imgs: im}); }
+  }
+  return out;
+}
+function guessType(blocks){
+  const top = blocks.filter(b => b.k !== 't' && b.t).slice(0, 15).map(b => b.t.toUpperCase()).join(' | ');
+  const rules = [['PR', /PROGRESS REPORT/], ['DSR', /DAILY (SITE )?REPORT|SITE DIARY|DAILY REPORT/], ['MM', /MANPOWER\s*&\s*MACHINERY/], ['SW', /SALVAGE\s*&\s*WASTE|WASTE MANAGEMENT/], ['SSO', /SCRAP/],
+    ['RFI', /REQUEST FOR INFORMATION|\bRFI\b/], ['TR', /TRANSMITTAL/], ['PDH', /PRE-?DEMOLITION/], ['IAH', /HANDOVER/], ['EMD', /EQUIPMENT MOVEMENT|DECLARATION/], ['TBT', /TOOLBOX|SAFETY INDUCTION|INDUCTION/], ['PTW', /PERMIT TO WORK/]];
+  const r = rules.find(([k, re]) => re.test(top)); return r ? r[0] : '';
+}
+async function smartImport(file, pid, forced){
+  const Z = await jszip(), zip = await Z.loadAsync(await file.arrayBuffer());
+  if(!zip.file('word/document.xml')) throw new Error('This is not a Word (.docx) file.');
+  const blocks = await readWordBlocks(zip);
+  const code = forced || guessType(blocks);
+  if(!code) return {ask: true};
+  const p = projById(pid) || {}, title = blocks.filter(b => b.k !== 't' && b.t).slice(0, 6).map(b => b.t).join(' ');
+  const firstTime = !projFmt(pid, code);
+  const draft = newDraft(pid, code), base = TYPES[code], x = draft.data, found = [], added = [], projUpd = {};
+  if(code === 'PR'){ const T = title.toUpperCase(); x.period = /BI-?WEEKLY|FORTNIGHT/.test(T) ? 'Fortnightly' : /MONTHLY/.test(T) ? 'Monthly' : 'Weekly';
+    const n = T.match(/\bNO\.?\s*(\d+)/); if(n) x.reportNo = n[1]; }
+  // period / dates from the first lines, e.g. "DATE: 26th October – 1st November 2026"
+  const dl = blocks.filter(b => b.k !== 't' && b.t).slice(0, 10).map(b => b.t).find(t => /DATE|PERIOD/i.test(t) && /\d/.test(t));
+  if(dl){ const parts = dl.replace(/^[^:]*:\s*/, '').split(/\s+(?:–|-|to|until)\s+/i); const yr = (dl.match(/(20\d\d)/g) || []).pop();
+    const d1 = impDate(/20\d\d/.test(parts[0]) ? parts[0] : parts[0] + ' ' + (yr || '')), d2 = parts[1] ? impDate(parts[1]) : '';
+    if(base.fields.some(f => f.k === 'from') && d1){ x.from = d1; if(d2) x.to = d2; } else if(d1){ const df = base.fields.find(f => f.t === 'date'); if(df) x[df.k] = d2 || d1; } }
+  const kvF = base.fields.filter(f => f.k && ['text', 'number', 'date', 'select', 'textarea'].includes(f.t));
+  const setKV = (label, val) => { const L = normH(label); val = String(val || '').trim(); if(!L || !val) return false;
+    const f = kvF.find(f => normH(f.l) === L || (KV_SYN[f.k] || []).includes(L)); if(!f) return false;
+    if(f.t === 'number') x[f.k] = String(numv(val)); else if(f.t === 'date'){ const d = impDate(val); if(!d) return false; x[f.k] = d; } else if(f.t === 'select'){ const o = f.o.find(o => val.toLowerCase().includes(o.toLowerCase())); if(!o) return false; x[f.k] = o; } else x[f.k] = val;
+    found.push(f.l); return true; };
+  const projMap = {'PROJECT': 'name', 'CLIENT': 'client', 'CLIENT OWNER': 'client', 'OWNER': 'client', 'CONSULTANT': 'consultant', 'LOCATION': 'location', 'CONTRACT NO': 'contractNo', 'CONTRACT LOA NO': 'contractNo', 'LOA NO': 'contractNo', 'DATE OF START': 'start', 'COMMENCEMENT DATE': 'start', 'DATE OF COMPLETION': 'end', 'COMPLETION DATE': 'end', 'INSURANCE POLICY': 'insurance', 'INSURANCE POLICIES': 'insurance'};
+  const used = new Set(), cfg = clone(projFmt(pid, code) || {}), extras = cfg.extra = cfg.extra || [], photosFor = {}, seenHeads = [];
+  const tableFields = base.fields.filter(f => f.t === 'table' && !f.cols.some(c => c.day != null));
+  let head = '', seenTable = false; const secPos = {};
+  const secOf0 = f => (base.fields.filter(g => g.sec && base.fields.indexOf(g) < base.fields.indexOf(f)).pop() || {}).sec;
+  const slug = s => 'x_' + normH(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 24);
+  for(const b of blocks){
+    if(b.k === 'h'){ head = b.t.replace(/^\s*\d+[.)]\s*/, '').trim(); if(!/^CONTENTS?$/i.test(head)) seenHeads.push(head); }
+    if(b.k === 'p' || b.k === 'h'){ const m = b.t.match(/^([^:]{2,40}):\s*(.+)$/); if(m) setKV(m[1], m[2]); }
+    if(b.imgs.length && !seenTable && base.fields.some(f => f.k === 'coverPhoto') && !(photosFor.coverPhoto || []).length){ (photosFor.coverPhoto = []).push(b.imgs[0]); continue; }
+    if(b.imgs.length){ const H = normH(head); let k;
+      const ph = base.fields.filter(f => f.t === 'photos');
+      const tgt = /PHOTO/.test(H) ? (ph.find(f => /AFTER|PROGRESS/.test(normH(f.l))) || ph[0]) : ph.find(f => normH(f.l) && H.includes(normH(f.l)));
+      if(tgt) k = tgt.k; else { k = slug(head || 'Attachments') + '_ph'; if(!extras.some(e => e.k === k)) { extras.push({k, l: titleCase(head || 'Attachments'), t: 'photos', sec: titleCase(head || 'Attachments')}); added.push(titleCase(head || 'Attachments') + ' (photos)'); } }
+      (photosFor[k] = photosFor[k] || []).push(...b.imgs); }
+    if(b.k !== 't' || !b.cells.length) continue;
+    seenTable = true;
+    const H = normH(head);
+    if(/^CONTENTS?$/.test(H) || b.cells.every(r => r.every(c => !c))) continue;
+    // label / value tables (project details)
+    if(b.cells.every(r => r.filter(Boolean).length <= 4) && b.cells.filter(r => r[0] && r[1]).length >= 2 && b.cells.every(r => r.length <= 4) && !b.cells[0].some(c => COL_SYN.desc.includes(normH(c)))){
+      let any = false; b.cells.forEach(r => { for(let i = 0; i + 1 < r.length; i += 2){ const L = normH(r[i]), v = r[i + 1]; if(!L || !v) continue;
+        if(projMap[L]){ const pk = projMap[L]; if(!p[pk] && pk !== 'name') projUpd[pk] = (pk === 'start' || pk === 'end') ? (impDate(v) || '') : v; any = true; } else if(setKV(r[i], v)) any = true; } });
+      if(any) continue; }
+    // header row = first row with 2+ filled cells
+    const hi = b.cells.findIndex(r => r.filter(Boolean).length >= 2); if(hi < 0) continue;
+    let hdr = b.cells[hi], rows = b.cells.slice(hi + 1);
+    // repeated column groups (e.g. Date | Schedule | Actual × 3)
+    for(let g = 2; g <= hdr.length / 2; g++){ if(hdr.length % g) continue; const grp = hdr.slice(0, g).map(normH); let rep = true; for(let i = g; i < hdr.length; i++) if(normH(hdr[i]) !== grp[i % g]) rep = false;
+      if(rep){ const nr = []; for(let s = 0; s < hdr.length; s += g) rows.forEach(r => nr.push(r.slice(s, s + g))); hdr = hdr.slice(0, g); rows = nr; break; } }
+    // best matching table field
+    let best = null, bestScore = 0;
+    tableFields.forEach(f => { if(used.has(f.k)) return; let sc = 0; f.cols.forEach(c => { if(hdr.some(h => colMatch(h, c))) sc += 2; });
+      const fl = normH(f.l) + ' ' + normH((base.fields.filter(g => g.sec && base.fields.indexOf(g) < base.fields.indexOf(f)).pop() || {}).sec || '');
+      H.split(' ').filter(w => w.length > 3).forEach(w => { if(fl.includes(w)) sc += 1; });
+      if(/OTHER/.test(H) !== /OTHER/.test(fl)) sc -= 2;
+      if(sc > bestScore && f.cols.filter(c => hdr.some(h => colMatch(h, c))).length >= Math.min(2, f.cols.length)){ best = f; bestScore = sc; } });
+    if(best){ used.add(best.k); { const sc = secOf0(best); if(sc && secPos[sc] == null) secPos[sc] = seenHeads.length - 1 + 0.01 * Object.keys(secPos).length; }
+      const idx = best.cols.map(c => hdr.findIndex(h => colMatch(h, c)));
+      const out = rows.map(r => { const o = {}; best.cols.forEach((c, i) => { if(idx[i] >= 0 && r[idx[i]]) o[c.k] = c.n ? String(numv(r[idx[i]])) : r[idx[i]]; }); return o; }).filter(o => Object.keys(o).length && !/^TOTAL$/i.test(String(Object.values(o)[0] || '')));
+      if(out.length){ out.forEach(r => calcRow(best, r)); x[best.k] = out; found.push(best.l + ' (' + out.length + ' rows)'); }
+      continue; }
+    // anything else becomes this project's own table
+    const label = titleCase(head || 'Additional table'); let k = slug(label);
+    const cols = hdr.map((h, i) => h || (i === 0 ? 'Item' : 'Column ' + (i + 1)));
+    let ex = extras.find(e => e.k === k);
+    if(!ex){ ex = {k, l: label, t: 'table', sec: label, cols: cols.join(', ')}; extras.push(ex); added.push(label + ' (table)'); }
+    const exCols = String(ex.cols).split(',').map(s => s.trim());
+    const prev = x[k] || [];
+    if(prev.length) prev.push({c0: b.cells.slice(0, hi).map(r => r.filter(Boolean).join(' ')).join(' ') || '—'});
+    rows.forEach(r => { const o = {}; exCols.forEach((c, i) => { if(r[i]) o['c' + i] = r[i]; }); if(Object.keys(o).length) prev.push(o); });
+    x[k] = prev;
+  }
+  // first import for this project: follow the report's order and hide what it doesn't use
+  const secOf = f => (base.fields.filter(g => g.sec && base.fields.indexOf(g) < base.fields.indexOf(f)).pop() || {}).sec;
+  if(firstTime){
+    const hide = new Set(cfg.hide || []), hidden = [];
+    const secs = base.fields.filter(f => f.sec && f.pdf !== false).map(f => f.sec);
+    secs.forEach(s => { const fs = base.fields.filter(f => f.k && !f.sec && secOf(f) === s && f.t !== 'auto' && f.t !== 'calc');
+      const has = fs.some(f => f.t === 'table' ? (x[f.k] || []).length && found.some(z => z.startsWith(f.l)) : f.t === 'photos' ? (photosFor[f.k] || []).length : found.includes(f.l));
+      const named = secPos[s] != null || seenHeads.some(h => { const a = normH(h), c = normH(s); if(!a || !c) return false; if(a.includes(c) || c.includes(a)) return true; const ct = c.split(' ').filter(w => w.length > 3); return ct.length && ct.filter(w => a.split(' ').some(v => v.startsWith(w.slice(0, 5)))).length / ct.length >= 0.6; });
+      if(!has && !named){ hide.add('sec:' + s); hidden.push(s); } });
+    cfg.hide = [...hide]; draft._hidden = hidden;
+    // order: sections in the order their content first appears in the report
+    const pos = s => { if(secPos[s] != null) return secPos[s]; const i = seenHeads.findIndex(h => { const a = normH(h), c = normH(s); return a && c && (a.includes(c) || c.includes(a)); }); return i < 0 ? 999 : i; };
+    cfg.order = [...secs, ...extras.map(e => e.sec)].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => pos(a) - pos(b));
+  }
+  if(!cfg.extra.length) delete cfg.extra;
+  draft.fmt = cfg; x._source = file.name;
+  return {draft, zip, found, added, hidden: draft._hidden || [], projUpd, code, photosFor, saveFmt: firstTime || added.length};
+}
+async function runSmartImport(file, pid, forced){
+  toast('Reading ' + file.name + '…');
+  try {
+    // our own sub-contractor forms first
+    try { const r = await importSubconDocx(file, pid); if(r){ return finishSubcon(r, file, pid); } } catch(e){ if(!/recognise/i.test(e.message || '')) throw e; }
+    const r = await smartImport(file, pid, forced);
+    if(r.ask){ S.smartFile = file; showModal(`<div class="box" style="max-width:460px"><div class="mh"><h3>Which document is this?</h3></div><div class="mb"><p style="margin-top:0">I couldn't tell the type of <b>${esc(file.name)}</b>. Choose it and I'll arrange it in the app format.</p><div class="fld"><select id="smartType">${TYPE_KEYS.filter(k => !TYPES[k].letter).map(k => `<option value="${k}">${esc(TYPES[k].name)}</option>`).join('')}</select></div></div><div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="smartgo" data-p="${esc(pid)}">Continue</button></div></div>`); return; }
+    if(r.saveFmt){ try { await S.db.doc('projects/' + pid).update({['formCfg.' + r.code]: r.draft.fmt}); const p = projById(pid); if(p) p.formCfg = {...(p.formCfg || {}), [r.code]: r.draft.fmt}; } catch(e){ console.warn(e); } }
+    if(Object.keys(r.projUpd).length){ try { await S.db.doc('projects/' + pid).update(r.projUpd); Object.assign(projById(pid) || {}, r.projUpd); } catch(e){ console.warn(e); } }
+    S.draft = r.draft; S.respMode = false; S.dirty = true; go('edit');
+    for(const [k, list] of Object.entries(r.photosFor)){ const files = [];
+      for(const im of list){ const f = r.zip.file(im.src); if(f && /\.(jpe?g|png|gif|bmp|webp)$/i.test(im.src)){ const blob = await f.async('blob'); const fl = new File([blob], im.src.split('/').pop(), {type: /png$/i.test(im.src) ? 'image/png' : 'image/jpeg'}); fl._cap = im.cap; files.push(fl); } }
+      if(files.length) await uploadPhotosCap(k, files); }
+    showModal(`<div class="box" style="max-width:560px"><div class="mh"><h3>✓ Arranged in the app format</h3></div><div class="mb">
+      <p style="margin-top:0"><b>${esc(TYPES[r.code].name)}</b> from <b>${esc(file.name)}</b>. Please check it, then save and sign — the PDF will have the Sadhana letterhead.</p>
+      ${r.found.length ? `<p class="small"><b>Filled in:</b> ${r.found.map(esc).join(' · ')}</p>` : ''}
+      ${r.added.length ? `<p class="small"><b>Added to this project's format:</b> ${r.added.map(esc).join(' · ')}</p>` : ''}
+      ${r.hidden.length ? `<p class="small"><b>Hidden for this project</b> (not in your report): ${r.hidden.map(esc).join(' · ')}</p>` : ''}
+      ${Object.keys(r.projUpd).length ? `<p class="small"><b>Project details updated:</b> ${Object.keys(r.projUpd).map(esc).join(', ')}</p>` : ''}
+      <p class="small muted">Change what is shown with <b>⚙ Report format (this project)</b>. Pictures of tables (e.g. manpower charts) are kept as photos.</p></div>
+      <div class="mf"><button class="btn pri" data-act="closemodal">OK</button></div></div>`);
+  } catch(e){ console.error(e); toast(e.message || 'Could not read this file.', true); }
+}
+async function finishSubcon({draft, info, zip}, file, pid){
+  S.draft = draft; S.respMode = false; S.dirty = true; go('edit');
+  for(const [k, paths] of Object.entries(info.photos)){ const files = [];
+    for(const pth of paths){ const f = zip.file(pth); if(f){ const blob = await f.async('blob'); files.push(new File([blob], pth.split('/').pop(), {type: /png$/i.test(pth) ? 'image/png' : 'image/jpeg'})); } }
+    if(files.length) uploadPhotos(k, files); }
+  toast(`Imported from ${info.subcon || 'sub-contractor'} — check the details, then sign to issue it with the Sadhana letterhead.`);
+  try { await uploadOne(pid, file, {category: 'Sub-contractor submissions', folder: 'Sub-contractor submissions', title: file.name.replace(/\.[^.]+$/, ''), refNo: '', date: today(), expiry: '', notes: 'Original from ' + (info.subcon || 'sub-contractor')}); } catch(e){ console.warn('original not kept', e); }
+}
+async function uploadPhotosCap(k, files){
+  S.uploads[k] = (S.uploads[k] || 0) + files.length; rerenderEditorField(k);
+  for(const file of files){ try { const blob = await compress(file); const r = await S.assets.upload(blob); (S.draft.data[k] = S.draft.data[k] || []).push({id: r.id, caption: file._cap || ''}); S.dirty = true; } catch(e){ console.error(e); }
+    S.uploads[k]--; rerenderEditorField(k); }
+}
 function registerView(){
   const rows = [...S.docs].filter(d => projById(d.projectId)).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return `<div class="pagehead"><div><div class="eyebrow">All projects</div><h1>Document register</h1></div><div class="sp"></div>${S.dl?'<button class="btn pri" data-act="isopack">📦 ISO audit pack</button><button class="btn" data-act="csv">Export CSV</button>':''}</div>
@@ -1753,7 +1915,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Y) · project formats + feedback chat</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z) · import existing reports</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3085,6 +3247,7 @@ document.addEventListener('click', async e => {
     case 'checksetup': checkSetup(el); break;
     case 'renamedoc': renameDocForm(id); break;
     case 'typenames': typeNamesForm(); break;
+    case 'smartgo': { const ty = $('#smartType').value; closeModal(); runSmartImport(S.smartFile, el.dataset.p, ty); break; }
     case 'chatsend': S.chatDraft = $('#chatText').value; chatSend(el); break;
     case 'chatkind': S.chatKind = el.dataset.k; S.chatDraft = $('#chatText').value; render(); break;
     case 'chatf': S.chatFilter = el.dataset.f; render(); break;
@@ -3201,7 +3364,7 @@ document.addEventListener('change', async e => {
   if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
   if(t.dataset.bulk && t.files?.length){ const fs = [...t.files]; const isFolder = t.dataset.bulk === 'folder'; prepareBulk(t.dataset.p, fs.map(f => ({file: f, path: isFolder ? (f.webkitRelativePath || f.name).split('/').slice(1).join('/') : f.name}))); t.value = ''; }
   if(t.dataset.photos && t.files?.length){ uploadPhotos(t.dataset.photos, t.files); t.value = ''; }
-  if(t.dataset.subcon && t.files?.length){ runSubconImport(t.files[0], t.dataset.subcon); t.value = ''; }
+  if(t.dataset.subcon && t.files?.length){ runSmartImport(t.files[0], t.dataset.subcon); t.value = ''; }
   if(t.matches('[data-filter]')) applyRegFilter();
   if(t.hasAttribute('data-lhfile') && t.files?.[0]){
     try { const blob = await compress(t.files[0], 1600, .9); const r = await S.assets.upload(blob); await S.db.doc('settings/company').set({...company(), letterheadId:r.id}); toast('Letterhead updated'); }
