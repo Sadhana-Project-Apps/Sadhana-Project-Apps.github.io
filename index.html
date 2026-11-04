@@ -172,6 +172,8 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .ftbl td{padding:4px;border-bottom:1px solid var(--line2)}
 .ftbl td input{width:100%;border:1px solid #cfc8bb!important;border-radius:6px!important;padding:7px 8px!important;font-size:14px!important;background:#fff!important;box-shadow:inset 0 1px 2px rgba(0,0,0,.04)}
 .ftbl td input::placeholder{color:#b5ada0}
+.ftbl td textarea.tta{width:100%;min-width:150px;border:1px solid #cfc8bb;border-radius:6px;padding:6px 8px;font:inherit;font-size:13.5px;line-height:1.35;background:#fff;resize:vertical;display:block}
+.ftbl td textarea.tta:focus{outline:2px solid var(--hazard)}
 .ftbl td input[readonly]{border-style:dashed!important}
 .ftbl td input:focus{background:#fff!important;outline:2px solid var(--hazard)!important}
 .ftbl td select.tsel{width:100%;border:1px solid #cfc8bb;border-radius:6px;padding:7px 4px;font-size:14px;background:#fff}
@@ -257,6 +259,10 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .dsec table tr.grp td{background:#E2EFDA;font-weight:700}
 .dsec table tr.tot td{background:#FFE699;font-weight:700}
 .dsec table{width:100%;border-collapse:collapse;font-size:13.5px}
+.dsec table td{white-space:pre-line;vertical-align:top}
+.dsec table.wide{min-width:1150px;font-size:12.5px}
+.dsec table.wide th{text-align:center;vertical-align:middle}
+.dsec table.wide td:first-child{white-space:nowrap}
 .dsec table th{background:#faf8f4;font-size:12px;text-align:left;padding:6px 8px;border:1px solid var(--line)}
 .dsec table td{padding:6px 8px;border:1px solid var(--line)}
 .kv{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--line);border-top:0}
@@ -577,16 +583,47 @@ function chkType(name, code, blurb, items, o = {}){
 }
 // daily inspection kept on one monthly sheet (/ = OK, X = not OK, NA)
 const WALK_AREAS = [{"ref": "F29A", "t": "Emergency Escape Route", "items": ["Emergency escape route is clearly defined in a layout drawing and displayed at suitable area.", "Construction workers has been briefed clearly about emergency escape route.", "Emergency access marked with adequate number of \"exit\" sign and can clearly seen", "Access clear from material, rubbish, debris that obstructing the access", "Emergency escape route free from any slippery agent that would create slip and fall hazard", "Emergency escape route (building) free from falling object to protect evacuees from head injury", "Safe emergency assembly area been identified and clearly marked on the layout drawing"]}, {"ref": "F29B", "t": "Electrical Safety (Temporary Supply & Equipment)", "items": ["To provide certified electrician to install and control temporary supply connection at site", "Temporary supply connected from provided temporary distribution box with proper connection (plug, MCB connection)", "Temporary distribution box equipped with Earth Leakage Circuit Breaker and properly grounded", "Temporary Distribution Box labeled with electrical hazard warning and contact number of person in charge", "Size of temporary supply cable must suit the amp demand of the electrical equipment", "Laid temporary supply cable is in good condition and hang minimum 6 feet from the ground", "All 3 pin plugs and socket are in good condition and safe to used", "All electrical equipment earthed properly"]}, {"ref": "F29C", "t": "Scheduled Waste Storage", "items": ["Each waste stored separately according to type of chemical and nature of hazard to avoid chemical reaction", "Suitable container according to type of chemical used for storage", "Each chemical container is properly labeled which indicate chemical name and nature of the chemical hazard", "Chemical storage must properly ventilated to avoid accumulation of hazardous gas from leak container", "Hazardous chemical storage must be properly locked.", "Scheduled waste consumption must be recorded and well updated from time to time", "Safety Data Sheet (SDS) for each chemical stored must properly updated."]}, {"ref": "F29D", "t": "Air Compressor & Pneumatic Hoses", "items": ["Does copy of the PMT certificate displayed at the air compressor unit and still valid?", "Physical condition of the air compressor unit is in good condition?", "Any leakage spotted?", "If the air compressor is an internal combustion engine type, does oil tray provided to cater possible oil leakage?", "Does pressure dial gauge working?", "Does safety valve unit in good condition?", "Does this air compressor unit equipped with mechanical drain valve and working condition?", "All pneumatic coupling & fitting are in good condition?", "Does moving part (pulley, belt) installed with machine guarding?"]}, {"ref": "F29E", "t": "Oxy-Acetylene Set", "items": ["Pressurised cylinder stored separately and in shaded storage", "Pressurized cylinder keep in standing position and properly secure", "Hazard warning signage available", "Oxy-acetylene set use with flashback arrestor", "Pressure gauge in good condition", "Pneumatic hose check for possible leakages?", "Workers trained to handle oxy-acetylene set?", "All pneumatic coupling & fitting are in good condition?", "Fire watcher with fire extinguisher provided during oxy-acetylene cutting?"]}, {"ref": "F29F", "t": "Site Office Area", "items": ["HSE Management Plan available and accessible as and when needed", "Safety promotion posters available", "Safety induction / training record well kept", "Site HSE inspection / audits checklist available", "Crane inspection checklist available", "Emergency response plan and emergency phone numbers displayed", "Fire extinguisher available with valid certificate and not obstructed", "Housekeeping ( aisles clear, floor swept / mopped, clean )", "Adequate lighting suitable with office work", "First aid kit available and complete", "Personnel trained in first aid available", "HSE related policies displayed", "Good condition chairs and table provided", "Site office adequately illuminated", "Air-conditioning available", "Adequate number of fire extinguisher provided"]}, {"ref": "F29F2", "t": "Construction Area", "items": ["Eye protection is used according to type of work task", "Good condition safety helmets provided, inspected and worn at all times", "Hearing protection is provided and worn at high noise working area", "Special protective clothing and equipment(welding jacket, gloves, face shield, goggles, spectacles etc.) provided according to type of work", "Respirators provided and used where required", "Employees are trained on proper use of Personal Protective Equipments", "Adequate number of First aid box available with adequate content", "Authorized first aider available at site", "Housekeeping concern addressed (slipping, tripping hazard, sharp edges, protruding edges and corners, obstruction of aisles and access ways cluttered work areas, misc., trash debris picked up, etc. )", "Hazards control such as permit to work, HIRARC, method of statement, work area isolation, hazard warning signage provided", "Adequate numbers of toilet provided", "Welfare facilities such as rest area, smoking area, drinking water, rubbish bin provided"]}, {"ref": "F29H", "t": "Excavation And Trenching", "items": ["Underground utilities located (I.e. water, gas electricity, compressed air, sewers, etc..)", "Other vehicle is protected from works with guardrails, board fences or other appropriate means from any trenching or excavating", "Flagmen or watchmen are used to warn others and approaching vehicles from the hazards", "Excavation or Trenching permit obtained from building owner or occupier prior to start", "Competent person designated (in accordance with Factories and Machinery Act 1967", "Sheet piling, wooden shoring or other types of shoring are in place before employee enter the excavated area", "Ladders, stairs ramps are provided in excavation over 1.2 meter ( 4 ft. depth)", "Excavated material stock pile area is in minimum of 610mm (2ft) away from excavated edge", "Barricades and warning signs are used where employees are exposed to falls of 3 meter (10ft) or more", "Excavation site is checked by designated person after every rainstorm for protection against slides and cave-in"]}, {"ref": "F29J", "t": "Construction Machinery (Excavator)", "items": ["Is there physical damage that could reduce or effect safety factor of the machine e.g. tire guarding", "Does head light working and bright enough to be used at night", "Is there any engine oil spillage spotted from the engine compartment", "Does the tire thread percentage / condition good enough to be used for slippery ground", "Does the braking system well functioning", "Is there any leakage spotted on hydraulic, joint, cylinders or pump", "Type of bucket used suitable with type of work (excavator & backhoe)", "Does engine oil and other related service being conducted at suitable interval time", "Does the operator has at least adequate experience to operate the machine", "Does operator being brief about site traffic and designated parking area for the machines"]}];
+// Seeded from the company's HIRARC (NXP demolition, Sg. Way PJ) — same columns as the original form
 const HRC_ROWS = [
-  {hazard:'1. MOBILISE / DEMOBILISE MACHINERY AT SITE', _g:1}, {hazard:'Moving machinery / low-loader reversing', effect:'Workers or public struck by vehicle — fatal / serious injury', existing:'Banksman, reverse buzzer, segregated access'}, {hazard:'Unloading on soft or uneven ground', effect:'Machine topples — operator injury, property damage', existing:'Ground checked, outrigger mats'},
-  {hazard:'2. SOFT STRIPPING & HACKING WORKS', _g:1}, {hazard:'Falling debris / objects', effect:'Head and body injury to workers below', existing:'Exclusion zone, safety helmet, barricade'}, {hazard:'Dust from hacking', effect:'Respiratory illness, eye irritation', existing:'Water spraying, dust mask, goggles'}, {hazard:'Noise and hand-arm vibration from hand breakers', effect:'Hearing loss, vibration injury', existing:'Ear plugs, job rotation'},
-  {hazard:'3. MECHANICAL DEMOLITION (EXCAVATOR / BREAKER / CRUSHER)', _g:1}, {hazard:'Uncontrolled collapse of structure', effect:'Operator and workers crushed — fatal', existing:'Demolition sequence per method statement, engineer check, exclusion zone'}, {hazard:'Excavator working near edge / on slab', effect:'Machine falls through slab — operator fatal', existing:'Propping, load check by engineer'}, {hazard:'Flying fragments', effect:'Eye and body injury, damage to public property', existing:'Hoarding, safety net, cab guard'},
-  {hazard:'4. WORKING AT HEIGHT', _g:1}, {hazard:'Fall from edge / opening / skylift', effect:'Fatal or serious injury', existing:'PTW working at height, full body harness, edge protection'}, {hazard:'Dropped tools', effect:'Injury to people below', existing:'Tool lanyards, barricade below'},
-  {hazard:'5. HOT WORK (OXY-ACETYLENE CUTTING)', _g:1}, {hazard:'Fire / explosion from gas leak or sparks', effect:'Burns, fire damage', existing:'Hot work PTW, flashback arrestors, fire extinguisher, fire watch'}, {hazard:'Fumes from cutting coated steel', effect:'Respiratory illness', existing:'Ventilation, respirator'},
-  {hazard:'6. LIFTING OPERATIONS', _g:1}, {hazard:'Load falls / crane overturns', effect:'Fatal injury, major damage', existing:'Lifting plan, lifting PTW, certified crane & operator, rigging check'},
-  {hazard:'7. SCRAP REMOVAL & LORRY MOVEMENT', _g:1}, {hazard:'Lorries on public road / site traffic', effect:'Road accident, struck-by', existing:'Flagman, traffic management, speed limit'}, {hazard:'Sharp scrap edges', effect:'Cuts and lacerations', existing:'Leather gloves, proper stacking'},
-  {hazard:'8. ELECTRICAL & GENERAL SITE', _g:1}, {hazard:'Live cables / temporary supply', effect:'Electrocution', existing:'TNB isolation confirmed, ELCB, chargeman'}, {hazard:'Heat stress', effect:'Heat exhaustion / heat stroke', existing:'Drinking water, rest breaks, shade'}
+  {no:'1.', job:'MOBILIZATION OF MANPOWER.', hazard:'COVID-19 spreading and outbreak.', effect:'Spreading of the virus to workplace and to other people at work.\nWorkplace to be closed.', existing:'Compulsory to wear 3 ply masks.\nDistancing 1 (one) meter from others.\nNo working at confined space or small area.\nCheck-in is compulsory for all personnel entering the site.', pic1:'Supervisor\nSHO\nSSS', a:'3', b:'4', action:'To provide hand wash facility and/or hand sanitizer at work area.\nDaily body temperature below 37.5 and COVID-19 symptom screening.\nAny positive or close contact case must be reported immediately.', pic:'Supervisor\nSHO\nSSS'},
+  {no:'', job:'', hazard:'Health and drugs.', effect:'Workers unfit to work and law and safety violations.', existing:'Compulsory physical and drug test by OHD.\nMust have CIDB.\nMust attend HSE induction and specific training required.', pic1:'Supervisor\nSHO\nSSS', a:'3', b:'4', action:'Terminate from working.', pic:'Supervisor\nSHO\nSSS'},
+  {no:'2.', job:'MOBILIZATION OF POWER TOOLS AND MATERIALS FOR HOARDING WORKS.', hazard:'Traffic accident', effect:'Body injury', existing:'Work to be properly planned to avoid any conflict.\nPower tools / electrical tools and pneumatic tools shall be inspected and tagged.', pic1:'Supervisor\nSSS', a:'1', b:'2', action:'Submit site equipment registration.\nAny material / vehicle entering the site to be escorted by banksman to the designated area.\nSpeed limit 20 km/h.\nInspect tools and equipment for the tag colour.', pic:'Supervisor\nSSS'},
+  {no:'3.', job:'MANUAL UNLOADING OF HOARDING MATERIAL.', hazard:'Improper body posture during manual lifting.\nFalling object / material.', effect:'Body injury', existing:'Buddy system for manual handling / loading.', pic1:'Supervisor\nSSS', a:'1', b:'2', action:'Below 25 kg per person — load to be unloaded manually.', pic:'Supervisor\nSSS'},
+  {no:'4.', job:'SOFT STRIPPING.\na) Manual digging to check and identify cables.', hazard:'Manual work', effect:'Back pain', existing:'Buddy system', pic1:'Supervisor\nSSS', a:'1', b:'2', action:'5-minute rest every hour.', pic:'Supervisor\nSSS'},
+  {no:'', job:'b) Manual dismantling of cables using battery and electrical power tools.', hazard:'Electrical hazard\nManual work', effect:'Electrical shock\nBack pain', existing:'Use rubber gloves.\nClient chargeman to check and isolate cable before dismantling work.', pic1:'Supervisor\nSSS', a:'2', b:'4', action:'Chargeman to check that the cable is isolated (not live).\nUse rubber gloves and shoes to prevent electrical shock.', pic:'Supervisor\nSSS'},
+  {no:'', job:'c) Pulling up cable manually.', hazard:'Manual work', effect:'Back pain\nBody injury', existing:'Buddy system', pic1:'Supervisor\nSSS', a:'1', b:'2', action:'15-minute rest every hour (administrative control).\nUse hand gloves.\nEnsure workers pull cable in correct posture.', pic:'Supervisor\nSSS'},
+  {no:'', job:'d) Removal and dismantling of electrical panel (1 unit) inside switch room using battery power tools.', hazard:'Electrical hazard\nManual work', effect:'Electrical shock\nBody injury', existing:'To dismantle connection from incoming and outgoing.\nClient chargeman to confirm all cables terminated and isolated.\nBuddy system', pic1:'Supervisor\nSSS', a:'2', b:'4', action:'Use rubber gloves to pull cable.', pic:'Supervisor\nSSS'},
+  {no:'', job:'e) Manual cutting of cable size 100 mm and above using battery and electrical power cutter.', hazard:'Electrical hazard', effect:'Electrical shock', existing:'Genset and power tools to be approved by client.\nPower tools to be checked regularly.', pic1:'Supervisor\nForeman', a:'2', b:'4', action:'Only experienced workers are allowed to use cable cutter.', pic:'Supervisor\nForeman'},
+  {no:'', job:'', hazard:'Hand stuck between cable cutters', effect:'Serious injury', existing:'Use hand gloves.', pic1:'Supervisor\nSSS', a:'2', b:'4', action:'Only experienced workers are allowed to use cable cutter.', pic:'Supervisor\nSSS'},
+  {no:'', job:'f) Loading and transporting out cable using 3-ton lorry.', hazard:'Traffic accident', effect:'Serious injury\nBody pain', existing:'Lorry to be inspected before entering project site.\nLorry to be escorted by banksman to designated area.', pic1:'Supervisor\nSSS', a:'2', b:'2', action:'Lorry driver must have valid driving licence, insurance and road tax before entering the site.\nParking area for lorry to be barricaded.', pic:'Supervisor\nSSS'},
+  {no:'5.', job:'DEMOLITION OF WAREHOUSE.\na) Mobilization of mobile crane and excavators c/w bucket, hydraulic hammer, hydraulic crusher, magnet and hydraulic cutter.', hazard:'Traffic accident', effect:'Serious body injuries', existing:'All heavy machinery shall be inspected by NMB before coming into the working area.\nMachinery documents and operator CIDB registration to be submitted to client 7 days before entry.\nAvoid cars parked at the roadside; soft barricade and signs to be provided.\nFlagman at the main road access for traffic control until the heavy machinery enters the site.', pic1:'Supervisor\nSSS', a:'2', b:'2', action:'Banksman to escort and guide the low loader to the designated area.\nOnly assigned operators are allowed to operate during unloading of the machine.\nFlagman to assist and escort the low loader out of the site.\nFlagman to stand by at the main road for the low loader.', pic:'Supervisor\nSSS'},
+  {no:'', job:'b) Dismantling of roof structure using mobile crane.', hazard:'Falling object', effect:'Serious body injury', existing:'Dismantling area to be barricaded and controlled by spotter.\nEnsure operator turns on walkie-talkie for emergency calls.\nBrief operator to always be aware of surroundings.\nWork only in good weather and wind conditions.', pic1:'Supervisor\nSSS', a:'2', b:'4', action:'Pre-task talk before work starts.\nProvide spotter to control barricaded area.\nSafety signage at the exclusion zone to avoid unauthorised access.', pic:'Supervisor\nSSS'},
+  {no:'', job:'', hazard:'Debris dropping onto operator\'s cabin\nUnplanned structural collapse', effect:'Serious body injury', existing:'Dismantling area to be barricaded and controlled by spotter.\nEnsure operator turns on walkie-talkie for emergency calls.\nBrief operator to always be aware of surroundings.', pic1:'Supervisor\nSSS\nExcavator operator\nSpotter', a:'2', b:'3', action:'Prepare lifting plan with lifting supervisor and rigger.\nProvide spotter to control barricaded area.\nSafety signage at the exclusion zone to avoid unauthorised access.', pic:'Supervisor\nSSS\nExcavator operator\nSpotter'},
+  {no:'', job:'', hazard:'Mobile crane toppling', effect:'Serious body injury', existing:'Ensure ground is level and compacted.\nWork only in good weather and wind conditions.\nTrained operator to operate the machine.', pic1:'Supervisor\nSSS\nExcavator operator', a:'2', b:'3', action:'Prepare lifting plan with lifting supervisor and rigger.\nProvide spotter to control barricaded area.\nSafety signage at the exclusion zone to avoid unauthorised access.', pic:'Supervisor\nSSS\nExcavator operator'},
+  {no:'', job:'c) Dismantling of steel structure using mobile crane.', hazard:'Debris dropping onto operator\'s cabin\nUnplanned structural collapse', effect:'Serious body injury', existing:'Dismantling area to be barricaded and controlled by spotter.\nEnsure operator turns on walkie-talkie for emergency calls.\nBrief operator to always be aware of surroundings.\nWork only in good weather and wind conditions.', pic1:'Supervisor\nSSS\nExcavator operator\nSpotter', a:'2', b:'3', action:'Prepare lifting plan with lifting supervisor and rigger.\nProvide spotter to control barricaded area.\nSafety signage at the exclusion zone to avoid unauthorised access.', pic:'Supervisor\nSSS\nExcavator operator\nSpotter'},
+  {no:'', job:'', hazard:'Mobile crane toppling', effect:'Serious body injury', existing:'Ensure ground is level and compacted.\nWork only in good weather and wind conditions.\nTrained operator to operate the long arm excavator.', pic1:'Supervisor\nSSS\nExcavator operator', a:'2', b:'3', action:'Pre-task talk before work starts.\nProvide spotter to control barricaded area.\nSafety signage at the exclusion zone to avoid unauthorised access.', pic:'Supervisor\nSSS\nExcavator operator'},
+  {no:'', job:'d) Cutting platform using oxy-acetylene.', hazard:'Damage to equipment or fire due to sparks', effect:'Serious body injury\nFatality', existing:'Apply hot work permit before commencing.\nEnsure the oxy set is in good condition.\nCheck all hoses and connections for leaks.\nUse hot work PPE: hand gloves, face shield, dust mask and safety goggles.\nGas cylinders upright, in cage / trolley and chained.', pic1:'Supervisor\nSSS\nFire watcher', a:'4', b:'4', action:'Flashback arrestor and non-return valve fitted when cutting.\nFire watcher to inspect before, during and after hot work.\nFire watcher to stand by with fire extinguisher and fire blanket.\nUse fire blanket.', pic:'Supervisor\nSSS\nFire watcher'},
+  {no:'6.', job:'DEMOLITION ON GROUND AND 1.5 M BELOW GROUND LEVEL.', hazard:'Flying debris', effect:'Body injury', existing:'Working area to be barricaded with proper signage.\nSpray water at the working area.', pic1:'Supervisor\nSSS\nExcavator operator', a:'2', b:'3', action:'Pre-task talk before work starts.', pic:'Supervisor\nSSS\nExcavator operator'},
+  {no:'7.', job:'HOUSEKEEPING.\na) Clearing debris / waste using forklift and manual handling.', hazard:'Collision', effect:'Major injury', existing:'Operators shall undergo HSE induction and other relevant training.\nOnly trained / experienced operators shall operate the machine.\nStrictly follow the speed limit (20 km/h).', pic1:'Supervisor\nSSS', a:'2', b:'2', action:'Toolbox talk compulsory before starting housekeeping.\nCorrect PPE must be worn.', pic:'Supervisor\nSSS'},
+  {no:'8.', job:'DEMOBILIZATION.\na) Manual loading of power tools and hoarding material.', hazard:'Traffic accident', effect:'Body injury', existing:'Work to be properly planned to avoid any conflict.', pic1:'Supervisor\nSSS', a:'1', b:'2', action:'Any material / vehicle leaving the site to be escorted by banksman to the main road.\nSpeed limit 20 km/h.', pic:'Supervisor\nSSS'}
 ];
+const HRC_LEGEND = [
+  {ar:'5', ap:'Most likely', br:'5', bs:'Catastrophic', e1:'Numerous fatalities, irrecoverable property damage & productivity', e2:'Fire which causes fatality, property and productivity damages', e3:'Spillage / leak which causes fire and explosion', sc:'15 - 25', lv:'High Risk (H)'},
+  {ar:'4', ap:'Possible', br:'4', bs:'Fatal', e1:'Approximately one single fatality, major property damage if hazard is realized', e2:'Fire which causes total evacuation', e3:'Spillage / leak which causes total evacuation', sc:'5 - 12', lv:'Medium Risk (M)'},
+  {ar:'3', ap:'Conceivable', br:'3', bs:'Serious', e1:'Non-fatal injury, permanent disability', e2:'Fire which causes use of fire extinguisher', e3:'Spillage / leak which causes legislative NC', sc:'1 - 4', lv:'Low Risk (L)'},
+  {ar:'2', ap:'Remote', br:'2', bs:'Minor', e1:'Disabling but not permanent injury', e2:'Fire which triggers the fire alarm', e3:'Spillage / leak with minimal mitigation cost', sc:'', lv:'Severity (B) = 5 is always High (SDESB-EHS-P01)'},
+  {ar:'1', ap:'Inconceivable', br:'1', bs:'Negligible', e1:'Minor abrasions, bruises, cuts, first aid type injury', e2:'No fire, only smoke', e3:'Spillage / leak which can be manually controlled', sc:'', lv:''}
+];
+// older HIRARC records (activity heading rows, S / L columns) → the form's own layout
+function hrcMigrate(data){
+  if(!data || !Array.isArray(data.rows) || !data.rows.some(r => r && (r._g || 's' in r || 'l' in r))) return data;
+  const out = []; let n = 0, pend = null;
+  data.rows.forEach(r => { if(!r) return;
+    if(r._g){ n++; pend = {no: n + '.', job: String(r.hazard || '').replace(/^\d+[.)]\s*/, '')}; return; }
+    const o = {no: '', job: '', ...(pend || {}), hazard: r.hazard || '', effect: r.effect || '', existing: r.existing || '', pic1: '', a: r.l || '', b: r.s || '', action: r.action || '', pic: r.pic || ''}; pend = null;
+    const sc = lxs(o.a, o.b); o.score = sc ? String(sc) : ''; o.level = sc ? (numv(o.b) >= 5 || sc >= 15 ? 'H' : sc >= 5 ? 'M' : 'L') : ''; out.push(o); });
+  data.rows = out; return data;
+}
 const LGR_ROWS = [
   {law:'ENVIRONMENT', _g:1}, {law:'Environmental Quality Act 1974 (Act 127)', sec:'Sec. 22', req:'No pollution of the atmosphere (dust, smoke) beyond acceptable conditions', appl:'Demolition, hacking, machinery'}, {law:'Environmental Quality Act 1974 (Act 127)', sec:'Sec. 23', req:'No noise beyond acceptable conditions', appl:'Breaking, crushing, machinery'}, {law:'Environmental Quality Act 1974 (Act 127)', sec:'Sec. 24', req:'No pollution of soil / land', appl:'Oil, diesel, chemical storage'}, {law:'Environmental Quality Act 1974 (Act 127)', sec:'Sec. 25', req:'No pollution of inland waters', appl:'Site run-off, washing bay'}, {law:'Environmental Quality Act 1974 (Act 127)', sec:'Sec. 29A', req:'No open burning', appl:'Site clearing, waste'}, {law:'Environmental Quality Act 1974 (Act 127)', sec:'Sec. 34B', req:'Scheduled wastes stored, labelled and disposed only through licensed contractors', appl:'Spent oil, contaminated waste'},
   {law:'Land Conservation Act 1960', sec:'', req:'Control of soil erosion and sedimentation', appl:'Earthworks, excavation'},
@@ -1379,19 +1416,32 @@ const TYPES = {
         ...['helmet:Helmet', 'boot:Boots', 'harness:Harness', 'earplug:Ear plug', 'shield:Face shield', 'jacket:Safety vest', 'goggles:Goggles', 'mask:Mask', 'glove:Gloves'].map(s => { const [k, l] = s.split(':'); return {k, l, n:1, w:62, center:1, pw:10}; }),
         {k:'ack', l:'Received (date)', w:100, center:1}], def: () => [{}, {}, {}, {}, {}]},
       {k:'photos', l:'Photos', t:'photos', opt:1}]},
-  HRC: {name:'HIRARC – Hazard Identification, Risk Assessment & Risk Control', code:'HRC', blurb:'Hazards per activity, S × L risk, L / M / H (S = 5 is always High), controls & opportunities', landscape:true, formRef:'Per SDESB-EHS-P01 · Rev 0',
-    sigs:[{role:'Prepared by', hint:'Safety & Health Officer'}, {role:'Reviewed by', hint:'EHS Committee / HOD'}, {role:'Approved by', hint:'Project Manager / MR'}], done:'Approved', dateField:'date', carry:['activity', 'location', 'rows', 'opps', 'legend'],
-    title: d => 'HIRARC — ' + (d.activity || '') + (d.revNo ? ' · Rev ' + d.revNo : ''),
-    fields:[{sec:'Register Details'}, {k:'activity', l:'Work activity / process', t:'text', req:1, w:'half'}, {k:'location', l:'Location', t:'text', w:'half'}, {k:'date', l:'Date assessed', t:'date', req:1, w:'half', def: () => today()}, {k:'revNo', l:'Rev. no.', t:'text', w:'half', def:'0'}, {k:'review', l:'Next review date', t:'date', w:'half'}, {k:'team', l:'Assessment team', t:'text', w:'half'},
-      {sec:'Hazard Identification & Risk Assessment'},
-      {k:'rows', l:'Register', t:'table', num:0, sub:false, groups:1, sumCols:[], hint:'Grey bars are work activities ("+ Add activity"). Score = S × L; 1–4 Low, 5–12 Medium, 15–25 High; S = 5 is always High (significant).', cols:[
-        {k:'hazard', l:'Hazard', pw:34}, {k:'effect', l:'Which can cause / who is harmed', pw:32}, {k:'existing', l:'Existing risk control', pw:36},
-        {k:'s', l:'S', o:LS5, w:56, center:1, pw:8}, {k:'l', l:'L', o:LS5, w:56, center:1, pw:8},
-        {k:'score', l:'Score', center:1, pw:10, calc: r => r._g ? '' : String(lxs(r.s, r.l))}, {k:'level', l:'Risk', center:1, pw:10, alert:['H'], calc: r => { if(r._g || !lxs(r.s, r.l)) return ''; const sc = lxs(r.s, r.l); return numv(r.s) >= 5 || sc >= 15 ? 'H' : sc >= 5 ? 'M' : 'L'; }},
-        {k:'action', l:'Recommended control measures', pw:44}, {k:'pic', l:'PIC / due date / status'}],
+  HRC: {name:'HIRARC – Hazard Identification, Risk Assessment & Risk Control', code:'HRC', blurb:'Job steps, hazards & effects, Probability (A) × Severity (B) risk ranking, controls — same layout as our HIRARC form', landscape:true, formRef:'Per SDESB-EHS-P01 · Rev 0',
+    sigs:[{role:'Prepared by – PD', hint:'Project Director'}, {role:'Prepared by – SSS', hint:'Site Safety Supervisor'}, {role:'Prepared by – Engineer', hint:'Site Engineer'}, {role:'Prepared by – PM', hint:'Project Manager'}, {role:'Checked by – SHO', hint:'Safety & Health Officer'}, {role:'Approved by – HOP / SPM / SM', hint:'Head of Project / Senior PM / Site Manager'}], done:'Approved', dateField:'date',
+    carry:['site', 'activity', 'location', 'legal', 'hirNo', 'revNo', 'rows', 'legendT', 'hazTypes'],
+    title: d => 'HIRARC' + (d.hirNo ? ' ' + d.hirNo : '') + (d.revNo ? ' · Rev ' + d.revNo : '') + (d.activity ? ' — ' + String(d.activity).split('\n')[0].slice(0, 70) : ''),
+    fields:[{sec:'HIRARC Details'}, {k:'site', l:'Project / site', t:'textarea'}, {k:'activity', l:'Description of job or work activity', t:'textarea', req:1},
+      {k:'location', l:'Location', t:'text', w:'half'}, {k:'legal', l:'Legal & other requirements', t:'text', w:'half', def:'OSHA 1994 – Act 514, FMA 1967 – Act 139'},
+      {k:'hirNo', l:'HIRARC no.', t:'text', w:'half', ph:'e.g. SDESB/L(m)-03'}, {k:'revNo', l:'Rev. no.', t:'text', w:'half', def:'0'}, {k:'date', l:'Eff. date', t:'date', req:1, w:'half', def: () => today()},
+      {sec:'Hazard Identification, Risk Assessment & Risk Control'},
+      {k:'rows', l:'HIRARC', t:'table', num:0, sub:false, sumCols:[], spanCols:['no', 'job'],
+        headGroups:[[null, 1], [null, 1], ['HAZARD IDENTIFICATION', 2], ['RISK ASSESSMENT', 6], ['RISK CONTROL', 2]],
+        hint:'One row per hazard. Put the NO and job step only on the first row of each step — rows below with these left empty print merged, like the form. Score = Probability (A) × Severity (B): 1–4 L, 5–12 M, 15–25 H; Severity 5 is always H.', cols:[
+        {k:'no', l:'No', w:46, center:1, pw:8}, {k:'job', l:'Job sequence / basic steps / work activity', ta:1, pw:27},
+        {k:'hazard', l:'Hazards', ta:1, pw:24}, {k:'effect', l:'Effects', ta:1, pw:22},
+        {k:'existing', l:'Existing risk control', ta:1, pw:36}, {k:'pic1', l:'Person in charge (status)', ta:1, pw:18},
+        {k:'a', l:'Probability (A)', o:LS5, w:60, center:1, pw:15}, {k:'b', l:'Severity (B)', o:LS5, w:60, center:1, pw:14},
+        {k:'score', l:'Score', center:1, pw:10, calc: r => String(lxs(r.a, r.b))},
+        {k:'level', l:'Level', center:1, pw:10, alert:['H'], calc: r => { const sc = lxs(r.a, r.b); if(!sc) return ''; return numv(r.b) >= 5 || sc >= 15 ? 'H' : sc >= 5 ? 'M' : 'L'; }},
+        {k:'action', l:'Recommended control measures', ta:1, pw:43}, {k:'pic', l:'Person in charge (status)', ta:1}],
         def: () => HRC_ROWS.map(r => ({...r}))},
-      {k:'opps', l:'EHS opportunities (no rating needed — give the proposed action)', t:'table', num:1, sub:false, cols:[{k:'opp', l:'Opportunity', pw:90}, {k:'action', l:'Proposed action', pw:90}, {k:'pic', l:'PIC / due date'}], def: () => [{}]},
-      {k:'legend', l:'Legend (SDESB-EHS-P01)', t:'textarea', def:'Severity: 1 Negligible (first aid) · 2 Minor (disabling, not permanent) · 3 Serious (permanent disability) · 4 Fatal (single fatality / major damage) · 5 Catastrophic (numerous fatalities).\nLikelihood: 1 Inconceivable · 2 Remote · 3 Conceivable · 4 Possible · 5 Most likely.\nRisk = S × L: 1–4 Low (acceptable) · 5–12 Medium (planned control action) · 15–25 High or S = 5 (significant — immediate action).'}]},
+      {sec:'Legend'},
+      {k:'legendT', l:'Legend', t:'table', num:0, sub:false, keepRows:1, sumCols:[],
+        headGroups:[['PROBABILITY (A)', 2], ['CONSEQUENCES (B)', 2], ['EXAMPLES', 3], ['RISK RANKING (C) = (A) x (B)', 2]], cols:[
+        {k:'ar', l:'Rating', center:1, w:50, pw:15}, {k:'ap', l:'Probability', pw:25}, {k:'br', l:'Rating', center:1, w:50, pw:15}, {k:'bs', l:'Severity', pw:22},
+        {k:'e1', l:'Bodily injury', ta:1, pw:46}, {k:'e2', l:'Fire', ta:1, pw:42}, {k:'e3', l:'Spillage / leakage', ta:1, pw:42}, {k:'sc', l:'Score', center:1, pw:16}, {k:'lv', l:'Level'}],
+        def: () => HRC_LEGEND.map(r => ({...r}))},
+      {k:'hazTypes', l:'Examples of types of hazards', t:'textarea', def:'Mechanical, Electrical, Chemical, Fire & Explosion, Particle & Dust, Radiation, Biological, Physical, Environmental, etc.'}]},
   LGR: {name:'Legal & Other Requirements Register', code:'LGR', blurb:'Applicable laws & client requirements, yearly evaluation of compliance', landscape:true, formRef:'Per SDESB-EHS-P03 · Rev 0',
     sigs:[{role:'Prepared by', hint:'Environmental / Safety & Health Officer'}, {role:'Reviewed by', hint:'EHS Committee'}, {role:'Approved by', hint:'Top management'}], done:'Approved', dateField:'date', carry:['rows'],
     title: d => 'Legal Register — evaluated ' + fmtDate(d.date),
@@ -1530,7 +1580,7 @@ const shown = (f, data) => !f.when || f.when(data || {});
 const TYPE_ORIG = {}; TYPE_KEYS.forEach(k => TYPE_ORIG[k] = {name: TYPES[k].name, blurb: TYPES[k].blurb});
 function applyTypeNames(){
   const o = (S.company && S.company.typeNames) || {};
-  TYPE_KEYS.forEach(k => { TYPES[k].name = (o[k] && o[k].name) || TYPE_ORIG[k].name; TYPES[k].blurb = (o[k] && o[k].blurb) || TYPE_ORIG[k].blurb; });
+  TYPE_KEYS.forEach(k => { const nm = o[k] && o[k].name && !(k === 'TBT' && /induction/i.test(o[k].name)) ? o[k].name : ''; TYPES[k].name = nm || TYPE_ORIG[k].name; TYPES[k].blurb = (o[k] && o[k].blurb && !(k === 'TBT' && !nm && o[k].name) && o[k].blurb) || TYPE_ORIG[k].blurb; });
 }
 const swapTypeName = (k, str) => { const o = TYPE_ORIG[k]; return o && TYPES[k] && TYPES[k].name !== o.name ? String(str).replace(o.name, TYPES[k].name) : str; };
 
@@ -1735,7 +1785,10 @@ const DOC_CATS = [
 const DEFAULT_CAT = {}; DOC_CATS.forEach(c => c.types.forEach(t => DEFAULT_CAT[t] = c.k));
 // admin can move a document type to another folder (saved in company settings)
 const typeCat = t => ((S.company && S.company.typeCats) || {})[t] || DEFAULT_CAT[t] || 'OPS';
-const catTypes = c => TYPE_KEYS.filter(k => typeCat(k) === c.k);
+// Retired types: replaced by a company form (PTW → PTM/PWH/PLW/PCS/PEX) or waiting for the correct list (POG duplicated SWI).
+// Not offered for new documents; old records of these types stay viewable.
+const RETIRED = new Set(['PTW','POG']);
+const catTypes = (c, withRetired) => TYPE_KEYS.filter(k => typeCat(k) === c.k && (withRetired || !RETIRED.has(k)));
 const catOfType = t => DOC_CATS.find(c => c.k === typeCat(t)) || DOC_CATS[0];
 /* ---------- ISO 9001 / 14001 / 45001: which records count as evidence for which clause ---------- */
 const ISO_STDS = [
@@ -1785,13 +1838,13 @@ function projectView(id, tab){
   S.lastCat = S.lastCat || {};
   const cat = DOC_CATS.find(c => c.k === (S.view.cat || (tab !== 'ALL' ? catOfType(tab).k : S.lastCat[id] || 'OPS'))) || DOC_CATS[0];
   S.lastCat[id] = cat.k;
-  const ckeys = catTypes(cat);
+  const ckeys = catTypes(cat, true);
   const allP = S.docs.filter(d => d.projectId === id);
   const all = allP.filter(d => ckeys.includes(d.type));
   if(tab !== 'ALL' && !ckeys.includes(tab)) tab = 'ALL';
   const ds = (tab === 'ALL' ? all : all.filter(d => d.type === tab)).sort((a,b) => String(docDate(b)).localeCompare(String(docDate(a))) || String(b.number).localeCompare(String(a.number)));
-  const tabs = ['ALL', ...ckeys].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
-  const folders = `<div class="folders">${DOC_CATS.map(c => { const ct = catTypes(c), n = allP.filter(d => ct.includes(d.type)).length, pend = allP.filter(d => ct.includes(d.type) && statusOf(d).next >= 0).length;
+  const tabs = ['ALL', ...ckeys.filter(k => !RETIRED.has(k) || all.some(d => d.type === k))].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
+  const folders = `<div class="folders">${DOC_CATS.map(c => { const ct = catTypes(c, true), n = allP.filter(d => ct.includes(d.type)).length, pend = allP.filter(d => ct.includes(d.type) && statusOf(d).next >= 0).length;
     return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name.toUpperCase())}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · ' + pend + ' awaiting' : ''}</span></span></button>`; }).join('')}</div>`;
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
@@ -1808,7 +1861,7 @@ function projectView(id, tab){
   </div>
   ${folders}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
-  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a Word report — our sub-contractor forms or your existing project reports">⇪ Import report (Word)<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${esc(projFmt(id, k)?.name || TYPES[k].name)}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
+  ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><div class="eyebrow">Create new — ${esc(cat.name)}</div><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a Word report — our sub-contractor forms or your existing project reports">⇪ Import report (Word)<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<div class="sp"></div><button class="btn sm ghost" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm ghost" data-act="typenames">✎ Names & folders</button>` : ''}</div><div class="newgrid">${ckeys.filter(k => !RETIRED.has(k)).map(k => `<button class="newbtn" data-act="new" data-p="${esc(id)}" data-t="${k}"><b>+ ${esc(projFmt(id, k)?.name || TYPES[k].name)}</b><span>${TYPES[k].blurb}</span></button>`).join('')}</div>`:''}
   <div class="tabs">${tabs}</div>
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
@@ -2129,7 +2182,7 @@ function presentProject(pid){
       <div class="card pad"><div class="eyebrow">Overall progress${lastPR ? ' · ' + esc(fmtDate(lastPR.data.to)) : ''}</div>${lastPR ? `<div style="font:800 40px Archivo">${a}%</div><div class="small">Actual</div>${bar(a)}<div class="small">Planned ${pl}%</div>${bar(pl, '#9aa3ad')}<div><b>${esc(withAutos(lastPR).aheadDelay || '')}</b></div>` : '<div class="muted">No progress report yet</div>'}</div>
     </div>
     ${lastDSR ? `<h3 style="margin:18px 0 8px">Works progress · ${esc(fmtDate(lastDSR.data.date))}</h3>${lastDSR.data.works.filter(r => r.work).map(r => `<div style="margin-bottom:8px"><div class="row"><span>${esc(r.work)}</span><div class="sp"></div><b>${numv(r.pct)}%</b></div>${bar(numv(r.pct))}</div>`).join('')}` : ''}
-    <h3 style="margin:18px 0 8px">Records</h3><div class="pgrid">${DOC_CATS.map(cat => { const ct = catTypes(cat), n = ds.filter(d => ct.includes(d.type)).length, done = ds.filter(d => ct.includes(d.type) && statusOf(d).next === -1).length;
+    <h3 style="margin:18px 0 8px">Records</h3><div class="pgrid">${DOC_CATS.map(cat => { const ct = catTypes(cat, true), n = ds.filter(d => ct.includes(d.type)).length, done = ds.filter(d => ct.includes(d.type) && statusOf(d).next === -1).length;
       return `<div class="card pad"><div class="eyebrow">${cat.icon} ${esc(cat.name)}</div><div style="font:800 28px Archivo">${n}</div><div class="small muted">${done} completed & signed</div></div>`; }).join('')}</div>
   </div></div>`;
   document.body.appendChild(ov); document.body.style.overflow = 'hidden';
@@ -2245,7 +2298,7 @@ async function readWordBlocks(zip){
 function guessType(blocks){
   const top = blocks.filter(b => b.k !== 't' && b.t).slice(0, 15).map(b => b.t.toUpperCase()).join(' | ');
   const rules = [['PR', /PROGRESS REPORT/], ['DSR', /DAILY (SITE )?REPORT|SITE DIARY|DAILY REPORT/], ['MM', /MANPOWER\s*&\s*MACHINERY/], ['SW', /SALVAGE\s*&\s*WASTE|WASTE MANAGEMENT/], ['SSO', /SCRAP/],
-    ['RFI', /REQUEST FOR INFORMATION|\bRFI\b/], ['TR', /TRANSMITTAL/], ['PDH', /PRE-?DEMOLITION/], ['IAH', /HANDOVER/], ['EMD', /EQUIPMENT MOVEMENT|DECLARATION/], ['TBT', /TOOLBOX|SAFETY INDUCTION|INDUCTION/], ['PTW', /PERMIT TO WORK/]];
+    ['RFI', /REQUEST FOR INFORMATION|\bRFI\b/], ['TR', /TRANSMITTAL/], ['PDH', /PRE-?DEMOLITION/], ['IAH', /HANDOVER/], ['EMD', /EQUIPMENT MOVEMENT|DECLARATION/], ['TBT', /TOOLBOX/], ['HIA', /INDUCTION/], ['PWH', /WORKING AT HEIGHT/], ['PLW', /LIFTING WORK/], ['PEX', /PERMIT.*EXCAVATION/], ['PCS', /CONFINED SPACE ENTRY/], ['HRC', /HIRARC|HAZARD IDENTIFICATION/], ['PTM', /PERMIT TO WORK/]];
   const r = rules.find(([k, re]) => re.test(top)); return r ? r[0] : '';
 }
 async function smartImport(file, pid, forced){
@@ -2449,8 +2502,8 @@ async function makeDocx(id){
     const t = (s, o = {}) => new TextRun({text: String(s ?? ''), font: FONT, size: o.size || 18, bold: o.bold, italics: o.it, color: o.color, underline: o.u ? {} : undefined});
     const P = (s, o = {}) => new Paragraph({children: Array.isArray(s) ? s : [t(s, o)], alignment: o.align, spacing: {before: o.before || 0, after: o.after ?? 40}, keepNext: o.keepNext, border: o.border, indent: o.indent});
     const bd = {style: BorderStyle.SINGLE, size: 4, color: GREY}, borders = {top: bd, bottom: bd, left: bd, right: bd};
-    const cell = (content, w, o = {}) => new TableCell({children: (Array.isArray(content) ? content : [content]).map(x => x instanceof Paragraph ? x : P(String(x ?? ''), {bold: o.bold, size: o.size, align: o.align, after: 0})),
-      width: {size: w, type: WidthType.DXA}, borders, columnSpan: o.span, verticalAlign: VerticalAlign.CENTER, shading: o.fill ? {fill: o.fill, type: ShadingType.CLEAR, color: 'auto'} : undefined, margins: {top: 40, bottom: 40, left: 80, right: 80}});
+    const cell = (content, w, o = {}) => new TableCell({children: (Array.isArray(content) ? content : [content]).flatMap(x => x instanceof Paragraph ? [x] : String(x ?? '').split('\n').map(l => P(l, {bold: o.bold, size: o.size, align: o.align, after: 0}))),
+      width: {size: w, type: WidthType.DXA}, borders, columnSpan: o.span, rowSpan: o.rs, verticalAlign: VerticalAlign.CENTER, shading: o.fill ? {fill: o.fill, type: ShadingType.CLEAR, color: 'auto'} : undefined, margins: {top: 40, bottom: 40, left: 80, right: 80}});
     const widths = arr => { const tot = arr.reduce((a, b) => a + b, 0); const w = arr.map(x => Math.round(x / tot * CW)); w[w.length - 1] += CW - w.reduce((a, b) => a + b, 0); return w; };
     const table = (w, rows) => new Table({width: {size: CW, type: WidthType.DXA}, columnWidths: w, rows});
     const row = (cells, o = {}) => new TableRow({children: cells, tableHeader: o.head, cantSplit: true});
@@ -2537,14 +2590,19 @@ async function makeDocx(id){
           const isGrp = r => !f.keepRows && tc0 && (r._g || (cols.filter(cc => cc !== tc0).every(cc => isEmpty(r[cc.k])) && String(r[tc0.k] || '').trim() === String(r[tc0.k] || '').trim().toUpperCase() && /[A-Z]{3}/.test(r[tc0.k] || '')));
           const grpOn = cols.length > 1 && rows.some(isGrp) && rows.some(r => !isGrp(r));
           if(f.sub !== false) body.push(P([t(f.l.toUpperCase(), {bold: true, size: 17})], {before: 80, after: 60, keepNext: true}));
-          const out = [row(head.map((h, i) => cell(h, w[i], {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small})), {head: true})];
+          const hgw = !dayCols.length && !f.num && !f.rowTotal ? headGroupRows(f, head) : null;
+          const out = hgw ? (() => { let i = 0; const top = hgw.top.map(h => { const ww = w.slice(i, i + (h.cs || 1)).reduce((a, b) => a + b, 0); i += h.cs || 1; return cell(h.l, ww, {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small, span: h.cs, rs: h.rs}); });
+              const bi = []; i = 0; hgw.top.forEach(h => { if(h.cs) for(let j = 0; j < h.cs; j++) bi.push(i + j); i += h.cs || 1; });
+              return [row(top, {head: true}), row(hgw.bot.map((l, j) => cell(l, w[bi[j]], {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small})), {head: true})]; })()
+            : [row(head.map((h, i) => cell(h, w[i], {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small})), {head: true})];
+          const smw = !grpOn && !dayCols.length ? spanMap(f, cols, rows) : null;
           let gN = 0, iN = 0;
           rows.forEach((r, i) => { if(grpOn && isGrp(r) && f.numItems){ const lab = String(r[tc0.k]).trim(), main = lab === lab.toUpperCase();
               out.push(row([cell(P([t(lab, {bold: true, italics: !main, size: small})], {after: 0, keepNext: true}), CW, {fill: main ? GRPF : 'F2F2F2', span: head.length})])); return; }
             if(grpOn && isGrp(r)){ gN++; const lab = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
               out.push(row([...(f.num ? [cell(P([t(gN + '.', {bold: true, size: small})], {align: AlignmentType.CENTER, after: 0, keepNext: true}), w[0], {fill: GRPF})] : []), cell(P([t(f.num ? lab : r[tc0.k], {bold: true, size: small})], {after: 0, keepNext: true}), CW - (f.num ? w[0] : 0), {fill: GRPF, span: head.length - (f.num ? 1 : 0)})])); return; }
             const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : (r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
-            out.push(row(vals.map((v, k) => cell(v, w[k], {size: small, align: (k === 0 && f.num) || (k - (f.num ? 1 : 0) >= 0 && cols[k - (f.num ? 1 : 0)] && (cols[k - (f.num ? 1 : 0)].n || cols[k - (f.num ? 1 : 0)].center || cols[k - (f.num ? 1 : 0)].day != null)) || (f.rowTotal && k === vals.length - 1) ? AlignmentType.CENTER : undefined})))); });
+            out.push(row(vals.map((v, k) => { const sc = smw && cols[k - (f.num ? 1 : 0)] ? smw[i][cols[k - (f.num ? 1 : 0)].k] : null; return sc === 0 ? null : cell(v, w[k], {rs: sc > 1 ? sc : undefined, size: small, align: (k === 0 && f.num) || (k - (f.num ? 1 : 0) >= 0 && cols[k - (f.num ? 1 : 0)] && (cols[k - (f.num ? 1 : 0)].n || cols[k - (f.num ? 1 : 0)].center || cols[k - (f.num ? 1 : 0)].day != null)) || (f.rowTotal && k === vals.length - 1) ? AlignmentType.CENTER : undefined}); }).filter(Boolean))); });
           const sk = f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? dayCols.map(cc => cc.k) : [];
           if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
             out.push(row(vals.map((v, k) => cell(v, w[k], {bold: true, fill: YEL, size: small, align: k ? AlignmentType.CENTER : undefined})))); }
@@ -2590,7 +2648,7 @@ function registerView(){
     <div class="filters">
       <input id="fq" placeholder="Search number, title, project…" data-filter>
       <select id="fp" data-filter><option value="">All projects</option>${S.projects.map(p=>`<option value="${esc(p.id)}" title="${esc(p.code)} — ${esc(p.name)}">${esc(shortName(p.code + ' — ' + p.name, 48))}</option>`).join('')}</select>
-      <select id="ft" data-filter><option value="">All types</option>${DOC_CATS.map(c => `<optgroup label="${esc(c.name)}">${catTypes(c).map(k=>`<option value="${k}">${esc(TYPES[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
+      <select id="ft" data-filter><option value="">All types</option>${DOC_CATS.map(c => `<optgroup label="${esc(c.name)}">${catTypes(c, true).map(k=>`<option value="${k}">${esc(TYPES[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
       <select id="fs" data-filter><option value="">Any status</option><option value="draft">Draft</option><option value="pending">Awaiting signature</option><option value="done">Completed</option></select>
     </div>
     ${rows.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Project</th><th class="hm">Date</th><th>Status</th></tr></thead><tbody id="regbody">
@@ -2681,7 +2739,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 1 Nov 2026 (Z15) · Procedures library, HIRARC, legal register, incident investigation</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 4 Nov 2026 (Z16) · HIRARC in the original form layout, duplicate forms removed</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -2702,6 +2760,21 @@ function valueText(f, v){
   if(f.t === 'datetime') return fmtDT(v);
   if(f.t === 'checks') return (v||[]).join(', ');
   return v ?? '';
+}
+// merged cells (like the HIRARC form): an empty cell in a spanCols column joins the cell above, within one numbered group
+function spanMap(f, cols, rows){
+  if(!f.spanCols) return null; const ks = f.spanCols.filter(k => cols.some(c => c.k === k)); if(!ks.length) return null;
+  const m = rows.map(() => ({})), anc = {};
+  rows.forEach((r, i) => { const start = i === 0 || r._g || rows[i - 1]._g || !isEmpty(r[ks[0]]);
+    ks.forEach(k => { if(start || !isEmpty(r[k]) || r._g){ m[i][k] = 1; anc[k] = i; } else { m[anc[k]][k]++; m[i][k] = 0; } }); });
+  return m;
+}
+// two-row table heading: [label, n columns]; label null = that column's own heading spans both rows
+function headGroupRows(f, labels){
+  if(!f.headGroups) return null; const top = [], bot = []; let i = 0;
+  f.headGroups.forEach(([lab, n]) => { if(lab == null){ for(let j = 0; j < n; j++) top.push({l: labels[i + j], rs: 2}); } else { top.push({l: lab, cs: n}); for(let j = 0; j < n; j++) bot.push(labels[i + j]); } i += n; });
+  while(i < labels.length) top.push({l: labels[i++], rs: 2});
+  return {top, bot};
 }
 function cleanRows(f, rows){ return (rows||[]).filter(r => f.cols.some(c => !isEmpty(r?.[c.k]))); }
 // fill in calculated columns (e.g. value = weight x rate)
@@ -2928,14 +3001,16 @@ function viewTable(f, data){
   if(!rows.length) return `<div class="body"><span class="muted">Nil</span></div>`;
   const grid = dayCols.length > 0, rt = f.rowTotal && dayCols.length;
   const cellv = (c, r) => esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : (c.dp || c.fmt) && !isEmpty(r[c.k]) ? fmtN(r[c.k], c.dp) : r[c.k]);
-  const th = cols.map(c => `<th>${esc(c.day != null ? dayLabel(data.from, c.day).slice(0, dayCols.length > 14 ? 2 : 5) : c.l)}</th>`).join('') + (rt ? '<th>Total</th>' : '');
-  const body = rows.map(r => r._g ? `<tr class="grp"><td colspan="${cols.length + (rt ? 1 : 0)}">${esc(r[cols[0].k] || '')}</td></tr>`
-    : `<tr>${cols.map(c => `<td class="${(f.check && c.k === 'ans' && r.ans === (f.bad || 'No')) || (c.alert && c.alert.includes(String(r[c.k] ?? ''))) ? 'ansNo' : ''}">${cellv(c, r)}</td>`).join('')}${rt ? `<td><b>${dayCols.reduce((a, c) => a + numv(r[c.k]), 0)}</b></td>` : ''}</tr>`).join('');
+  const hg = !grid && !f.num ? headGroupRows(f, cols.map(c => c.l)) : null, sm = !grid ? spanMap(f, cols, rows) : null;
+  const th = hg ? hg.top.map(h => `<th ${h.rs ? 'rowspan="2"' : `colspan="${h.cs}" style="text-align:center"`}>${esc(h.l)}</th>`).join('') + '</tr><tr>' + hg.bot.map(l => `<th>${esc(l)}</th>`).join('')
+    : cols.map(c => `<th>${esc(c.day != null ? dayLabel(data.from, c.day).slice(0, dayCols.length > 14 ? 2 : 5) : c.l)}</th>`).join('') + (rt ? '<th>Total</th>' : '');
+  const body = rows.map((r, ri) => r._g ? `<tr class="grp"><td colspan="${cols.length + (rt ? 1 : 0)}">${esc(r[cols[0].k] || '')}</td></tr>`
+    : `<tr>${cols.map(c => sm && sm[ri][c.k] === 0 ? '' : `<td ${sm && sm[ri][c.k] > 1 ? `rowspan="${sm[ri][c.k]}" ` : ''}class="${(f.check && c.k === 'ans' && r.ans === (f.bad || 'No')) || (c.alert && c.alert.includes(String(r[c.k] ?? ''))) ? 'ansNo' : ''}">${cellv(c, r)}</td>`).join('')}${rt ? `<td><b>${dayCols.reduce((a, c) => a + numv(r[c.k]), 0)}</b></td>` : ''}</tr>`).join('');
   let foot = '';
   if(f.colTotal && dayCols.length){ const real = rows.filter(r => !r._g);
     foot = `<tr class="tot"><td>Total</td>${cols.slice(1).map(c => c.day != null ? `<td>${real.reduce((a, r) => a + numv(r[c.k]), 0) || ''}</td>` : '<td></td>').join('')}${rt ? `<td>${real.reduce((a, r) => a + dayCols.reduce((b, c) => b + numv(r[c.k]), 0), 0)}</td>` : ''}</tr>`; }
   else foot = tableTotals({...f, cols}, rows.filter(r => !r._g));
-  return `${f.check ? `<div class="small" style="padding:6px 2px">${chkCount(rows, f)}</div>` : ''}<div class="tscroll"><table class="${grid ? 'daygrid' : ''}"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div>${dayCols.length > 7 ? `<div class="small muted" style="padding:4px 2px">${esc(dayLabel(data.from, 0))} – ${esc(dayLabel(data.from, days - 1))} · swipe sideways to see all days</div>` : ''}`;
+  return `${f.check ? `<div class="small" style="padding:6px 2px">${chkCount(rows, f)}</div>` : ''}<div class="tscroll"><table class="${grid ? 'daygrid' : f.headGroups || cols.length > 9 ? 'wide' : ''}"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div>${dayCols.length > 7 ? `<div class="small muted" style="padding:4px 2px">${esc(dayLabel(data.from, 0))} – ${esc(dayLabel(data.from, days - 1))} · swipe sideways to see all days</div>` : ''}`;
 }
 function tableTotals(f, rows){
   const numCols = f.sumCols ? f.cols.filter(c => f.sumCols.includes(c.k)) : f.cols.filter(c => c.n && !/%/.test(c.l));
@@ -3119,8 +3194,9 @@ function newDraft(pid, type){
       if(type === 'ENM'){ (data.summary || []).forEach(r => { r.cur = ''; r.stat = ''; r.note = ''; }); }
       if(type === 'EAIA') data.revNo = String((parseInt(prev.data.revNo) || 0) + 1);
       data._from = prev.number || ''; } }
+  if(type === 'HRC'){ const p = projById(pid) || {}; if(!data.site) data.site = [p.name, p.location].filter(Boolean).join(', ') || ''; if(!data.location) data.location = p.location || ''; if(data._from) data.revNo = String((parseInt(data.revNo) || 0) + 1); hrcMigrate(data); }
   if(type === 'EAIA'){ const p = projById(pid) || {}; if(!data.job) data.job = 'Demolition works — ' + (p.name || ''); if(!data.location) data.location = p.location || ''; }
-  if(type === 'ENM' || type === 'EMR' || type === 'EAIA' || type === 'ERO') T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
+  if(type === 'ENM' || type === 'EMR' || type === 'EAIA' || type === 'ERO' || type === 'HRC') T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
   return {projectId:pid, type, data, signatures:[], ...(fmt0 ? {fmt: clone(fmt0)} : {})};
 }
 const MIC_SMALL = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg>';
@@ -3262,7 +3338,7 @@ function fieldInput(f, v){
       const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
       if(f.marks){ const di = S.draft?.data?.from ? dDiff(today(), S.draft.data.from) : -1; if(di >= 0 && di < fcols.filter(c => c.day != null).length) S._dayok = di; else S._dayok = null; }
       return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${fcols.length <= 3 ? 'compact' : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : `<input ${c.n?'inputmode="decimal"':''} placeholder="${c.n ? '0' : c === fcols[0] ? 'Type here' : esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''} placeholder="${c.n ? '0' : c === fcols[0] ? 'Type here' : esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
       </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
     }
     case 'photos': {
@@ -3654,6 +3730,7 @@ async function makePDF(id, opt){
         if(['date','datetime','select','text','number','auto'].includes(f.t)){ kvn++; continue; }
         if(f.t === 'textarea' || f.t === 'checks'){ if(T.cover && isEmpty(v)) continue; h += 10 + Math.ceil(String(valueText(f, v) || '-').length / 110 + (String(v || '').match(/\n/g) || []).length) * 4.4; }
         else if(f.t === 'table'){ const rows = (f.keepRows ? (v || []).filter(r => r && !isEmpty(r[f.cols[0].k])) : cleanRows(f, v)); if(T.cover && !hasC(f)) continue;
+          if(f.spanCols && rows.length > 4) return 9999;
           if(f.k === 'scurve' && rows.length > 12) h += Math.ceil(rows.length / 3) * 4.3 + 10 + 78;
           else h += 10 + rows.reduce((a, r) => a + 5.6 + Math.floor(Math.max(0, ...f.cols.map(c => String(r[c.k] || '').length)) / 70) * 3.6, 0) + (f.k === 'scurve' ? 78 : 0); }
         else if(f.t === 'photos'){ const ph = v || []; if(!ph.length) continue; const cp = ph.every(p => p.caption);
@@ -3709,6 +3786,12 @@ async function makePDF(id, opt){
           if(f.rowTotal) out.push(String(dayCols.reduce((a, cc) => a + (parseFloat(r[cc.k]) || 0), 0)));
           return out;
         });
+        const smP = !grpOn && !dayCols.length ? spanMap(f, cols, rows) : null;
+        { const sm = smP;
+          if(sm) body.forEach((line, i) => { for(let ci = cols.length - 1; ci >= 0; ci--){ const n = sm[i][cols[ci].k]; if(n == null) continue; const at = ci + (f.num ? 1 : 0);
+            if(n === 0) line.splice(at, 1); else if(n > 1){ const c0 = line[at]; line[at] = c0 && typeof c0 === 'object' ? {...c0, rowSpan: n} : {content: c0, rowSpan: n}; } } }); }
+        const hgr = !dayCols.length && !f.num && !f.rowTotal ? headGroupRows(f, head) : null;
+        const HR = hgr ? [hgr.top.map(h => h.rs ? {content: h.l, rowSpan: 2} : {content: pt(h.l), colSpan: h.cs, styles: {halign: 'center'}}), hgr.bot] : [head];
         if(!body.length) body.push([{content: f.nil ? 'Nil' : '-', colSpan:head.length, styles:{halign:'center'}}]);
         let foot;
         if(f.sumCols && f.sumCols.length && rows.length){
@@ -3731,25 +3814,26 @@ async function makePDF(id, opt){
         const tOpt = {...base, columnStyles:colStyles, styles:{...base.styles, fontSize: head.length > 20 ? (HS.CW < 200 ? 5.2 : 5.6) : head.length > 9 ? 6.8 : head.length > 7 ? 7.6 : 8.5, cellPadding: head.length > 20 ? (HS.CW < 200 ? 0.5 : 0.8) : head.length > 9 ? 1 : 1.6}, headStyles:{...base.headStyles, fontSize: head.length > 20 ? 5.2 : head.length > 9 ? 6.6 : 8.2}};
         const pageH = BOTTOM - TOP;
         // measure a piece of table on a scratch page (exact height)
-        const measure = (part, withHead, withFoot) => { const t = new jspdf.jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'}); t.autoTable({...tOpt, startY: TOP, head: [head], body: part, foot: withFoot ? foot : undefined, showHead: withHead ? 'firstPage' : 'never', showFoot: 'lastPage'}); return t.getNumberOfPages() > 1 ? 9999 : t.lastAutoTable.finalY - TOP; };
-        if(!grpOn){
+        const measure = (part, withHead, withFoot) => { const t = new jspdf.jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'}); t.autoTable({...tOpt, startY: TOP, head: HR, body: part, foot: withFoot ? foot : undefined, showHead: withHead ? 'firstPage' : 'never', showFoot: 'lastPage'}); return t.getNumberOfPages() > 1 ? 9999 : t.lastAutoTable.finalY - TOP; };
+        if(!grpOn && !smP){
           // short tables are never split: move the whole table to the next page if it doesn't fit
           const h = (body.length <= 25 ? measure(body, true, true) : 9999) + preH;
           if(h <= pageH && y + h > BOTTOM) breakPage();
           else if(h > pageH && y + 30 + preH > BOTTOM) breakPage();
           drawPre();
-          doc.autoTable({...tOpt, startY:y, head:[head], body, foot, showFoot:'lastPage'}); after();
+          doc.autoTable({...tOpt, startY:y, head:HR, body, foot, showFoot:'lastPage'}); after();
         } else {
           // keep each group (heading row + its items) together on one page; same column widths throughout
-          { const t = new jspdf.jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'}); t.autoTable({...tOpt, startY: TOP, head: [head], body, foot});
+          { const t = new jspdf.jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'}); t.autoTable({...tOpt, startY: TOP, head: HR, body, foot});
             const cs = {...tOpt.columnStyles}; t.lastAutoTable.columns.forEach((c, i) => { cs[i] = {...(cs[i] || {}), cellWidth: c.width}; }); tOpt.columnStyles = cs; }
-          const chunks = []; body.forEach((r, i) => { if(i === 0 || (Array.isArray(r) && r.some(c => c && c.colSpan > 1))) chunks.push([]); chunks[chunks.length - 1].push(r); });
+          const chunks = []; body.forEach((r, i) => { if(i === 0 || (Array.isArray(r) && r.some(c => c && c.colSpan > 1)) || (smP && smP[i] && smP[i][f.spanCols[0]] > 0 && i < rows.length && !isEmpty(rows[i][f.spanCols[0]]))) chunks.push([]); chunks[chunks.length - 1].push(r); });
           chunks.forEach((part, ci) => { const last = ci === chunks.length - 1, first = ci === 0;
             let h = measure(part, first, last) + (first ? preH : 0);
             if(h <= pageH && y + h > BOTTOM){ breakPage(); h = 0; }
+            else if(smP && h > pageH && Math.abs(y - TOP) > 0.5 && !first){ breakPage(); }
             if(first) drawPre();
             const atTop = Math.abs(y - TOP) < 0.5;
-            doc.autoTable({...tOpt, startY: y, head: [head], body: part, foot: last ? foot : undefined, showFoot: 'lastPage', showHead: (first || atTop) ? 'everyPage' : 'never'}); after(); });
+            doc.autoTable({...tOpt, ...(smP ? {rowPageBreak: 'avoid'} : {}), startY: y, head: HR, body: part, foot: last ? foot : undefined, showFoot: 'lastPage', showHead: (first || atTop) ? 'everyPage' : 'never'}); after(); });
         }
         if(f.k === 'scurve' && rows.length) { drawSCurve(doc, rows); after(); }
       } else if(f.t === 'calc' && f.calc === 'scrap'){
@@ -5155,6 +5239,7 @@ S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false;
 function recomputeDocs(){
   const m = {...S.extra}; S.recent.forEach(d => m[d.id] = d);
   S.docs = Object.values(m).filter(d => TYPES[d.type]);
+  S.docs.forEach(d => { if(d.type === 'HRC' && d.data) hrcMigrate(d.data); });
 }
 async function loadProjectDocs(pid){
   if(!pid || S.loadedProj[pid] || S.allLoaded || !S.recentFull) return;
