@@ -136,7 +136,10 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .tabs button.on{background:var(--steel);color:#fff;border-color:var(--steel)}
 .tabs button i{font-style:normal;opacity:.6;margin-left:4px}
 .createbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 16px}
-.createbar .btn.qk{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.createbar .btn.qk{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tabsel{display:flex;align-items:center;gap:10px;margin:0 0 12px}.tabsel select{flex:1;min-width:0;width:100%;max-width:420px;padding:10px 12px;font-size:15px;border:1.5px solid var(--line);border-radius:9px;background:#fff}
+.docmore summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6px 2px;list-style:none;text-align:center}.docmore summary::-webkit-details-marker{display:none}
+@media (max-width:640px){ .sheet .metat tr{display:grid;grid-template-columns:38% 62%} .sheet .metat td.k{width:auto} }
 .createbar details.more{margin-left:auto}.createbar details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:8px 6px;list-style:none}
 .createbar details.more summary::-webkit-details-marker{display:none}
 .createbar .morebox{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}
@@ -228,6 +231,7 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .uploading{display:grid;place-items:center;aspect-ratio:4/3;font-size:12.5px;color:var(--muted);background:repeating-linear-gradient(45deg,#f6f3ee,#f6f3ee 8px,#efebe4 8px,#efebe4 16px)}
 .actbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);z-index:15;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 .actbar .in{max-width:1180px;margin:0 auto;display:flex;gap:10px;align-items:center}
+@media (max-width:640px){ .actbar{padding-left:10px;padding-right:10px} .actbar .in{gap:6px} .actbar .btn{padding-left:12px;padding-right:12px;white-space:nowrap} .hidem{display:none} }
 /* document sheet */
 .docwrap{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;align-items:start}
 .sheet{background:#fff;border:1px solid var(--line);box-shadow:0 2px 18px rgba(0,0,0,.07);padding:34px 38px;border-radius:4px;max-width:860px}
@@ -1809,7 +1813,8 @@ const QUICK_DEF = {OPS:['DSR','PR','LTR'], SHE:['TBT','PTM','WLK'], ENV:['SWI','
 function quickTypes(pid, cat, docs){ const ok = catTypes(cat), cnt = {}; docs.forEach(d => { if(ok.includes(d.type)) cnt[d.type] = (cnt[d.type] || 0) + 1; });
   const used = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]), out = [];
   [...used, ...(QUICK_DEF[cat.k] || []), ...ok].forEach(k => { if(out.length < 3 && ok.includes(k) && !out.includes(k)) out.push(k); }); return out; }
-const qkName = n => String(n).replace(/ Inspection Checklist$/, ' check').replace(/ Checklist$/, '').replace(/^Permit to Work – /, 'PTW – ').replace(/ \(.*\)$/, '');
+const qkName = n => { let t = String(n).replace(/ Inspection Checklist$/, ' check').replace(/ Checklist$/, '').replace(/^Permit to Work – /, 'PTW – ').replace(/ \(.*\)$/, '').replace(/ Report$/, '').replace(/ Register$/, '');
+  if(!/^PTW/.test(t) && / – /.test(t) && t.split(' – ')[0].length >= 4) t = t.split(' – ')[0]; return t; };
 function newPicker(pid, ck){
   const cats = [...DOC_CATS.filter(c => c.k === ck), ...DOC_CATS.filter(c => c.k !== ck)];
   showModal(`<div class="box" style="max-width:560px"><div class="mh"><h3>New document</h3></div><div class="mb"><input id="npQ" class="npq" placeholder="Search — e.g. permit, excavator, toolbox, letter" autocomplete="off">
@@ -1887,7 +1892,9 @@ function projectView(id, tab){
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
   ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="createbar"><button class="btn pri" data-act="newpick" data-p="${esc(id)}" data-c="${cat.k}">+ New document</button>${quickTypes(id, cat, allP).map(k => `<button class="btn qk" data-act="new" data-p="${esc(id)}" data-t="${k}" title="${esc(TYPES[k].name)}">+ ${esc(qkName(projFmt(id, k)?.name || TYPES[k].name))}</button>`).join('')}
     <details class="more"><summary>More ▾</summary><div class="morebox"><button class="btn sm" data-act="scforms" data-p="${esc(id)}">📄 Sub-contractor forms</button><label class="btn sm" style="margin:0" title="Upload a Word report — our sub-contractor forms or your existing project reports">⇪ Import report (Word)<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>${S.canEdit ? `<button class="btn sm" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm" data-act="typenames">✎ Names & folders</button>` : ''}</div></details></div>`:''}
-  ${(tabs.match(/data-act="tab"/g) || []).length > 2 ? `<div class="tabs">${tabs}</div>` : ""}
+  ${(() => { const tk = ['ALL', ...ckeys.filter(k => all.some(d => d.type === k) || k === tab)]; if(tk.length <= 2) return '';
+    if(tk.length <= 6) return `<div class="tabs">${tabs}</div>`;
+    return `<div class="tabsel"><label class="muted small" for="tabSel">Show</label><select id="tabSel" data-tabsel="1">${tk.map(k => `<option value="${k}" ${k === tab ? 'selected' : ''}>${k === 'ALL' ? 'All documents' : esc(TYPES[k].name)} (${k === 'ALL' ? all.length : all.filter(d => d.type === k).length})</option>`).join('')}</select></div>`; })()}
   <div class="card">${ds.length ? `<table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th class="hm">Date</th><th class="hm">By</th><th>Status</th></tr></thead><tbody>
     ${ds.map(d => `<tr class="click" data-act="open" data-id="${esc(d.id)}"><td class="mono" style="white-space:nowrap">${esc(d.number)}</td><td>${esc(docTitle(d))}</td><td class="hm" style="white-space:nowrap">${fmtDate(docDate(d))}</td><td class="hm">${esc(d.signatures?.[0]?.name || nameOf(d.createdBy))}</td><td>${pill(d)}</td></tr>`).join('')}
   </tbody></table>` : `<div class="empty">No ${tab==='ALL'?'documents':TYPES[tab].name.toLowerCase()+'s'} yet.</div>`}</div>`;
@@ -2764,7 +2771,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 5 Nov 2026 (Z17) · Simpler screens: one New document button, shorter project page</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 5 Nov 2026 (Z18) · Full check: phone layout fixes, simpler document page</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -2783,7 +2790,7 @@ function valueText(f, v){
   if(f.t === 'auto') return v ?? '';
   if(f.t === 'date') return fmtDate(v);
   if(f.t === 'datetime') return fmtDT(v);
-  if(f.t === 'checks') return (v||[]).join(', ');
+  if(f.t === 'checks') return (Array.isArray(v) ? v : v ? [v] : []).join(', ');
   return v ?? '';
 }
 // merged cells (like the HIRARC form): an empty cell in a spanCols column joins the cell above, within one numbered group
@@ -3175,12 +3182,14 @@ function docView(id){
         ${st.next>0 && S.canWrite && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF</button>
         <button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>
-        <button class="btn" data-act="present" data-id="${esc(d.id)}">▶ Present</button>
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
+        <details class="more docmore"><summary>More actions ▾</summary><div style="display:grid;gap:8px;padding-top:8px">
+        <button class="btn" data-act="present" data-id="${esc(d.id)}">▶ Present</button>
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
         ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
         ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
         ${(S.canEdit || (st.next===0 && d.createdBy===S.me)) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">Delete</button>`:''}
+        </div></details>
       </div></div>
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Record trail</div><div class="trail">${trail}</div></div>
     </aside>
@@ -3355,7 +3364,7 @@ function fieldInput(f, v){
     case 'datetime': return `<input type="datetime-local" ${dk} value="${esc(v)}">`;
     case 'number': return `<input type="number" inputmode="decimal" step="any" ${dk} value="${esc(v)}">`;
     case 'select': return `<select ${dk}><option value=""></option>${f.o.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
-    case 'checks': return `<div class="checks">${f.o.map(o=>`<label><input type="checkbox" data-chk="${f.k}" value="${esc(o)}" ${(v||[]).includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>`;
+    case 'checks': return `<div class="checks">${f.o.map(o=>`<label><input type="checkbox" data-chk="${f.k}" value="${esc(o)}" ${(Array.isArray(v) ? v : [v]).includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>`;
     case 'table': {
       const rows = v && v.length ? v : [{}];
       const fcols = f.cols.filter(c => c.day == null || c.day < periodDays(S.draft?.data || {}, f.maxDays || 7));
@@ -3403,7 +3412,7 @@ function editView(){
     <button class="btn ghost" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">Cancel</button><div class="sp"></div>
     ${S.sample ? `<button class="btn voice" data-act="voice">🎤 Voice</button>` : ''}
     ${resp ? `<button class="btn pri" data-act="saveresp">Save ${T.code==='PTW'?'close-out':T.code==='TR'?'proof of receipt':'response'}</button>` :
-      `${S.draft.type === 'DSR' ? `<button class="btn" data-act="wadraft" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp</button>` : ''}<button class="btn" data-act="save">Save draft</button><button class="btn pri" data-act="savesign">✍ Sign & submit</button>`}
+      `${S.draft.type === 'DSR' ? `<button class="btn" data-act="wadraft" title="Send on WhatsApp" style="background:#25D366;color:#fff;border-color:#25D366">💬<span class="hidem"> WhatsApp</span></button>` : ''}<button class="btn" data-act="save">Save draft</button><button class="btn pri" data-act="savesign">✍ Sign<span class="hidem"> & submit</span></button>`}
   </div></div>`;
 }
 function chkCount(rows, f){ const o = (f && (f.cols.find(c => c.k === 'ans') || {}).o) || ['Yes', 'No', 'N/A'], it = (rows || []).filter(r => r && !r._g && r.item), c = k => it.filter(r => r.ans === k).length, left = it.length - o.reduce((a, k) => a + c(k), 0);
@@ -4018,7 +4027,7 @@ document.addEventListener('input', e => { if(e.target.id === 'npQ'){ const w = e
     document.querySelectorAll('#modal .npg').forEach(g => { let n = 0; g.querySelectorAll('.npi').forEach(b => { const ok = w.every(x => b.dataset.s.includes(x)); b.style.display = ok ? '' : 'none'; if(ok) n++; }); g.style.display = n ? '' : 'none'; any += n; });
     const no = document.querySelector('#modal .npnone'); if(no) no.style.display = any ? 'none' : ''; return; }
   if(e.target.closest && e.target.closest('#modal')) mSnap(); if(e.target.dataset && e.target.dataset.libq !== undefined){ S.libQ = e.target.value; const pos = e.target.selectionStart; render(); const i = document.getElementById('libQ'); if(i){ i.focus(); i.setSelectionRange(pos, pos); } } });
-document.addEventListener('change', e => { if(e.target.closest && e.target.closest('#modal')) mSnap(); });
+document.addEventListener('change', e => { if(e.target.dataset && e.target.dataset.tabsel){ S.view.tab = e.target.value; render(); return; } if(e.target.closest && e.target.closest('#modal')) mSnap(); });
 function closeModal(keep){ if(LIVE.on) stopListening(true); if(keep !== true && S.modalKey) MDRAFT.drop(S.modalKey); S.modalKey = ''; S.modalOpen = false; $('#modal').innerHTML = ''; PAD = null; }
 let CONFIRM_CB = null;
 function confirmBox(title, msg, okLabel, cb, danger){
