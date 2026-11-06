@@ -144,6 +144,11 @@ body.intern [data-v=team]{display:none}
 .sigprev{border:1px dashed var(--line);border-radius:9px;background:#fff;padding:10px;display:flex;align-items:center;justify-content:center;min-height:70px;max-width:340px}.sigprev img{max-height:80px;max-width:100%}.sigprev.big img{max-height:140px}.sigprev.empty{color:var(--muted)}
 .sigchoose{display:flex;flex-wrap:wrap;gap:8px 18px;margin:2px 0 10px;font-size:14px}.fld .sigchoose label{display:flex;align-items:center;gap:8px;font-weight:500;color:inherit;margin:0;font-size:14px;text-transform:none;letter-spacing:0}.fld .sigchoose input{width:18px;height:18px;margin:0;padding:0;flex:none;accent-color:var(--hazard)}
 .al .abtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.recrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-4px 0 14px}
+.recchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px 5px 6px;font:inherit;font-size:13px;cursor:pointer;color:inherit}
+.recchip .ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:#e6e1d6;color:#555}
+.recchip.ok .ic{background:#2E7D32;color:#fff}.recchip.soon .ic{background:#f79009;color:#fff}.recchip.exp{border-color:#d92d20;color:#b42318}.recchip.exp .ic{background:#d92d20;color:#fff}
+.recchip.miss{border-style:dashed;color:#6b6257}
 .createbar details.more{margin-left:auto}.createbar details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:8px 6px;list-style:none}
 .createbar details.more summary::-webkit-details-marker{display:none}
 .createbar .morebox{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}
@@ -1915,10 +1920,12 @@ function projectView(id, tab){
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
+  ${projRecordsCard(id)}
   ${(() => { const ex = expiringFiles().filter(x => x.f.projectId === id); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
   ${(() => { try { const A = projAlerts(p); return A.length ? `<div class="card alerts" style="margin-bottom:14px">${alertLines(A)}</div>` : ''; } catch(e){ return ''; } })()}
   ${(() => { const it = [['Client', p.client], ['Consultant', p.consultant], ['Location', p.location], ['Contract no.', p.contractNo], ['Project manager', p.pm]].filter(x => x[1]).map(([l, v]) => `<div><span>${l}</span>${esc(v)}</div>`);
     if(p.start || p.end) it.splice(Math.min(it.length, 4), 0, `<div><span>Period</span>${(p.status||'Active') === 'Completed' ? fmtDate(p.start) + ' – ' + fmtDate(p.end) : countdownHTML(p)}</div>`);
+    if((p.eots || []).length) it.push(`<div><span>Extension of time</span>${(p.eots || []).map(e => `EOT ${e.n}: +${e.days} days to ${fmtDate(e.newEnd)} (approved ${fmtDate(e.approvedOn)}${e.ref ? ', ' + esc(e.ref) : ''})`).join('<br>')}<br><span class="small muted">Original completion ${fmtDate(p.origEnd)}</span></div>`);
     return it.length ? `<div class="card projinfo">${it.join('')}</div>` : ''; })()}
   ${folders}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
@@ -2803,7 +2810,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (Z22) · Sub-contractor daily report form updated (photos, one signer)</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (Z23) · EOT approved date, insurance & project records reminders</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3703,6 +3710,55 @@ async function saveMySig(img){
   catch(e){ dbErr(e); }
 }
 
+/* ---------- project records checklist + EOT approval ---------- */
+const REQ_DOCS = [
+  {k: 'CIDB', l: 'CIDB registration', short: 'CIDB', cat: 'CIDB registration', re: /\bcidb\b|\bppk\b|\bspkk\b|\bstb\b/i},
+  {k: 'LHDN', l: 'LHDN stamping', short: 'LHDN stamping', cat: 'Stamp duty (LHDN)', re: /lhdn|stamp(ing| duty)|setem/i},
+  {k: 'LOA', l: 'Letter of Award (LOA)', short: 'LOA', cat: 'Letter of Award (LOA)', re: /\bloa\b|letter of (award|acceptance)|surat setuju terima/i},
+  {k: 'INS', l: 'Insurance', short: 'insurance', cat: 'Insurance', re: /insurance|insuran|\bcar\b|all risks|workmen|public liability|\bpli\b|socso|perkeso/i},
+  {k: 'DOSH', l: 'DOSH registration', short: 'DOSH', cat: 'DOSH registration', re: /\bdosh\b|\bjkkp\b|jabatan keselamatan/i}];
+const projRecFiles = (pid, r) => !r ? [] : S.files.filter(f => f.projectId === pid && f.status !== 'uploading' && !f.letterKind && ((f.folder || f.category) === r.cat || r.re.test((f.title || '') + ' ' + (f.folder || f.category || ''))));
+function projRecordsCard(pid){
+  const it = REQ_DOCS.map(r => { const fs = projRecFiles(pid, r), ex = fs.map(f => expiryInfo(f)).filter(Boolean).sort((a, b) => b.days - a.days)[0];
+    const st = !fs.length ? 'miss' : ex && ex.days < 0 ? 'exp' : ex && ex.days <= 30 ? 'soon' : 'ok';
+    return `<button class="recchip ${st}" ${st === 'ok' || st === 'soon' ? `data-act="files" data-id="${esc(pid)}"` : `data-act="fileaddcat" data-p="${esc(pid)}" data-c="${esc(r.cat)}" data-t="${esc(r.l)}"`} title="${st === 'miss' ? 'Not uploaded yet — tap to upload' : st === 'exp' ? 'Expired — tap to upload the renewal' : 'Open project files'}">
+      <span class="ic">${st === 'ok' ? '✓' : st === 'soon' ? '⏰' : st === 'exp' ? '!' : '+'}</span>${esc(r.short === 'insurance' ? 'Insurance' : r.short)}</button>`; }).join('');
+  return `<div class="recrow"><span class="small muted">Project records:</span>${it}</div>`;
+}
+function eotApproveForm(pid){
+  const p = projById(pid); if(!p) return;
+  const n = (p.eots || []).length + 1;
+  showModal(`<div class="box"><div class="mh"><div><div class="eyebrow">${esc(p.code)} · ${esc(p.name)}</div><h3>EOT ${n} approved by the client</h3></div></div><div class="mb">
+    <p class="small muted" style="margin-top:0">Current completion date: <b>${fmtDate(p.end)}</b>${p.origEnd && p.origEnd !== p.end ? ` (original ${fmtDate(p.origEnd)})` : ''}. The new date becomes the project duration for every countdown, warning and report.</p>
+    <div class="fgrid">
+      <div class="fld half" id="fld_eaEnd"><label>Approved new completion date <em>*</em></label><input type="date" id="eaEnd" min="${esc(addDays(p.end || today(), 1))}"></div>
+      <div class="fld half" id="fld_eaOn"><label>Date of approval <em>*</em></label><input type="date" id="eaOn" value="${today()}"></div>
+      <div class="fld half"><label>Client's letter ref. no.</label><input id="eaRef" placeholder="e.g. MLSB/EOT/2026/01"></div>
+      <div class="fld half"><label>Days granted</label><input id="eaDays" disabled placeholder="worked out from the dates"></div>
+      <div class="fld"><label>Approval letter / email</label><input type="file" id="eaFile" accept=".pdf,.doc,.docx,.eml,.msg,image/*"><div class="hint">Kept in Project files › Correspondence.</div></div>
+      <div class="fld"><label>Note</label><input id="eaNote" placeholder="Optional — e.g. reasons, conditions"></div>
+    </div><div id="eaProg" class="small muted"></div></div>
+    <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="eotsave" data-p="${esc(pid)}">✓ Update completion date</button></div></div>`);
+}
+async function saveEotApproval(pid, btn){
+  const p = projById(pid); if(!p) return;
+  const end = $('#eaEnd').value, on = $('#eaOn').value, file = $('#eaFile').files[0], ref = $('#eaRef').value.trim(), note = $('#eaNote').value.trim(), prog = $('#eaProg');
+  if(!end || (p.end && end <= p.end)){ $('#fld_eaEnd').classList.add('err'); toast(p.end ? 'The new completion date must be after ' + fmtDate(p.end) + '.' : 'Enter the new completion date.', true); return; }
+  if(!on){ $('#fld_eaOn').classList.add('err'); toast('Enter the date of approval.', true); return; }
+  btn.disabled = true;
+  try {
+    let fileId = '';
+    if(file){ prog.textContent = 'Uploading the approval letter…';
+      fileId = await uploadOne(pid, file, {category: 'Correspondence', folder: 'Correspondence', title: `EOT ${(p.eots || []).length + 1} approval — new completion ${fmtDate(end)}`, refNo: ref, date: on, expiry: '', notes: note, letterKind: 'EOT approval', updatedAt: new Date().toISOString(), updatedBy: S.me || null}, (i, n) => prog.textContent = `Uploading… ${Math.round(i / n * 100)}%`, msg => prog.textContent = msg); }
+    const days = p.end ? dDiff(end, p.end) : 0;
+    const rec = {n: (p.eots || []).length + 1, oldEnd: p.end || '', newEnd: end, days, approvedOn: on, ref, note, fileId: fileId || '', by: S.me || null, at: new Date().toISOString()};
+    await S.db.doc('projects/' + pid).update({end, origEnd: p.origEnd || p.end || '', eots: [...(p.eots || []), rec], updatedAt: rec.at});
+    Object.assign(p, {end, origEnd: p.origEnd || rec.oldEnd, eots: [...(p.eots || []), rec]});
+    closeModal(); render();
+    toast(`Completion date updated to ${fmtDate(end)} (+${days} days). Now upload the renewed insurance for the extension.`);
+  } catch(e){ btn.disabled = false; prog.textContent = ''; if(e.code === 'too-big') toast('Could not compress the approval letter under 10 MB — save it as a PDF and try again.', true); else dbErr(e); }
+}
+
 /* ---------- 📅 report for any date range (built from the records, not saved) ---------- */
 function rangeReportForm(pid){
   const p = projById(pid); if(!p) return; const t = today();
@@ -4239,7 +4295,8 @@ const MDRAFT = { all: (() => { try { return JSON.parse(localStorage.getItem('sde
 function mSnap(){ if(!S.modalOpen || !S.modalKey) return; const o = {}; let any = false;
   mFields().forEach(([k, el]) => { const v = el.type === 'checkbox' ? el.checked : el.value; o[k] = v; if(el.type !== 'checkbox' && el.tagName !== 'SELECT' && String(v).trim() && v !== el.defaultValue) any = true; });
   if(any) MDRAFT.put(S.modalKey, o); else MDRAFT.drop(S.modalKey); }
-document.addEventListener('input', e => { if(e.target.id === 'npQ'){ const w = e.target.value.toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
+document.addEventListener('input', e => { if(e.target.id === 'eaEnd' || e.target.id === 'eaOn'){ const p = projById(document.querySelector('[data-act=eotsave]')?.dataset.p), v = $('#eaEnd').value; if(p && p.end && v) $('#eaDays').value = (dDiff(v, p.end) > 0 ? '+' : '') + dDiff(v, p.end) + ' days'; }
+  if(e.target.id === 'npQ'){ const w = e.target.value.toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
     document.querySelectorAll('#modal .npg').forEach(g => { let n = 0; g.querySelectorAll('.npi').forEach(b => { const ok = w.every(x => b.dataset.s.includes(x)); b.style.display = ok ? '' : 'none'; if(ok) n++; }); g.style.display = n ? '' : 'none'; any += n; });
     const no = document.querySelector('#modal .npnone'); if(no) no.style.display = any ? 'none' : ''; return; }
   if(e.target.closest && e.target.closest('#modal')) mSnap(); });
@@ -4618,6 +4675,9 @@ document.addEventListener('click', async e => {
     case 'savesigtemp': saveMySig(S.sigTemp); break;
     case 'rmsig': confirmBox('Remove your e-signature?', 'Documents you already signed keep their signature.', 'Remove', () => saveMySig(null)); break;
     case 'savedes': { const v = ($('#myDes') || {}).value || ''; try { await S.db.doc('users/' + S.me).update({designation: v.trim()}); S.myDes = v.trim(); toast('Designation saved'); } catch(err){ dbErr(err); } break; }
+    case 'eotapprove': if(!(S.canEdit || el.dataset.by === S.me || !el.dataset.by)){ toast('Only the person who sent the EOT letter (or an admin) updates the approved date.', true); break; } eotApproveForm(el.dataset.p); break;
+    case 'eotsave': saveEotApproval(el.dataset.p, el); break;
+    case 'fileaddcat': fileForm(el.dataset.p, {category: el.dataset.c, title: el.dataset.t || '', kind: 'upload'}); break;
     case 'rangerpt': rangeReportForm(el.dataset.p); break;
     case 'rngquick': if(el.dataset.a) $('#rgFrom').value = el.dataset.a; $('#rgTo').value = el.dataset.b; break;
     case 'rangego': makeRangeReport(el, el.dataset.p); break;
@@ -4951,17 +5011,30 @@ function projAlerts(p){
     const due = addDays(p.end, -ALERT_CFG.eotNotice), toDue = dDiff(due, t), toEnd = dDiff(p.end, t);
     const eot = docs.filter(d => d.type === 'LTR' && /Extension of Time/.test(d.data?.category || '') && (d.signatures || [])[0] && (!d.data.origEnd || d.data.origEnd === p.end))
       .sort((a, b) => String(b.data.date).localeCompare(String(a.data.date)))[0];
-    const eotUp = !eot && S.files.filter(f => f.projectId === p.id && f.status !== 'uploading' && /^EOT/.test(f.letterKind || '') && (!f.origEnd || f.origEnd === p.end)).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+    const eotUp = !eot && S.files.filter(f => f.projectId === p.id && f.status !== 'uploading' && /^EOT (notice|application)/.test(f.letterKind || '') && (!f.origEnd || f.origEnd === p.end)).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
     const eotDraft = !eot && docs.find(d => d.type === 'LTR' && /Extension of Time/.test(d.data?.category || '') && !(d.signatures || [])[0]);
     const behind = (planned != null && actual != null && actual < planned) || (actual != null && p.start && p.end && actual < elapsedPct(p, t) - 5);
     const wr = {act: 'neweot', p: p.id, l: '✉ Write EOT notice'}, up = {act: 'sentltr', p: p.id, k: 'EOT notice', l: '✓ Done — upload my letter'};
-    if(eotUp){ if(toEnd <= ALERT_CFG.eotWarn) add('info', '✉', `${esc(eotUp.letterKind)} sent ${fmtDate(eotUp.date)}${eotUp.refNo ? ' (' + esc(eotUp.refNo) + ')' : ''} — record uploaded by ${esc(nameOf(eotUp.uploadedBy) || 'staff')}. When the extension is approved, update the completion date in "Edit project".`, {act: 'files', id: p.id, l: 'View record'}); }
-    else if(eot){ if(toEnd <= ALERT_CFG.eotWarn) add('info', '✉', `EOT ${/Application/.test(eot.data.category) ? 'application' : 'notice'} issued ${fmtDate(eot.data.date)} (${ltrRef(eot)}). When the extension is approved, update the completion date in "Edit project".`, {act: 'open', id: eot.id, l: 'View letter'}); }
+    // EOT sent (letter in the app or uploaded copy) → wait for the client's approval, then the sender updates the approved completion date
+    const sent = eotUp ? {kind: eotUp.letterKind, date: eotUp.date, ref: eotUp.refNo, by: eotUp.uploadedBy, view: {act: 'files', id: p.id, l: 'View letter'}}
+      : eot ? {kind: /Application/.test(eot.data.category) ? 'EOT application' : 'EOT notice', date: eot.data.date, ref: ltrRef(eot), by: eot.createdBy, view: {act: 'open', id: eot.id, l: 'View letter'}} : null;
+    if(sent){ const mine = sent.by === S.me || S.canEdit, apr = {act: 'eotapprove', p: p.id, by: sent.by || '', l: '✓ EOT approved — update date'};
+      add(toEnd < 0 ? 'red' : 'amber', '⏳', `${esc(sent.kind)} sent ${fmtDate(sent.date)}${sent.ref ? ' (' + esc(sent.ref) + ')' : ''} — <b>waiting for the client's approval</b>. ${mine ? 'When approved, update the new completion date here.' : `${esc(nameOf(sent.by))} will update the new completion date when it is approved.`}${toEnd < 0 ? ` The current completion date (${fmtDate(p.end)}) has passed.` : ''}`, mine ? apr : sent.view, mine ? sent.view : null); }
+    else if(false){}
     else if(toEnd < 0) add('red', '⛔', `Project is <b>${-toEnd} day${toEnd === -1 ? '' : 's'} past</b> the completion date (${fmtDate(p.end)})${actual != null ? ` at ${actual}% complete` : ''} and no EOT letter has been issued.`, wr, up);
     else if(toDue < 0) add('red', '⏰', `EOT notice deadline <b>passed ${-toDue} day${toDue === -1 ? '' : 's'} ago</b> (due ${fmtDate(due)}, 14 days before completion on ${fmtDate(p.end)}). Issue the notice now.`, eotDraft ? {act: 'edit', id: eotDraft.id, l: 'Finish EOT draft'} : wr, up);
     else if(toDue <= 7) add('red', '⏰', `EOT notice due in <b>${toDue} day${toDue === 1 ? '' : 's'}</b> (by ${fmtDate(due)}) — completion date ${fmtDate(p.end)}.`, eotDraft ? {act: 'edit', id: eotDraft.id, l: 'Finish EOT draft'} : wr, up);
     else if(toDue <= ALERT_CFG.eotNotice || (toDue <= ALERT_CFG.eotWarn && behind)) add('amber', '⏰', `EOT notice deadline in <b>${toDue} days</b> (${fmtDate(due)}). ${behind ? 'Progress is behind — an extension may be needed.' : 'Check whether the works will finish on time.'}`, eotDraft ? {act: 'edit', id: eotDraft.id, l: 'Finish EOT draft'} : wr, up);
   }
+  // ---- insurance must cover the (extended) completion date ----
+  if(p.end && !done){ const ins = projRecFiles(p.id, REQ_DOCS.find(r => r.k === 'INS')), last = (p.eots || []).slice(-1)[0];
+    const maxExp = ins.map(f => f.expiry).filter(Boolean).sort().pop() || '';
+    const upIns = {act: 'fileaddcat', p: p.id, c: 'Insurance', t: 'Insurance' + (last ? ' — extension to ' + fmtDate(p.end) : ''), l: '⇪ Upload insurance'};
+    if(last && !ins.some(f => (f.expiry && f.expiry >= p.end) || (!f.expiry && String(f.uploadedAt || '') >= String(last.at || '')))) add('amber', '🛡', `Completion date extended to <b>${fmtDate(p.end)}</b> (EOT ${(p.eots || []).length} approved ${fmtDate(last.approvedOn)}). Upload the <b>renewed / extended insurance</b> covering the new date.`, upIns);
+    else if(maxExp && maxExp < p.end) add('amber', '🛡', `Insurance cover ends <b>${fmtDate(maxExp)}</b> but the completion date is ${fmtDate(p.end)}. Upload the renewed / extended insurance.`, upIns); }
+  // ---- project records everyone needs (CIDB, LHDN stamping, LOA, insurance, DOSH) ----
+  { const miss = REQ_DOCS.filter(r => !projRecFiles(p.id, r).length);
+    if(miss.length) add('amber', '📁', `Project records missing: <b>${miss.map(r => r.l).join(', ')}</b>. Upload them in Project files for everyone's reference.`, {act: 'fileaddcat', p: p.id, c: miss[0].cat, t: miss[0].l, l: '⇪ Upload ' + miss[0].short}); }
   // ---- progress against plan ----
   if(pr && actual != null && !done){
     if(planned != null){ const v = +(actual - planned).toFixed(1);
@@ -5142,7 +5215,7 @@ async function createStaff(){
 /* ---------- Project files: tender, LOA, insurance, stamp duty and other reference documents ----------
    Uploaded files are split into pieces and kept in the database (no separate storage bill).
    Links (e.g. Google Drive) can be saved instead of uploading. */
-const FILE_CATS = ['Tender documents','Letter of Award (LOA)','Contract / agreement','Insurance','Stamp duty (LHDN)','Permits & approvals','Bonds & guarantees','Drawings & specifications','Method statement & HIRARC','Correspondence','Others'];
+const FILE_CATS = ['Tender documents','Letter of Award (LOA)','Contract / agreement','Insurance','Stamp duty (LHDN)','CIDB registration','DOSH registration','Permits & approvals','Bonds & guarantees','Drawings & specifications','Method statement & HIRARC','Correspondence','Others'];
 const FILE_CHUNK = 900000;            // characters of base64 per database record
 const FILE_MAX = 200 * 1024 * 1024;     // largest file we accept before compressing
 const FILE_TARGET = 9.5 * 1024 * 1024;  // every stored file is kept under 10 MB
