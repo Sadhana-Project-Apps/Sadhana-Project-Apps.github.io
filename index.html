@@ -734,6 +734,35 @@ const TYPES = {
       {k:'photos', l:'Site photos — today\'s progress', t:'photos', req:1, pdf:false, hint:'At least 1 photo is needed to submit. Photos are kept as a record for the progress report — they are not printed on the daily report.'}
     ]
   },
+  // made on request for any date range (project page › 📅 Report by date) — never saved, so not offered in "New document"
+  RNG: {
+    name: 'Site Report', code: 'RNG', blurb: 'Summary of the records for a chosen date range', skipEmpty: true,
+    nameFn: d => d.titleText || 'Site Report',
+    sigs: [{role:'Prepared by', hint:'Site Supervisor'}], done: 'Prepared',
+    title: d => 'Site Report ' + fmtDate(d.from) + ' – ' + fmtDate(d.to), dateField: 'to',
+    fields: [
+      {sec:'Summary'},
+      {k:'from', l:'Period from', t:'date', w:'half'}, {k:'to', l:'Period to', t:'date', w:'half'},
+      {k:'nDays', l:'Days in period', t:'text', w:'half'}, {k:'nDsr', l:'Daily reports', t:'text', w:'half'},
+      {k:'manDays', l:'Total man-days', t:'text', w:'half'}, {k:'avgMan', l:'Average manpower / day', t:'text', w:'half'},
+      {k:'machHrs', l:'Total machine hours', t:'text', w:'half'}, {k:'rainHrs', l:'Hours lost to rain', t:'text', w:'half'},
+      {k:'nDocs', l:'Documents in period', t:'text', w:'half'}, {k:'progress', l:'Latest overall progress', t:'text', w:'half'},
+      {sec:'Daily Manpower & Machinery'},
+      {k:'daily', l:'Day by day', t:'table', sub:false, sumCols:['man', 'mach', 'hrs', 'rain'], cols:[{k:'date', l:'Date', pw:24}, {k:'weather', l:'Weather (AM / PM)', pw:40}, {k:'man', l:'Manpower', n:1, pw:22}, {k:'mach', l:'Machines', n:1, pw:22}, {k:'hrs', l:'Machine hours', n:1, pw:24}, {k:'rain', l:'Rain (hrs)', n:1, pw:20}, {k:'doc', l:'Daily report'}]},
+      {k:'trades', l:'Manpower by trade', t:'table', sumCols:['md'], cols:[{k:'name', l:'Manpower'}, {k:'md', l:'Man-days', n:1, pw:28}, {k:'avg', l:'Average / day', n:1, pw:30}, {k:'max', l:'Highest in a day', n:1, pw:32}]},
+      {k:'machines', l:'Machinery', t:'table', sumCols:['ud', 'hrs'], cols:[{k:'name', l:'Machinery'}, {k:'ud', l:'Unit-days', n:1, pw:26}, {k:'hrs', l:'Hours', n:1, pw:24}, {k:'max', l:'Most units in a day', n:1, pw:34}]},
+      {sec:'Works Progress'},
+      {k:'works', l:'Works', t:'table', num:1, sub:false, cols:[{k:'work', l:'Work activity / location'}, {k:'first', l:'First reported', pw:26}, {k:'p0', l:'Start %', n:1, pw:18}, {k:'last', l:'Last reported', pw:26}, {k:'p1', l:'Latest %', n:1, pw:18}]},
+      {sec:'Issues, Delays & Instructions'},
+      {k:'issues', l:'Issues', t:'table', sub:false, cols:[{k:'date', l:'Date', pw:24}, {k:'text', l:'Issue / delay / instruction received'}]},
+      {sec:'Safety'},
+      {k:'safety', l:'Safety', t:'table', sub:false, cols:[{k:'date', l:'Date', pw:24}, {k:'text', l:'Toolbox talk, incidents, near-misses'}]},
+      {sec:'Documents in this Period'},
+      {k:'docs', l:'Documents', t:'table', num:1, sub:false, cols:[{k:'date', l:'Date', pw:22}, {k:'no', l:'Doc no.', pw:34}, {k:'name', l:'Document'}, {k:'status', l:'Status', pw:30}]},
+      {sec:'Site Photos'},
+      {k:'photos', l:'Site photos', t:'photos', opt:1, capEach:1}
+    ]
+  },
   PR: {
     name: 'Progress Report', code: 'PR', blurb: 'Weekly, fortnightly or monthly progress', cover: true,
     nameFn: d => (d.period || 'Weekly') + ' Progress Report',
@@ -1806,7 +1835,7 @@ const DEFAULT_CAT = {}; DOC_CATS.forEach(c => c.types.forEach(t => DEFAULT_CAT[t
 const typeCat = t => ((S.company && S.company.typeCats) || {})[t] || DEFAULT_CAT[t] || 'OPS';
 // Retired types: replaced by a company form (PTW → PTM/PWH/PLW/PCS/PEX) or waiting for the correct list (POG duplicated SWI).
 // Not offered for new documents; old records of these types stay viewable.
-const RETIRED = new Set(['PTW','POG']);
+const RETIRED = new Set(['PTW','POG','RNG']);
 const catTypes = (c, withRetired) => TYPE_KEYS.filter(k => typeCat(k) === c.k && (withRetired || !RETIRED.has(k)));
 const catOfType = t => DOC_CATS.find(c => c.k === typeCat(t)) || DOC_CATS[0];
 // quick-start buttons: the forms this project uses most in the open folder (or the usual ones)
@@ -1882,6 +1911,7 @@ function projectView(id, tab){
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
+  <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
@@ -2773,7 +2803,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (Z20) · Intern access, my e-signature, upload sent letters, 1-page daily report</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (Z21) · Report by date (any date range)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3673,6 +3703,82 @@ async function saveMySig(img){
   catch(e){ dbErr(e); }
 }
 
+/* ---------- 📅 report for any date range (built from the records, not saved) ---------- */
+function rangeReportForm(pid){
+  const p = projById(pid); if(!p) return; const t = today();
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><div><div class="eyebrow">${esc(p.code)} · ${esc(p.name)}</div><h3>Report by date</h3></div></div><div class="mb">
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">${[['This week', addDays(t, -((new Date(t + 'T00:00:00').getDay() + 6) % 7)), t], ['Last 7 days', addDays(t, -6), t], ['This month', t.slice(0, 8) + '01', t], ['Last month', (() => { const d = new Date(t.slice(0, 8) + '01T00:00:00'); d.setDate(0); return [d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-01', d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())]; })()], ['Whole project', p.start || '', t]]
+      .map(([l, a, b]) => { if(Array.isArray(a)){ b = a[1]; a = a[0]; } return `<button class="btn sm" data-act="rngquick" data-a="${a}" data-b="${b}">${l}</button>`; }).join('')}</div>
+    <div class="fgrid"><div class="fld half" id="fld_rgFrom"><label>From <em>*</em></label><input type="date" id="rgFrom" value="${addDays(t, -6)}"></div>
+      <div class="fld half" id="fld_rgTo"><label>To <em>*</em></label><input type="date" id="rgTo" value="${t}"></div></div>
+    <div class="fld"><label>Include</label>
+      <label style="font-weight:500;display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="rgPh" checked> Site photos from the daily reports</label>
+      <label style="font-weight:500;display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="rgDocs" checked> List of all documents in the period</label>
+      <label style="font-weight:500;display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="rgZip"> Also download every document in the period as PDFs (ZIP)</label></div>
+    <div id="rgProg" class="small muted"></div></div>
+    <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="rangego" data-p="${esc(pid)}">⤓ Create report</button></div></div>`);
+}
+function rangeData(pid, from, to, withPh, withDocs){
+  const p = projById(pid) || {}, inR = dt => { dt = String(dt || '').slice(0, 10); return dt >= from && dt <= to; };
+  const all = S.docs.filter(d => d.projectId === pid && inR(docDate(d)));
+  const dsr = all.filter(d => d.type === 'DSR').sort((a, b) => String(a.data?.date).localeCompare(String(b.data?.date)));
+  const num = v => parseFloat(v) || 0, r1 = v => String(Math.round(v * 10) / 10);
+  const tr = {}, mc = {}, wk = {}, daily = [], issues = [], safety = [], photos = [];
+  let manDays = 0, machHrs = 0, rain = 0;
+  dsr.forEach(d => { const x = d.data || {}, dt = fmtDate(x.date);
+    let man = 0, mach = 0, hrs = 0;
+    (x.manpower || []).forEach(r => { const q = num(r?.qty); if(!q || !r.trade) return; man += q; const o = tr[r.trade] = tr[r.trade] || {md: 0, days: 0, max: 0}; o.md += q; o.days++; o.max = Math.max(o.max, q); });
+    (x.machinery || []).forEach(r => { const q = num(r?.qty), h = num(r?.hrs); if((!q && !h) || !r.item) return; mach += q; hrs += h; const o = mc[r.item] = mc[r.item] || {ud: 0, hrs: 0, max: 0}; o.ud += q; o.hrs += h; o.max = Math.max(o.max, q); });
+    manDays += man; machHrs += hrs; rain += num(x.rainHours);
+    daily.push({date: dt, weather: [x.weatherAM, x.weatherPM].filter(Boolean).join(' / '), man: r1(man), mach: r1(mach), hrs: r1(hrs), rain: x.rainHours ? r1(num(x.rainHours)) : '', doc: d.number + (statusOf(d).next === -1 ? '' : ' (draft)')});
+    (x.works || []).forEach(r => { if(!r || !String(r.work || '').trim()) return; const k = String(r.work).trim().toLowerCase(), o = wk[k] = wk[k] || {work: String(r.work).trim(), first: dt, p0: r.pct ?? ''}; o.last = dt; o.p1 = r.pct ?? ''; });
+    if(String(x.issues || '').trim()) issues.push({date: dt, text: String(x.issues).trim()});
+    if(String(x.safety || '').trim()) safety.push({date: dt, text: String(x.safety).trim()});
+    if(withPh) (x.photos || []).forEach(ph => { if(photos.length < 30) photos.push({...ph, caption: ph.caption ? dt + ' — ' + ph.caption : dt}); }); });
+  const days = Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000) + 1;
+  const prs = all.filter(d => d.type === 'PR' && d.data?.actual).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)));
+  const docs = withDocs ? all.slice().sort((a, b) => String(docDate(a)).localeCompare(String(docDate(b))) || String(a.number).localeCompare(String(b.number)))
+    .map(d => ({date: fmtDate(String(docDate(d)).slice(0, 10)), no: d.number, name: TT(d).name, status: statusOf(d).label})) : [];
+  const files = S.files.filter(f => f.projectId === pid && f.letterKind && inR(f.date)).map(f => ({date: fmtDate(f.date), no: f.refNo || '-', name: f.title + ' (uploaded record)', status: 'Sent'}));
+  return {from, to, titleText: 'Site Report', nDays: String(days), nDsr: String(dsr.length) + (dsr.length < days ? ` of ${days} days` : ''),
+    manDays: r1(manDays), avgMan: dsr.length ? r1(manDays / dsr.length) : '-', machHrs: r1(machHrs), rainHrs: r1(rain), nDocs: String(all.length + files.length),
+    progress: prs[0] ? prs[0].data.actual + '% (' + prs[0].number + ', up to ' + fmtDate(prs[0].data.to) + ')' : 'No progress report in this period',
+    daily, trades: Object.entries(tr).map(([n, o]) => ({name: n, md: r1(o.md), avg: r1(o.md / Math.max(1, dsr.length)), max: r1(o.max)})),
+    machines: Object.entries(mc).map(([n, o]) => ({name: n, ud: r1(o.ud), hrs: r1(o.hrs), max: r1(o.max)})),
+    works: Object.values(wk).map(o => ({...o, p0: o.p0 === '' ? '' : String(o.p0), p1: o.p1 === '' ? '' : String(o.p1)})), issues, safety, docs: [...docs, ...files], photos};
+}
+async function makeRangeReport(btn, pid){
+  const p = projById(pid); if(!p) return;
+  const from = $('#rgFrom').value, to = $('#rgTo').value, prog = $('#rgProg');
+  if(!from){ $('#fld_rgFrom').classList.add('err'); toast('Choose the start date.', true); return; }
+  if(!to){ $('#fld_rgTo').classList.add('err'); toast('Choose the end date.', true); return; }
+  if(to < from){ toast('"To" must be on or after "From".', true); return; }
+  const withPh = $('#rgPh').checked, withDocs = $('#rgDocs').checked, withZip = $('#rgZip').checked;
+  btn.disabled = true; prog.textContent = 'Collecting records…';
+  const tmpId = '__range_' + Date.now();
+  try {
+    if(!S.allLoaded){ try { await loadProjectDocs(pid); } catch(e){} }
+    const data = rangeData(pid, from, to, withPh, withDocs);
+    const tag = from.replace(/-/g, '') + '-' + to.replace(/-/g, '');
+    const doc = {id: tmpId, type: 'RNG', projectId: pid, number: (p.code || 'PRJ') + '-RPT-' + tag, seq: 0, data, createdAt: new Date().toISOString(), createdBy: S.me,
+      signatures: [{name: S.names[S.me] || '', designation: S.myDes || '', img: S.mySig || '', at: new Date().toISOString(), uid: S.me}]};
+    S.docs.push(doc);
+    prog.textContent = 'Making the report…';
+    const r = await makePDF(tmpId, {blob: true});
+    S.docs = S.docs.filter(d => d.id !== tmpId);
+    if(!withZip){ await S.dl.save({filename: r.name, data: r.blob}); closeModal(); toast('Report ready ✓'); return; }
+    const list = S.docs.filter(d => d.projectId === pid && (() => { const dt = String(docDate(d) || '').slice(0, 10); return dt >= from && dt <= to; })());
+    const Z = await jszip(), zip = new Z(), root = safeName(`${p.code} Site Report ${from} to ${to}`);
+    zip.file(`${root}/${r.name}`, r.blob);
+    for(let i = 0; i < list.length; i++){ prog.textContent = `Making PDF ${i + 1} of ${list.length} — ${list[i].number}`;
+      try { const x = await makePDF(list[i].id, {blob: true}); zip.file(`${root}/${safeName(TT(list[i]).name)}/${x.name}`, x.blob); } catch(e){ console.error(e); } }
+    prog.textContent = 'Packing the ZIP…';
+    const blob = await zip.generateAsync({type: 'blob'});
+    await S.dl.save({filename: root + '.zip', data: blob}); closeModal(); toast(`Report + ${list.length} document${list.length === 1 ? '' : 's'} ready ✓`);
+  } catch(e){ console.error(e); toast('Could not create the report.', true); }
+  finally { S.docs = S.docs.filter(d => d.id !== tmpId); btn.disabled = false; if(prog) prog.textContent = ''; }
+}
+
 /* ---------- ✉ letters / emails written outside the app: upload as the record ---------- */
 const SENT_KINDS = ['EOT notice', 'EOT application', 'Variation order (VO) letter', 'Claim letter', 'Completion letter', 'Authority / permit letter', 'Other letter / email'];
 function sentLetterForm(pid, kind){
@@ -3857,7 +3963,7 @@ async function makePDF(id, opt){
       if(f.t === 'calc' || f.t === 'auto') return true;
       return !isEmpty(v); };
     const emptySec = new Set();
-    if(T.cover){ let cs = null, any = false; const close = () => { if(cs && !any) emptySec.add(cs); };
+    if(T.cover || T.skipEmpty){ let cs = null, any = false; const close = () => { if(cs && !any) emptySec.add(cs); };
       T.fields.forEach(f => { if(f.pdf === false) return; if(f.sec){ close(); cs = f; any = false; } else if(cs && hasC(f)) any = true; }); close(); }
     // rough height of a whole section (mm), used to start it on a new page when it would otherwise be split
     const estSec = i0 => { let h = 16, kvn = 0;
@@ -3880,7 +3986,7 @@ async function makePDF(id, opt){
       if(f.sec) skipSec = emptySec.has(f);
       if(skipSec) continue;
       if((T.cover || f.opt) && !f.sec && f.t === 'photos' && !(data[f.k] || []).length) continue;
-      if(T.cover && !f.sec && (f.t === 'textarea' || f.t === 'table') && !hasC(f)) continue;
+      if((T.cover || T.skipEmpty) && !f.sec && (f.t === 'textarea' || f.t === 'table') && !hasC(f)) continue;
       if(f.sec && !T.onePage){ const est = estSec(T.fields.indexOf(f)); if(est > 0 && est <= BOTTOM - TOP - 4 && y + est > BOTTOM){ flush(); doc.addPage(); y = TOP; } }
       if(f.sec){ flush(); const i = T.fields.indexOf(f), nx = T.fields.slice(i + 1).find(g => !g.sec && g.pdf !== false);
         heading(f.sec, !nx ? 18 : nx.t === 'photos' ? 80 : nx.t === 'table' ? 40 : 28); started = true; continue; }
@@ -3989,12 +4095,12 @@ async function makePDF(id, opt){
         doc.autoTable({...base, startY:y, head:[['CATEGORY','TRIPS','TOTAL WEIGHT (KG)']], body: salvageSummary(data).map(r => r.map(pt)), columnStyles:{1:{halign:'center'}, 2:{halign:'center'}}}); after();
       } else if(f.t === 'photos'){
         const ph = data[f.k] || []; if(!ph.length && (f.k === 'coverPhoto' || f.optional)) continue;
-        const capd0 = ph.length && ph.every(p => p.caption);
+        const capd0 = ph.length && ph.every(p => p.caption) && !f.capEach;
         need(ph.length === 1 && !capd0 ? 115 : ph.length ? 58 : 18); y += 2;
         if(!capd0){ doc.setFillColor(...GREEN_HEAD); doc.setDrawColor(...GRID); doc.setLineWidth(0.15); doc.rect(L, y, CW, 6.5, 'FD');
         doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), L + CW/2, y + 4.4, {align:'center'}); y += 6.5; }
         if(!ph.length){ doc.rect(L, y, CW, 8); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text('No photos', L + 2, y + 5); y += 8; continue; }
-        const capd = ph.some(p => p.caption) && ph.every(p => p.caption);
+        const capd = ph.some(p => p.caption) && ph.every(p => p.caption) && !f.capEach;
         if(ph.length === 1 && !capd){ need(100); try { const I = await imgData(await photoData(ph[0].id), 1600); const r = Math.min((CW * 0.8)/I.w, 95/I.h); doc.setDrawColor(...GRID); doc.rect(L, y, CW, I.h*r + 6); doc.addImage(I.url, 'JPEG', L + (CW - I.w*r)/2, y + 3, I.w*r, I.h*r); y += I.h*r + 6; } catch(e){} continue; }
         if(capd){ // groups: green caption band, then photos three per row (as in the site reports)
           const groups = []; ph.forEach(p => { const g = groups[groups.length - 1]; if(g && g.cap === p.caption) g.items.push(p); else groups.push({cap: p.caption, items: [p]}); });
@@ -4512,6 +4618,9 @@ document.addEventListener('click', async e => {
     case 'savesigtemp': saveMySig(S.sigTemp); break;
     case 'rmsig': confirmBox('Remove your e-signature?', 'Documents you already signed keep their signature.', 'Remove', () => saveMySig(null)); break;
     case 'savedes': { const v = ($('#myDes') || {}).value || ''; try { await S.db.doc('users/' + S.me).update({designation: v.trim()}); S.myDes = v.trim(); toast('Designation saved'); } catch(err){ dbErr(err); } break; }
+    case 'rangerpt': rangeReportForm(el.dataset.p); break;
+    case 'rngquick': if(el.dataset.a) $('#rgFrom').value = el.dataset.a; $('#rgTo').value = el.dataset.b; break;
+    case 'rangego': makeRangeReport(el, el.dataset.p); break;
     case 'sentltr': sentLetterForm(el.dataset.p, el.dataset.k); break;
     case 'sentsave': saveSentLetter(el.dataset.p, el); break;
     case 'sgclear': if(PAD){ PAD.g.clearRect(0,0,PAD.c.width,PAD.c.height); Object.assign(PAD,{strokes:0,minX:1e9,minY:1e9,maxX:-1,maxY:-1}); } break;
