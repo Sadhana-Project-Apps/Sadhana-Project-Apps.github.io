@@ -802,8 +802,14 @@ const TYPES = {
       {k:'reportNo', l:'Report no.', t:'text', w:'half', ph:'e.g. 1', pdf:false},
       {k:'from', l:'Period from', t:'date', req:1, w:'half', pdf:false},
       {k:'to', l:'Period to', t:'date', req:1, w:'half', def: () => today(), pdf:false, hint:'Filled in automatically from the report type — change it if needed'},
+      {k:'subDate', l:'Date of submission', t:'date', req:1, w:'half', def: () => today(), pdf:false, hint:'Printed on the cover page'},
       {k:'coverPhoto', l:'Cover photo', t:'photos', hint:'One site photo for the cover page', pdf:false},
       {sec:'S-Curve'},
+      {k:'wp', l:'Work programme — progress by activity', t:'table', num:1, sub:false, hint:'List the activities from the work programme with their start / finish dates and weightage (%). Carried to the next progress report. "Actual % at cut-off" is filled from the daily reports when you generate — change it if needed.', cols:[
+        {k:'act', l:'Activity'}, {k:'start', l:'Start', date:1, w:150, center:1, pw:24}, {k:'finish', l:'Finish', date:1, w:150, center:1, pw:24}, {k:'weight', l:'Weightage %', n:1, w:90, pw:22}, {k:'plan', l:'Planned % at cut-off', n:1, w:100, pw:24}, {k:'actp', l:'Actual % at cut-off', n:1, w:100, pw:24}],
+        def: () => [{}, {}, {}]},
+      {k:'cutoff', l:'S-curve cut-off date', t:'date', w:'half', def: () => today(), hint:'Progress is measured up to this date — normally the end of the reporting period.'},
+      {k:'_gen', l:'', t:'draftbtn', act:'genscurve', btn:'📈 Generate the S-curve from the work programme', pdf:false},
       {k:'planned', l:'Scheduled progress to date (%)', t:'number', w:'half'},
       {k:'actual', l:'Actual progress to date (%)', t:'number', req:1, w:'half'},
       {k:'aheadDelay', l:'Ahead / delay', t:'auto', w:'half', calc:(x, d, p) => {
@@ -2288,23 +2294,24 @@ function closePresent(){ document.querySelectorAll('.present').forEach(x => x.re
    Messages are small records (kind: 'chat') kept with the app's other shared records. */
 S.chat = [];
 const CHAT_KINDS = {err: {l: 'Error', c: '#b3261e', i: '🐞'}, idea: {l: 'Suggestion', c: '#2e7a4c', i: '💡'}, q: {l: 'Question', c: '#0d2b63', i: '❓'}, msg: {l: 'Message', c: '#5b6470', i: '💬'}};
-const CHAT_STATUS = ['New', 'Noted', 'In progress', 'Done'];
+// no statuses: an error / suggestion is "answered" once someone else replies to it
+const chatAnswered = m => S.chat.some(x => x.replyTo === m.id && x.by !== m.by && !x.hidden) || m.status === 'Done';
 const chatUnread = () => { let seen = ''; try { seen = localStorage.getItem('sde-chat-seen') || ''; } catch(e){} return S.chat.filter(m => !m.hidden && m.at > seen && m.by !== S.me).length; };
 function chatView(){
   const f = S.chatFilter || 'all';
-  const list = S.chat.filter(m => !m.hidden && (f === 'all' || (f === 'open' ? m.kind !== 'msg' && m.status !== 'Done' : m.kind === f))).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const list = S.chat.filter(m => !m.hidden && (f === 'all' || (f === 'open' ? m.kind !== 'msg' && !chatAnswered(m) : m.kind === f))).sort((a, b) => String(a.at).localeCompare(String(b.at)));
   try { localStorage.setItem('sde-chat-seen', new Date().toISOString()); } catch(e){}
   setTimeout(() => { const b = $('#chatlist'); if(b) b.scrollTop = b.scrollHeight; updateChatBadge(); }, 0);
   const byId = id => S.chat.find(m => m.id === id);
-  const openN = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && m.status !== 'Done').length;
+  const openN = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && !chatAnswered(m)).length;
   return `<div class="pagehead"><div><div class="eyebrow">Help us improve the app</div><h1>Feedback chat</h1></div>${S.canEdit && openN ? `<button class="btn pri" data-act="chatcopy" title="Copies every open error and suggestion as one list — paste it to Claude to get them all fixed in the next update">📋 Copy ${openN} open item${openN > 1 ? 's' : ''} for the next update</button>` : ''}</div>
-  <div class="tabs">${[['all', 'All'], ['open', 'Open issues'], ['err', '🐞 Errors'], ['idea', '💡 Suggestions'], ['q', '❓ Questions']].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="chatf" data-f="${k}">${l}</button>`).join('')}</div>
+  <div class="tabs">${[['all', 'All'], ['open', 'Not replied yet'], ['err', '🐞 Errors'], ['idea', '💡 Suggestions'], ['q', '❓ Questions']].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="chatf" data-f="${k}">${l}</button>`).join('')}</div>
   <div class="card chatbox"><div id="chatlist" class="chatlist">${list.length ? list.map(m => { const K = CHAT_KINDS[m.kind] || CHAT_KINDS.msg, mine = m.by === S.me, re = m.replyTo && byId(m.replyTo);
-    return `<div class="cmsg ${mine ? 'mine' : ''}"><div class="cmeta"><b>${esc(m.name || '')}</b> · ${fmtDT(m.at)}${m.kind !== 'msg' ? ` · <span style="color:${K.c};font-weight:700">${K.i} ${K.l}</span>` : ''}${m.kind !== 'msg' ? ` · <span class="pill ${m.status === 'Done' ? 'done' : m.status === 'New' ? 'pending' : 'draft'}">${esc(m.status || 'New')}</span>` : ''}</div>
+    return `<div class="cmsg ${mine ? 'mine' : ''}"><div class="cmeta"><b>${esc(m.name || '')}</b> · ${fmtDT(m.at)}${m.kind !== 'msg' ? ` · <span style="color:${K.c};font-weight:700">${K.i} ${K.l}</span>` : ''}${m.kind !== 'msg' && chatAnswered(m) ? ' · <span class="small" style="color:#2E7D32;font-weight:700">↩ Replied</span>' : ''}</div>
       ${re ? `<div class="cquote">↪ ${esc(re.name || '')}: ${esc(String(re.text || '').slice(0, 90))}</div>` : ''}
       <div class="ctext">${esc(m.text || '')}</div>${m.where ? `<div class="small muted">Page: ${esc(m.where)}</div>` : ''}
       ${(m.photos || []).length ? `<div class="dphotos" style="margin-top:6px">${m.photos.map(ph => `<figure><img ${photoAttr(ph)} data-act="zoom" data-zid="${esc(ph)}" alt=""></figure>`).join('')}</div>` : ''}
-      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${S.canEdit && m.kind !== 'msg' ? `<select data-chatst="${esc(m.id)}">${CHAT_STATUS.map(s => `<option ${s === (m.status || 'New') ? 'selected' : ''}>${s}</option>`).join('')}</select>` : ''}${(S.canEdit || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
+      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${(S.canEdit || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
   <div class="ccompose">${S.chatReply && byId(S.chatReply) ? `<div class="cquote">Replying to ${esc(byId(S.chatReply).name)} <button class="btn sm ghost" data-act="chatreply" data-id="">✕</button></div>` : ''}
     <div class="small muted" style="margin-bottom:6px">What is it about?</div>
     <div class="ckinds">${Object.entries(CHAT_KINDS).map(([k, K]) => `<button class="btn sm ${(S.chatKind || 'err') === k ? 'pri' : ''}" data-act="chatkind" data-k="${k}">${K.i} ${K.l}</button>`).join('')}</div>
@@ -2316,7 +2323,7 @@ async function chatSend(btn){
   btn.disabled = true;
   try {
     const id = 'chat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), kind = S.chatKind || 'err';
-    const m = {kind: 'chat', ck: kind, text: polishText ? text : text, by: S.me, name: S.names[S.me] || '', at: new Date().toISOString(), status: kind === 'msg' ? '' : 'New', photos: S.chatPhotos || [], replyTo: S.chatReply || '', where: S.chatWhere || ''};
+    const m = {kind: 'chat', ck: kind, text: polishText ? text : text, by: S.me, name: S.names[S.me] || '', at: new Date().toISOString(), photos: S.chatPhotos || [], replyTo: S.chatReply || '', where: S.chatWhere || ''};
     await S.db.doc('counters/' + id).set(m);
     S.chatDraft = ''; S.chatPhotos = []; S.chatReply = ''; S.chatWhere = '';
     toast('Sent — thank you!'); render();
@@ -2641,7 +2648,7 @@ async function makeDocx(id){
     } else {
       if(T.cover){
         body.push(P([t(docTitleTxt.toUpperCase(), {bold: true, size: 36})], {align: AlignmentType.CENTER, before: 200, after: 80}));
-        body.push(P([t(`Report No. ${data.reportNo || d.seq || ''}     |     Period: ${fmtDate(data.from)} – ${fmtDate(data.to)}`, {size: 22})], {align: AlignmentType.CENTER, after: 200}));
+        body.push(P([t(`Report No. ${data.reportNo || d.seq || ''}     |     Period: ${fmtDate(data.from)} – ${fmtDate(data.to)}${data.subDate ? '     |     Submitted: ' + fmtDate(data.subDate) : ''}`, {size: 22})], {align: AlignmentType.CENTER, after: 200}));
         body.push(P([t(String(data._title || p.name || '').toUpperCase(), {bold: true, size: 24})], {align: AlignmentType.CENTER, after: 240}));
         const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0]; if(cov){ const im = await img(await photoData(cov.id), 150, 100); if(im) body.push(new Paragraph({alignment: AlignmentType.CENTER, children: [im], spacing: {after: 300}})); }
         body.push(await sigTable(), new Paragraph({children: [new PageBreak()]}));
@@ -2697,7 +2704,7 @@ async function makeDocx(id){
               out.push(row([cell(P([t(lab, {bold: true, italics: !main, size: small})], {after: 0, keepNext: true}), CW, {fill: main ? GRPF : 'F2F2F2', span: head.length})])); return; }
             if(grpOn && isGrp(r)){ gN++; const lab = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
               out.push(row([...(f.num ? [cell(P([t(gN + '.', {bold: true, size: small})], {align: AlignmentType.CENTER, after: 0, keepNext: true}), w[0], {fill: GRPF})] : []), cell(P([t(f.num ? lab : r[tc0.k], {bold: true, size: small})], {after: 0, keepNext: true}), CW - (f.num ? w[0] : 0), {fill: GRPF, span: head.length - (f.num ? 1 : 0)})])); return; }
-            const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : (r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
+            const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? fmtDate(r[cc.k]) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : (r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
             out.push(row(vals.map((v, k) => { const sc = smw && cols[k - (f.num ? 1 : 0)] ? smw[i][cols[k - (f.num ? 1 : 0)].k] : null; return sc === 0 ? null : cell(v, w[k], {rs: sc > 1 ? sc : undefined, size: small, align: (k === 0 && f.num) || (k - (f.num ? 1 : 0) >= 0 && cols[k - (f.num ? 1 : 0)] && (cols[k - (f.num ? 1 : 0)].n || cols[k - (f.num ? 1 : 0)].center || cols[k - (f.num ? 1 : 0)].day != null)) || (f.rowTotal && k === vals.length - 1) ? AlignmentType.CENTER : undefined}); }).filter(Boolean))); });
           const sk = f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? dayCols.map(cc => cc.k) : [];
           if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
@@ -2835,7 +2842,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (${APP_VER}) · Daily report: rain from–to times</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (${APP_VER}) · Simpler feedback, PR submission date, S-curve from work programme</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3101,7 +3108,7 @@ function viewTable(f, data){
   if(dayCols.length) rows = rows.filter(r => r._g || cols.slice(1).some(c => c.day != null && !f.marks ? numv(r[c.k]) : !isEmpty(r[c.k])));
   if(!rows.length) return `<div class="body"><span class="muted">Nil</span></div>`;
   const grid = dayCols.length > 0, rt = f.rowTotal && dayCols.length;
-  const cellv = (c, r) => esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : (c.dp || c.fmt) && !isEmpty(r[c.k]) ? fmtN(r[c.k], c.dp) : r[c.k]);
+  const cellv = (c, r) => c.date && !isEmpty(r[c.k]) ? esc(fmtDate(r[c.k])) : esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : (c.dp || c.fmt) && !isEmpty(r[c.k]) ? fmtN(r[c.k], c.dp) : r[c.k]);
   const hg = !grid && !f.num ? headGroupRows(f, cols.map(c => c.l)) : null, sm = !grid ? spanMap(f, cols, rows) : null;
   const th = hg ? hg.top.map(h => `<th ${h.rs ? 'rowspan="2"' : `colspan="${h.cs}" style="text-align:center"`}>${esc(h.l)}</th>`).join('') + '</tr><tr>' + hg.bot.map(l => `<th>${esc(l)}</th>`).join('')
     : cols.map(c => `<th>${esc(c.day != null ? dayLabel(data.from, c.day).slice(0, dayCols.length > 14 ? 2 : 5) : c.l)}</th>`).join('') + (rt ? '<th>Total</th>' : '');
@@ -3276,7 +3283,10 @@ function newDraft(pid, type){
   if(type === 'PR' || type === 'SW' || type === 'ENM'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
   if(type === 'PR'){ const last = prevOf('PR')[0];
     if(last && last.data?.hse) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
-    if(last && last.data?.to){ data.from = addDays(last.data.to, 1); } }
+    if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
+    // the work programme carries over; actual % is refreshed when the S-curve is generated
+    const lwp = (last?.data?.wp || []).filter(r => r && String(r.act || '').trim());
+    if(lwp.length) data.wp = lwp.map(r => ({act: r.act, start: r.start, finish: r.finish, weight: r.weight, 'actp': r['actp'] || '', _auto: r._auto || ''})); }
   if(type === 'MM'){ data.to = monthEnd(data.from); }
   { const p = projById(pid) || {}, lines2 = t => String(t || '').split(/\s*,\s*(?=\d{5}|[A-Z][a-z]+\s*$)/).join(',\n');
     if(type === 'TR'){ data.to = p.client || ''; data.toAddress = p.clientAddress || ''; data.attn = p.clientAttn || ''; data.projectRef = [p.name, p.contractNo || p.clientRef].filter(Boolean).join(' — '); }
@@ -3290,7 +3300,7 @@ function newDraft(pid, type){
     const carry = last ? last.data.works.filter(r => r && r.work && numv(r.pct) < 100).map(r => ({work: r.work, pct: r.pct || ''})) : [];
     if(carry.length) data.works = carry;
   }
-  if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); } data.to = addDays(data.from, 6); }
+  if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); } data.to = addDays(data.from, 6); data.cutoff = data.to; data.subDate = today(); }
   T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
   if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); if(u <= n) u.setTime(n.getTime() + 8 * 3600000); data.until = iso(u); }
   // registers and monthly reports continue from the last one of this project
@@ -3430,7 +3440,7 @@ function fieldInput(f, v){
   const dk = `data-f="${f.k}"`;
   switch(f.t){
     case 'textarea': return `<div class="dict"><textarea ${dk} placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>${micBtn(f.k)}</div>${S.sample?`<div class="fixrow">${f.k in S.fixUndo?`<button class="undo" data-act="undofix" data-k="${f.k}">Undo</button>`:''}<button class="aibtn" data-act="fixen" data-k="${f.k}">✨ Fix English</button></div>`:''}`;
-    case 'draftbtn': return `<button type="button" class="btn pri" data-act="ltrdraft" style="width:100%">✨ Draft the letter from the details above</button>`;
+    case 'draftbtn': return `<button type="button" class="btn pri" data-act="${f.act || 'ltrdraft'}" style="width:100%">${esc(f.btn || '✨ Draft the letter from the details above')}</button>`;
     case 'auto': return `<div class="autobox"><span data-auto="${f.k}">${esc(S.draft ? autoValue(f, S.draft) : v) || '—'}</span><em>auto</em></div>`;
     case 'date': return `<input type="date" ${dk} value="${esc(v)}">`;
     case 'datetime': return `<input type="datetime-local" ${dk} value="${esc(v)}">`;
@@ -3444,7 +3454,7 @@ function fieldInput(f, v){
       const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
       if(f.marks){ const di = S.draft?.data?.from ? dDiff(today(), S.draft.data.from) : -1; if(di >= 0 && di < fcols.filter(c => c.day != null).length) S._dayok = di; else S._dayok = null; }
       return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? 'Type here' : esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? 'Type here' : esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
       </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
     }
     case 'photos': {
@@ -3744,7 +3754,7 @@ async function saveMySig(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z28';
+const APP_VER = 'Z29';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -3845,6 +3855,42 @@ async function dsrCalZip(pid, btn){
     prog.textContent = 'Packing…'; await S.dl.save({filename: root + '.zip', data: await zip.generateAsync({type: 'blob'})}); prog.textContent = ''; toast(list.length + ' daily reports downloaded ✓'); }
   catch(e){ console.error(e); toast('Could not make the ZIP.', true); }
   finally { btn.disabled = false; }
+}
+
+/* ---------- 📈 S-curve from the work programme, up to a chosen cut-off date ---------- */
+function genSCurve(){
+  const d = S.draft; if(!d) return; const x = d.data, p = projById(d.projectId) || {};
+  const pd = v => { v = String(v || '').trim(); if(/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10); const m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad2(m[2]) + '-' + pad2(m[1]) : ''; };
+  const acts = (x.wp || []).filter(r => r && String(r.act || '').trim()).map(r => ({r, s: pd(r.start), f: pd(r.finish), w: numv(r.weight)})).filter(a => a.s && a.f && a.f >= a.s);
+  if(!acts.length){ toast('Fill in the work programme first — activity, start date, finish date and weightage.', true); document.querySelector('[data-tbl=wp]')?.scrollIntoView({block: 'center'}); return; }
+  let W = acts.reduce((a, b) => a + b.w, 0); if(!W){ acts.forEach(a => a.w = 1); W = acts.length; }
+  const cut = x.cutoff || x.to || today(), r1 = v => String(Math.round(v * 10) / 10);
+  const share = (a, t) => { const tot = dDiff(a.f, a.s) + 1, done = Math.max(0, Math.min(tot, dDiff(t, a.s) + 1)); return done / tot; };
+  const planAt = t => acts.reduce((sum, a) => sum + a.w * share(a, t), 0) / W * 100;
+  // actual % per activity from the daily reports (latest figure on or before the date)
+  const dsr = S.docs.filter(z => z.projectId === d.projectId && z.type === 'DSR' && z.data?.date).sort((a, b) => String(a.data.date).localeCompare(String(b.data.date)));
+  const key = v => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const same = (a, w) => { const A = key(a.r.act), B = key(w); return A && B && (A === B || A.includes(B) || B.includes(A)); };
+  const dsrPct = (a, t) => { let v = null; for(const z of dsr){ if(z.data.date > t) break; (z.data.works || []).forEach(w => { if(w && same(a, w.work) && !isEmpty(w.pct)) v = Math.min(100, numv(w.pct)); }); } return v; };
+  let nAuto = 0;
+  acts.forEach(a => { a.r.plan = r1(share(a, cut) * 100); const v = dsrPct(a, cut); if(v != null && (isEmpty(a.r['actp']) || a.r._auto)){ a.r['actp'] = String(v); a.r._auto = 1; nAuto++; } });
+  const actualCut = acts.reduce((sum, a) => sum + a.w * Math.min(100, numv(a.r['actp'])), 0) / W;
+  // points: weekly (or wider for long jobs) from the first start to the last finish, always including the cut-off date
+  const s0 = acts.reduce((m, a) => a.s < m ? a.s : m, acts[0].s), e0 = acts.reduce((m, a) => a.f > m ? a.f : m, acts[0].f);
+  const span = Math.max(1, dDiff(e0, s0)), step = 7 * Math.max(1, Math.ceil(span / 7 / 24));
+  const pts = []; for(let t = s0; t < e0; t = addDays(t, step)) pts.push(t); pts.push(e0);
+  if(cut >= s0 && cut <= e0 && !pts.includes(cut)) pts.push(cut); pts.sort();
+  // earlier actual figures: from the daily reports, else from earlier progress reports' S-curves
+  const prev = {}; S.docs.filter(z => z.projectId === d.projectId && z.type === 'PR' && z.id !== d.id).forEach(z => (z.data?.scurve || []).forEach(r => { if(r && !isEmpty(r.actual)) prev[r.date] = r.actual; }));
+  const lab = t => t.slice(8, 10) + '/' + t.slice(5, 7) + '/' + t.slice(2, 4);
+  let lastAct = '0';
+  x.scurve = pts.map(t => { let act = '';
+    if(t === cut) act = r1(actualCut);
+    else if(t < cut){ const vals = acts.map(a => dsrPct(a, t)); if(vals.some(v => v != null)) act = r1(acts.reduce((sum, a, i) => sum + a.w * (vals[i] || 0), 0) / W); else if(prev[lab(t)] != null) act = String(prev[lab(t)]); else act = lastAct; lastAct = act; }
+    return {date: lab(t), sched: r1(planAt(t)), actual: act}; });
+  x.planned = r1(planAt(cut)); x.actual = r1(actualCut);
+  S.dirty = true; render();
+  toast(`S-curve made up to ${fmtDate(cut)}: scheduled ${x.planned}%, actual ${x.actual}%${nAuto ? ` (actual % of ${nAuto} activit${nAuto > 1 ? 'ies' : 'y'} taken from the daily reports)` : ''} — please check.`);
 }
 
 /* ---------- 📅 report for any date range (built from the records, not saved) ---------- */
@@ -4061,7 +4107,7 @@ async function makePDF(id, opt){
       doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...INK);
       doc.text(fitTxt(doc, pt(docName(T, data).toUpperCase()), CW), HS.W/2, y + 6, {align:'center'});
       doc.setFont('helvetica','normal'); doc.setFontSize(11);
-      doc.text(fitTxt(doc, pt('Report No. ' + (data.reportNo || d.seq || '') + '     |     Period: ' + periodTxt), CW), HS.W/2, y + 13, {align:'center'});
+      doc.text(fitTxt(doc, pt('Report No. ' + (data.reportNo || d.seq || '') + '     |     Period: ' + periodTxt + (data.subDate ? '     |     Submitted: ' + fmtDate(data.subDate) : '')), CW), HS.W/2, y + 13, {align:'center'});
       doc.setFont('helvetica','bold'); doc.setFontSize(11);
       const pl = doc.splitTextToSize(pt(String(data._title || p.name || '').toUpperCase()), CW - 10);
       doc.text(pl, HS.W/2, y + 22, {align:'center'}); y += 22 + pl.length * 5 + 4;
@@ -4166,7 +4212,7 @@ async function makePDF(id, opt){
             return [{content: pt(label), colSpan: head.length, styles: {fillColor: main ? [226, 239, 218] : [242, 242, 242], fontStyle: main ? 'bold' : 'bolditalic'}}]; }
           if(grpOn && isGrp(r)){ gN++; const label = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
             return [...(f.num ? [{content: String(gN) + '.', styles: {fillColor: [226, 239, 218], fontStyle: 'bold', halign: 'center'}}] : []), {content: pt(f.num ? label : (/^\d/.test(r[tc0.k]) ? r[tc0.k] : label)), colSpan: cols.length + (f.rowTotal ? 1 : 0), styles: {fillColor: [226, 239, 218], fontStyle: 'bold'}}]; }
-          const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
+          const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? pt(fmtDate(r[cc.k])) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
           if(f.check && r.ans === (f.bad || 'No')){ const ai = cols.findIndex(cc => cc.k === 'ans') + (f.num ? 1 : 0); out[ai] = {content: pt(r.ans), styles: {textColor: [180, 35, 24], fontStyle: 'bold'}}; }
           cols.forEach((cc, ci) => { if(cc.alert && cc.alert.includes(String(r[cc.k] ?? ''))) out[ci + (f.num ? 1 : 0)] = {content: pt(r[cc.k]), styles: {textColor: [180, 35, 24], fontStyle: 'bold'}}; });
           if(f.rowTotal) out.push(String(dayCols.reduce((a, cc) => a + (parseFloat(r[cc.k]) || 0), 0)));
@@ -4678,6 +4724,7 @@ document.addEventListener('click', async e => {
       break; }
     case 'saveresp': saveResponse(); break;
     case 'fillpr': fillFromDailyReports(); break;
+    case 'genscurve': genSCurve(); break;
     case 'fillenv': fillEnv(); break;
     case 'files': S.fileQ = ''; go('files', {id}); break;
     case 'fileadd': fileForm(el.dataset.p); break;
@@ -4767,9 +4814,9 @@ document.addEventListener('click', async e => {
     case 'eotapprove': if(!(S.canEdit || el.dataset.by === S.me || !el.dataset.by)){ toast('Only the person who sent the EOT letter (or an admin) updates the approved date.', true); break; } eotApproveForm(el.dataset.p); break;
     case 'eotsave': saveEotApproval(el.dataset.p, el); break;
     case 'fileaddcat': fileForm(el.dataset.p, {category: el.dataset.c, title: el.dataset.t || '', kind: 'upload'}); break;
-    case 'chatcopy': { const L = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && m.status !== 'Done').sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    case 'chatcopy': { const L = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && !chatAnswered(m)).sort((a, b) => String(a.at).localeCompare(String(b.at)));
       const txt = 'Sadhana app — open feedback (' + fmtDT(new Date().toISOString()) + ', app ' + APP_VER + ')\n\n' + L.map((m, i) => `${i + 1}. [${(CHAT_KINDS[m.kind] || CHAT_KINDS.msg).l}] ${m.name || ''}, ${fmtDT(m.at)}${m.where ? ' — page: ' + m.where : ''}${(m.photos || []).length ? ' — ' + m.photos.length + ' screenshot(s) in the app' : ''}\n   ${String(m.text || '').replace(/\n/g, '\n   ')}`).join('\n\n') + '\n\nPlease fix / add all of these in the next update.';
-      try { await navigator.clipboard.writeText(txt); toast(`${L.length} item${L.length > 1 ? 's' : ''} copied — paste them to Claude. Mark them Done here when the update is in.`); }
+      try { await navigator.clipboard.writeText(txt); toast(`${L.length} item${L.length > 1 ? 's' : ''} copied — paste them to Claude. Reply to each person here when it's done.`); }
       catch(err){ showModal(`<div class="box"><div class="mh"><h3>Copy this list</h3></div><div class="mb"><textarea style="width:100%;min-height:300px" readonly>${esc(txt)}</textarea></div></div>`); }
       break; }
     case 'clientsig': { const d = docById(id); if(!d) break; const v = el.dataset.v;
@@ -5239,7 +5286,7 @@ function computeRanks(per){
     if(m.kind === 'msg'){ const dk = local(m.at); u.chat++; if(m.replyTo && (u.dayMsg[dk] || 0) < RANK_PTS.msgDayMax){ u.dayMsg[dk] = (u.dayMsg[dk] || 0) + RANK_PTS.reply; u.pts += RANK_PTS.reply; } return; }
     if(!long) return;
     u[m.kind] = (u[m.kind] || 0) + 1; u.pts += RANK_PTS.fb[m.kind] || 0;
-    if(m.status === 'Done' && m.kind !== 'q'){ u.done++; u.pts += RANK_PTS.fbDone; } });
+    if(chatAnswered(m) && m.kind !== 'q'){ u.done++; u.pts += RANK_PTS.fbDone; } });
   const people = (S.users.length ? S.users.filter(u => u.role !== 'removed' && u.role !== 'pending').map(u => u.id) : Object.keys(S.names));
   people.forEach(id => me(id));
   const list = Object.values(P).filter(u => (people.includes(u.id) || u.pts > 0) && !isIntern(u.id)).map(u => { const days = u.days.size; return {...u, days, pts: u.pts + days * RANK_PTS.day}; });
