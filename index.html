@@ -149,6 +149,13 @@ body.intern [data-v=team]{display:none}
 .recchip .ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:#e6e1d6;color:#555}
 .recchip.ok .ic{background:#2E7D32;color:#fff}.recchip.soon .ic{background:#f79009;color:#fff}.recchip.exp{border-color:#d92d20;color:#b42318}.recchip.exp .ic{background:#d92d20;color:#fff}
 .recchip.miss{border-style:dashed;color:#6b6257}
+.dcal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.dcal span{font-size:11px;color:var(--muted);text-align:center;font-weight:700}
+.dcd{position:relative;aspect-ratio:1;border:1px solid var(--line2);background:#fff;border-radius:8px;font:inherit;font-size:14px;cursor:pointer;color:inherit;padding:0}
+.dcd:disabled{opacity:.35;cursor:default}.dcd i{position:absolute;right:4px;top:2px;font-style:normal;font-size:11px;font-weight:800}
+.dcd.ok{background:#e7f3e8;border-color:#7cb07f}.dcd.ok i{color:#2E7D32}.dcd.part{background:#fff4e0;border-color:#f0b35a}.dcd.part i{color:#b45309}
+.dcd.miss{border-color:#e9a39b;border-style:dashed}.dcd.sel{outline:3px solid var(--hazard);outline-offset:1px}.dcd.tod{font-weight:800}
+.dkey{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line2);text-align:center;font-size:11px;line-height:15px;font-weight:800;vertical-align:-3px}
+.dkey.ok{background:#e7f3e8;border-color:#7cb07f;color:#2E7D32}.dkey.part{background:#fff4e0;border-color:#f0b35a;color:#b45309}.dkey.miss{border:1px dashed #e9a39b}
 .createbar details.more{margin-left:auto}.createbar details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:8px 6px;list-style:none}
 .createbar details.more summary::-webkit-details-marker{display:none}
 .createbar .morebox{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}
@@ -706,7 +713,7 @@ const lastPR = (d, upto) => S.docs.filter(x => x.projectId === d.projectId && x.
 const TYPES = {
 
   DSR: {
-    name: 'Site Daily Report', code: 'DSR', blurb: 'Manpower, machinery, weather, activities, site photos', onePage: true,
+    name: 'Site Daily Report', code: 'DSR', blurb: 'Manpower, machinery, weather, activities, site photos', onePage: true, carry: ['clientSign'],
     sigs: [
       {role:'Prepared by', hint:'Site Supervisor'}
     ],
@@ -735,6 +742,8 @@ const TYPES = {
       {sec:'Safety & Remarks'},
       {k:'safety', l:'Safety (toolbox talk, incidents, near-misses)', t:'textarea'},
       {k:'issues', l:'Issues / delays / instructions received', t:'textarea'},
+      {sec:'Sign-off', pdf:false},
+      {k:'clientSign', l:'Client / consultant to sign this report?', t:'select', o:['No', 'Yes'], def:'No', pdf:false, w:'half', hint:'Yes adds an "Acknowledged by (Client / Consultant)" signature box. You can still remove it later if it is not needed.'},
       {sec:'Site Photos (record for the progress report)', pdf:false},
       {k:'photos', l:'Site photos — today\'s progress', t:'photos', req:1, pdf:false, hint:'At least 1 photo is needed to submit. Photos are kept as a record for the progress report — they are not printed on the daily report.'}
     ]
@@ -1555,8 +1564,12 @@ function buildType(type, fmt){
 }
 // daily reports signed before Z20 had three signers — keep showing them
 const DSR_OLD_SIGS = [{role:'Prepared by', hint:'Site Supervisor'}, {role:'Checked by', hint:'Project Manager'}, {role:'Acknowledged by', hint:'Client / Consultant'}];
+const DSR_CLIENT_SIG = {role:'Acknowledged by', hint:'Client / Consultant', wait:'Waiting for client'};
 const TT = d => { const T = buildType(d.type, d.fmt); const n = (d.signatures || []).filter(Boolean).length;
-  if(d.type === 'DSR' && n > T.sigs.length) return {...T, sigs: [...T.sigs, ...DSR_OLD_SIGS.slice(T.sigs.length, n)]}; return T; };
+  if(d.type !== 'DSR') return T;
+  const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
+  if(n > sigs.length) return {...T, sigs: [...sigs, ...DSR_OLD_SIGS.slice(sigs.length, n)]};
+  return sigs === T.sigs ? T : {...T, sigs, done: 'Acknowledged'}; };
 const projFmt = (pid, type) => ((projById(pid) || {}).formCfg || {})[type] || null;
 
 function fmtEditor(pid, type){
@@ -1689,6 +1702,7 @@ async function resolveNames(ids){
 
 /* ---------- routing / render ---------- */
 function go(name, params={}){
+  if(S.updWaiting && name !== 'edit') setTimeout(checkUpdate, 400);
   if(typeof stopDictation === 'function') stopDictation();
   if(S.view.name === 'edit' && S.dirty && name !== 'edit'){
     return confirmBox('Leave without saving?', 'Your changes to this document have not been saved.', 'Leave', () => { S.dirty = false; go(name, params); });
@@ -1916,6 +1930,7 @@ function projectView(id, tab){
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
+  <button class="btn" data-act="dcal" data-p="${esc(id)}">🗓 Daily reports</button>
   <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
   ${S.canWrite && !intern() ? `<button class="btn" data-act="scforms" data-p="${esc(id)}">📄 Subcon forms</button><label class="btn" style="margin:0" title="Upload a Word report sent back by the sub-contractor (or one of your existing reports) — the app makes it a Sadhana document">⇪ Upload subcon report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>` : ''}
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
@@ -2273,7 +2288,8 @@ function chatView(){
   try { localStorage.setItem('sde-chat-seen', new Date().toISOString()); } catch(e){}
   setTimeout(() => { const b = $('#chatlist'); if(b) b.scrollTop = b.scrollHeight; updateChatBadge(); }, 0);
   const byId = id => S.chat.find(m => m.id === id);
-  return `<div class="pagehead"><div><div class="eyebrow">Help us improve the app</div><h1>Feedback chat</h1></div></div>
+  const openN = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && m.status !== 'Done').length;
+  return `<div class="pagehead"><div><div class="eyebrow">Help us improve the app</div><h1>Feedback chat</h1></div>${S.canEdit && openN ? `<button class="btn pri" data-act="chatcopy" title="Copies every open error and suggestion as one list — paste it to Claude to get them all fixed in the next update">📋 Copy ${openN} open item${openN > 1 ? 's' : ''} for the next update</button>` : ''}</div>
   <div class="tabs">${[['all', 'All'], ['open', 'Open issues'], ['err', '🐞 Errors'], ['idea', '💡 Suggestions'], ['q', '❓ Questions']].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="chatf" data-f="${k}">${l}</button>`).join('')}</div>
   <div class="card chatbox"><div id="chatlist" class="chatlist">${list.length ? list.map(m => { const K = CHAT_KINDS[m.kind] || CHAT_KINDS.msg, mine = m.by === S.me, re = m.replyTo && byId(m.replyTo);
     return `<div class="cmsg ${mine ? 'mine' : ''}"><div class="cmeta"><b>${esc(m.name || '')}</b> · ${fmtDT(m.at)}${m.kind !== 'msg' ? ` · <span style="color:${K.c};font-weight:700">${K.i} ${K.l}</span>` : ''}${m.kind !== 'msg' ? ` · <span class="pill ${m.status === 'Done' ? 'done' : m.status === 'New' ? 'pending' : 'draft'}">${esc(m.status || 'New')}</span>` : ''}</div>
@@ -2811,7 +2827,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (Z24) · Subcon forms buttons on the project page</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (${APP_VER}) · Stay signed in, daily reports by date, optional client signature</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3223,6 +3239,9 @@ function docView(id){
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF</button>
         <button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
+        ${d.type === 'DSR' && S.canWrite && (d.signatures || []).filter(Boolean).length <= 1 ? (d.data?.clientSign === 'Yes'
+          ? `<button class="btn ghost" data-act="clientsig" data-id="${esc(d.id)}" data-v="No">✕ Client signature not needed</button>`
+          : `<button class="btn ghost" data-act="clientsig" data-id="${esc(d.id)}" data-v="Yes">+ Add client signature</button>`) : ''}
         <details class="more docmore"><summary>More actions ▾</summary><div style="display:grid;gap:8px;padding-top:8px">
         <button class="btn" data-act="present" data-id="${esc(d.id)}">▶ Present</button>
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
@@ -3711,6 +3730,24 @@ async function saveMySig(img){
   catch(e){ dbErr(e); }
 }
 
+/* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
+const APP_VER = 'Z27';
+async function checkUpdate(){
+  if(!navigator.onLine || location.protocol === 'file:') return;
+  try {
+    const base = location.href.split('#')[0].split('?')[0];
+    const r = await fetch(base + '?check=' + Date.now(), {cache: 'no-store'}); if(!r.ok) return;
+    const m = (await r.text()).match(/const APP_VER = '([^']+)'/); if(!m || m[1] === APP_VER) return;
+    const busy = S.view?.name === 'edit' || S.modalOpen || document.querySelector('#sgPad');
+    if(busy){ if(!S.updWaiting){ S.updWaiting = true; toast('A new version of the app is ready — it will update when you finish this.'); } return; }
+    toast('Updating to the latest version…');
+    setTimeout(() => location.replace(base + '?v=' + encodeURIComponent(m[1]) + location.hash), 900);
+  } catch(e){}
+}
+setTimeout(checkUpdate, 20000); setInterval(checkUpdate, 10 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') checkUpdate(); });
+
+
 /* ---------- project records checklist + EOT approval ---------- */
 const REQ_DOCS = [
   {k: 'CIDB', l: 'CIDB registration', short: 'CIDB', cat: 'CIDB registration', re: /\bcidb\b|\bppk\b|\bspkk\b|\bstb\b/i},
@@ -3758,6 +3795,43 @@ async function saveEotApproval(pid, btn){
     closeModal(); render();
     toast(`Completion date updated to ${fmtDate(end)} (+${days} days). Now upload the renewed insurance for the extension.`);
   } catch(e){ btn.disabled = false; prog.textContent = ''; if(e.code === 'too-big') toast('Could not compress the approval letter under 10 MB — save it as a PDF and try again.', true); else dbErr(e); }
+}
+
+/* ---------- 🗓 daily reports by date: month calendar → open / print one day, or download several ---------- */
+function dsrCal(pid, ym, pickIn){
+  const p = projById(pid); if(!p) return;
+  ym = ym || today().slice(0, 7); S.dcal = {pid, ym, pick: pickIn !== undefined ? pickIn : (S.dcal && S.dcal.pid === pid ? S.dcal.pick : '')};
+  const ds = S.docs.filter(d => d.projectId === pid && d.type === 'DSR'), byDay = {};
+  ds.forEach(d => { const k = String(d.data?.date || '').slice(0, 10); (byDay[k] = byDay[k] || []).push(d); });
+  const [Y, M] = ym.split('-').map(Number), first = new Date(Y, M - 1, 1), nDays = new Date(Y, M, 0).getDate(), lead = (first.getDay() + 6) % 7, t = today();
+  const prevYm = new Date(Y, M - 2, 1), nextYm = new Date(Y, M, 1), fy = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1);
+  const monthDocs = ds.filter(d => String(d.data?.date || '').startsWith(ym));
+  let cells = ''; for(let i = 0; i < lead; i++) cells += '<div></div>';
+  for(let dd = 1; dd <= nDays; dd++){ const k = ym + '-' + pad2(dd), L = byDay[k] || [], done = L.some(d => statusOf(d).next === -1), wd = new Date(Y, M - 1, dd).getDay();
+    const cls = L.length ? (done ? 'ok' : 'part') : (k < t && k >= (p.start || '') && wd !== 0 ? 'miss' : '');
+    cells += `<button class="dcd ${cls} ${k === S.dcal.pick ? 'sel' : ''} ${k === t ? 'tod' : ''}" data-act="dcalday" data-d="${k}" ${k > t ? 'disabled' : ''}>${dd}${L.length ? `<i>${done ? '✓' : '•'}</i>` : ''}</button>`; }
+  const pick = S.dcal.pick, L = pick ? (byDay[pick] || []) : [];
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><div><div class="eyebrow">${esc(p.code)} · ${esc(p.name)}</div><h3>Daily reports</h3></div></div><div class="mb">
+    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn sm" data-act="dcalm" data-m="${fy(prevYm)}">‹</button><b style="flex:1;text-align:center">${first.toLocaleString('en-GB', {month: 'long', year: 'numeric'})}</b><button class="btn sm" data-act="dcalm" data-m="${fy(nextYm)}" ${fy(nextYm) > t.slice(0, 7) ? 'disabled' : ''}>›</button>
+      <input type="date" id="dcalGo" value="${esc(pick || '')}" max="${t}" title="Go to a date" style="width:150px"></div>
+    <div class="dcal"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>${cells}</div>
+    <div class="small muted" style="margin:8px 0 12px"><span class="dkey ok">✓</span> signed &nbsp; <span class="dkey part">•</span> draft / waiting signature &nbsp; <span class="dkey miss"></span> no report (working day)</div>
+    ${pick ? `<div class="card pad" style="margin-bottom:10px"><b>${fmtDate(pick)}</b>${L.length ? L.map(d => `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><span class="mono small">${esc(d.number)}</span><span class="pill ${statusOf(d).cls}">${esc(statusOf(d).label)}</span><div class="sp"></div>
+        <button class="btn sm" data-act="open" data-id="${esc(d.id)}">Open</button><button class="btn sm dark" data-act="pdf" data-id="${esc(d.id)}">⤓ PDF / print</button></div>`).join('')
+      : `<div class="small muted" style="margin-top:6px">No daily report for this date.</div>${S.canWrite ? `<button class="btn sm pri" style="margin-top:8px" data-act="dcalnew" data-p="${esc(pid)}" data-d="${pick}">+ Make the daily report for this date</button>` : ''}`}</div>` : '<div class="small muted">Tap a date to open or print its daily report.</div>'}
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><span class="small muted" style="flex:1">${monthDocs.length} daily report${monthDocs.length === 1 ? '' : 's'} this month</span>
+      ${monthDocs.length ? `<button class="btn sm" data-act="dcalzip" data-p="${esc(pid)}">⤓ All this month (ZIP of PDFs)</button>` : ''}</div>
+    <div id="dcalProg" class="small muted"></div></div></div>`);
+}
+async function dsrCalZip(pid, btn){
+  const p = projById(pid), ym = S.dcal.ym, prog = $('#dcalProg');
+  const list = S.docs.filter(d => d.projectId === pid && d.type === 'DSR' && String(d.data?.date || '').startsWith(ym)).sort((a, b) => String(a.data.date).localeCompare(String(b.data.date)));
+  btn.disabled = true;
+  try { const Z = await jszip(), zip = new Z(), root = safeName(`${p.code} Daily Reports ${ym}`);
+    for(let i = 0; i < list.length; i++){ prog.textContent = `Making PDF ${i + 1} of ${list.length}…`; const x = await makePDF(list[i].id, {blob: true}); zip.file(`${root}/${x.name}`, x.blob); }
+    prog.textContent = 'Packing…'; await S.dl.save({filename: root + '.zip', data: await zip.generateAsync({type: 'blob'})}); prog.textContent = ''; toast(list.length + ' daily reports downloaded ✓'); }
+  catch(e){ console.error(e); toast('Could not make the ZIP.', true); }
+  finally { btn.disabled = false; }
 }
 
 /* ---------- 📅 report for any date range (built from the records, not saved) ---------- */
@@ -3950,12 +4024,12 @@ async function makePDF(id, opt){
     const sigTable = async () => {
       const sigs = d.signatures || [], n = T.sigs.length, lw = 26, cw = n === 1 ? 64 : (CW - lw) / n;
       const imgs = await Promise.all(T.sigs.map((s, i) => sigs[i] ? imgData(sigs[i].img, 600, 'png').catch(() => null) : null));
-      if(T.onePage && n === 1){   // one signer on a one-page form: a single compact row
-        need(20); const sg = sigs[0];
-        doc.autoTable({...base, startY: y, head: [[pt(T.sigs[0].role.toUpperCase()), 'DESIGNATION', 'SIGNATURE', 'DATE & TIME']],
-          body: [[pt(sg?.name || ''), pt(sg?.designation || T.sigs[0].hint), '', sg ? pt(fmtDT(sg.at)) : '']],
-          columnStyles: {0: {cellWidth: 52}, 1: {cellWidth: 38}, 2: {cellWidth: 46, minCellHeight: 15 * sc}, 3: {halign: 'center'}}, styles: {...base.styles, valign: 'middle'},
-          didDrawCell: h => { if(h.section === 'body' && h.column.index === 2 && imgs[0]){ const I = imgs[0], r = Math.min((h.cell.width - 4) / I.w, (h.cell.height - 2) / I.h); doc.addImage(I.url, 'PNG', h.cell.x + (h.cell.width - I.w * r) / 2, h.cell.y + (h.cell.height - I.h * r) / 2, I.w * r, I.h * r); } }});
+      if(T.onePage && n <= 3){   // one-page forms: one compact row per signer
+        need(8 + 16 * n); 
+        doc.autoTable({...base, startY: y, head: [['SIGN-OFF', 'NAME', 'DESIGNATION', 'SIGNATURE', 'DATE & TIME']],
+          body: T.sigs.map((s, i) => { const sg = sigs[i]; return [pt(s.role.toUpperCase()), pt(sg?.name || ''), pt(sg?.designation || s.hint), '', sg ? pt(fmtDT(sg.at)) : '']; }),
+          columnStyles: {0: {cellWidth: 30, fontStyle: 'bold', fillColor: LABEL_FILL}, 1: {cellWidth: 40}, 2: {cellWidth: 34}, 3: {cellWidth: 40, minCellHeight: 14 * sc}, 4: {halign: 'center'}}, styles: {...base.styles, valign: 'middle'},
+          didDrawCell: h => { if(h.section === 'body' && h.column.index === 3 && imgs[h.row.index]){ const I = imgs[h.row.index], r = Math.min((h.cell.width - 4) / I.w, (h.cell.height - 2) / I.h); doc.addImage(I.url, 'PNG', h.cell.x + (h.cell.width - I.w * r) / 2, h.cell.y + (h.cell.height - I.h * r) / 2, I.w * r, I.h * r); } }});
         after(); return; }
       need(48);
       doc.autoTable({...base, ...(n === 1 ? {tableWidth: lw + cw, margin: {...base.margin, left: L + CW - lw - cw}} : {}), startY:y, head:[['', ...T.sigs.map(s => pt(s.role.toUpperCase()))]],
@@ -4301,7 +4375,8 @@ document.addEventListener('input', e => { if(e.target.id === 'eaEnd' || e.target
     document.querySelectorAll('#modal .npg').forEach(g => { let n = 0; g.querySelectorAll('.npi').forEach(b => { const ok = w.every(x => b.dataset.s.includes(x)); b.style.display = ok ? '' : 'none'; if(ok) n++; }); g.style.display = n ? '' : 'none'; any += n; });
     const no = document.querySelector('#modal .npnone'); if(no) no.style.display = any ? 'none' : ''; return; }
   if(e.target.closest && e.target.closest('#modal')) mSnap(); });
-document.addEventListener('change', e => { if(e.target.dataset && e.target.dataset.sguse !== undefined){ const dr = e.target.value === 'draw';
+document.addEventListener('change', e => { if(e.target.id === 'dcalGo' && e.target.value){ dsrCal(S.dcal.pid, e.target.value.slice(0, 7), e.target.value); return; }
+  if(e.target.dataset && e.target.dataset.sguse !== undefined){ const dr = e.target.value === 'draw';
     $('#sgDraw').style.display = dr ? '' : 'none'; $('#sgSaved').style.display = dr ? 'none' : ''; if(dr && !PAD) initPad(); if(!dr){ $('#sgName').value = S.names[S.me] || ''; $('#sgDes').value = S.myDes || ''; } return; }
   if(e.target.dataset && e.target.dataset.tabsel){ S.view.tab = e.target.value; render(); return; } if(e.target.closest && e.target.closest('#modal')) mSnap(); });
 function closeModal(keep){ if(LIVE.on) stopListening(true); if(keep !== true && S.modalKey) MDRAFT.drop(S.modalKey); S.modalKey = ''; S.modalOpen = false; $('#modal').innerHTML = ''; PAD = null; }
@@ -4679,6 +4754,20 @@ document.addEventListener('click', async e => {
     case 'eotapprove': if(!(S.canEdit || el.dataset.by === S.me || !el.dataset.by)){ toast('Only the person who sent the EOT letter (or an admin) updates the approved date.', true); break; } eotApproveForm(el.dataset.p); break;
     case 'eotsave': saveEotApproval(el.dataset.p, el); break;
     case 'fileaddcat': fileForm(el.dataset.p, {category: el.dataset.c, title: el.dataset.t || '', kind: 'upload'}); break;
+    case 'chatcopy': { const L = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && m.status !== 'Done').sort((a, b) => String(a.at).localeCompare(String(b.at)));
+      const txt = 'Sadhana app — open feedback (' + fmtDT(new Date().toISOString()) + ', app ' + APP_VER + ')\n\n' + L.map((m, i) => `${i + 1}. [${(CHAT_KINDS[m.kind] || CHAT_KINDS.msg).l}] ${m.name || ''}, ${fmtDT(m.at)}${m.where ? ' — page: ' + m.where : ''}${(m.photos || []).length ? ' — ' + m.photos.length + ' screenshot(s) in the app' : ''}\n   ${String(m.text || '').replace(/\n/g, '\n   ')}`).join('\n\n') + '\n\nPlease fix / add all of these in the next update.';
+      try { await navigator.clipboard.writeText(txt); toast(`${L.length} item${L.length > 1 ? 's' : ''} copied — paste them to Claude. Mark them Done here when the update is in.`); }
+      catch(err){ showModal(`<div class="box"><div class="mh"><h3>Copy this list</h3></div><div class="mb"><textarea style="width:100%;min-height:300px" readonly>${esc(txt)}</textarea></div></div>`); }
+      break; }
+    case 'clientsig': { const d = docById(id); if(!d) break; const v = el.dataset.v;
+      const go2 = async () => { try { await S.db.doc('docs/' + d.id).update({'data.clientSign': v, updatedAt: new Date().toISOString(), updatedBy: S.me || null}); d.data.clientSign = v; render(); toast(v === 'Yes' ? 'Client signature box added — use "✍ Sign" or ask the client to sign.' : 'Client signature removed — the report is complete with your signature.'); }
+        catch(err){ if(String(err.code || '').includes('permission')) toast('Not allowed yet — the admin needs to publish the updated Firebase rules (or an admin can do this).', true); else dbErr(err); } };
+      if(v === 'No') confirmBox('Remove the client signature box?', 'The report will be complete with the preparer\'s signature only.', 'Remove', go2); else go2(); break; }
+    case 'dcal': dsrCal(el.dataset.p); break;
+    case 'dcalm': dsrCal(S.dcal.pid, el.dataset.m, ''); break;
+    case 'dcalday': dsrCal(S.dcal.pid, S.dcal.ym, el.dataset.d); break;
+    case 'dcalzip': dsrCalZip(el.dataset.p, el); break;
+    case 'dcalnew': { closeModal(); S.draft = newDraft(el.dataset.p, 'DSR'); S.draft.data.date = el.dataset.d; go('edit'); break; }
     case 'rangerpt': rangeReportForm(el.dataset.p); break;
     case 'rngquick': if(el.dataset.a) $('#rgFrom').value = el.dataset.a; $('#rgTo').value = el.dataset.b; break;
     case 'rangego': makeRangeReport(el, el.dataset.p); break;
@@ -4750,6 +4839,7 @@ document.addEventListener('change', async e => {
   const t = e.target;
   if(t.dataset.mysig !== undefined && t.files?.length){ try { sigConfirm(await sigFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nosig' ? 'No signature found in that picture — sign with a dark pen on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
   if(t.dataset.role){ const uid = t.dataset.role, role = t.value;
+    rememberAccess(uid, role);
     if(role === 'intern' || isIntern(uid)){ try { const was = S.users.find(u => u.id === uid)?.role; if(role === 'intern' && was !== 'staff') await S.db.doc('users/' + uid).update({role: 'staff', roleBy: S.me, roleAt: new Date().toISOString()});
       await setIntern(uid, role === 'intern'); if(role !== 'intern') await S.db.doc('users/' + uid).update({role, roleBy: S.me, roleAt: new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; } try { await S.db.doc('users/'+uid).update({role, roleBy:S.me, roleAt:new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; }
   if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
@@ -4779,7 +4869,32 @@ const FB_BASE = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
 const FB = {};          // loaded Firebase modules + instances
 const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', intern:'Intern (update only)', admin:'Admin', removed:'Removed'};
 // Interns sign in as staff; the admin-only company settings record lists them, so they cannot change it themselves
-const isIntern = uid => !!(uid && S.company && S.company.interns && S.company.interns[uid]);
+// approved people are remembered by email (settings/company.approved), so signing in again — even as a new account — needs no new approval
+const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
+const userEmail = uid => uid === S.me ? (FB.auth?.currentUser?.email || '') : (S.users.find(u => u.id === uid)?.email || '');
+const isIntern = uid => !!(uid && S.company && ((S.company.interns && S.company.interns[uid]) || (S.company.approved && S.company.approved[emailKey(userEmail(uid))] === 'intern')));
+async function companyUpdate(upd){   // dotted-path update of settings/company; creates the record if it doesn't exist yet
+  const ref = S.db.doc('settings/company');
+  try { await ref.update(upd); }
+  catch(e){ const sn = await ref.get().catch(() => null); if(sn && sn.exists) throw e;
+    const obj = {}; Object.entries(upd).forEach(([k, v]) => { const ps = k.split('.'); let o = obj; ps.slice(0, -1).forEach(x => o = o[x] = o[x] || {}); o[ps[ps.length - 1]] = v; }); await ref.set(obj); }
+}
+async function rememberAccess(uid, role){
+  const em = emailKey(userEmail(uid)); if(!em) return;
+  const val = role === 'removed' || role === 'pending' ? null : role;
+  try { await companyUpdate({['approved.' + em]: val}); } catch(e){}
+}
+// admin's app: keep the remembered list complete, and let returning people straight back in
+async function syncApprovals(){
+  if(!S.canEdit || !S.users.length || !S.company) return;
+  const ap = S.company.approved || {}, upd = {};
+  S.users.forEach(u => { const k = emailKey(u.email); if(!k) return; const r = roleOf(u);
+    if(['staff', 'admin', 'intern'].includes(r) && ap[k] !== r && !(u.role === 'pending')) upd['approved.' + k] = r;
+    if(r === 'removed' && ap[k]) upd['approved.' + k] = null; });
+  if(Object.keys(upd).length){ try { await companyUpdate(upd); } catch(e){} }
+  for(const u of S.users.filter(u => u.role === 'pending')){ const r = ap[emailKey(u.email)]; if(!r) continue;
+    try { await S.db.doc('users/' + u.id).update({role: r === 'intern' ? 'staff' : r, roleBy: 'auto', roleAt: new Date().toISOString()}); toast(`${u.name || u.email} signed in again — let back in automatically (${ROLE_LABEL[r]}).`); } catch(e){} }
+}
 const intern = () => !S.canEdit && isIntern(S.me);
 async function setIntern(uid, on){
   const ref = S.db.doc('settings/company');
@@ -4954,7 +5069,7 @@ function loginView(mode){
 function pendingView(){
   const u = FB.auth.currentUser, r = S.myRole;
   return authShell(`<h3 style="margin-bottom:6px">${r === 'removed' ? 'Access removed' : 'Waiting for approval'}</h3>
-    <p class="muted" style="margin-top:0">${r === 'removed' ? 'Your access to the app has been removed. Contact your admin if this is a mistake.' : 'Your account has been created. An admin needs to approve it before you can see projects. This page will open automatically once you are approved.'}</p>
+    <p class="muted" style="margin-top:0">${r === 'removed' ? 'Your access to the app has been removed. Contact your admin if this is a mistake.' : 'If you were using the app before, sign in the same way as before (Google or email & password) — you will be let back in automatically. Otherwise: your account has been created. An admin needs to approve it before you can see projects. This page will open automatically once you are approved.'}</p>
     <div class="small muted">Signed in as <b>${esc(u.email || u.displayName || '')}</b></div>
     <button class="btn" style="margin-top:14px" data-act="signout">Sign out</button>`);
 }
@@ -5206,6 +5321,7 @@ async function createStaff(){
     await FB.authM.signOut(sa);
     await S.db.doc('users/' + cr.user.uid).set({name, email, role: role === 'intern' ? 'staff' : role, createdAt: new Date().toISOString(), addedBy: S.me});
     if(role === 'intern') await setIntern(cr.user.uid, true);
+    try { await companyUpdate({['approved.' + emailKey(email)]: role}); } catch(e){}
     closeModal(); render();
     showModal(`<div class="box" style="max-width:440px"><div class="mh"><h3>Account created ✓</h3></div><div class="mb"><p style="margin-top:0">Send these to <b>${esc(name)}</b>:</p>
       <div class="vchg"><div class="b">Website: ${esc(location.origin)}\nEmail: ${esc(email)}\nPassword: ${esc(pw)}</div></div>
@@ -5625,36 +5741,52 @@ function startData(){
   unsubs.push(db.collection('users').onSnapshot(s => {
     S.users = s.docs.map(x => ({id: x.id, ...x.data()}));
     S.users.forEach(u => { if(u.name) S.names[u.id] = u.name; });
-    softRender();
+    syncApprovals(); softRender();
   }, () => {}));
   unsubs.push(startChat(db));
-  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); softRender(); }, () => {}));
+  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); syncApprovals(); softRender(); }, () => {}));
 }
+const ROLE_CACHE = 'sde-role-';
 async function onSignedIn(u){
   S.me = u.uid; S.names[u.uid] = u.displayName || u.email || 'Me';
   const ref = S.db.doc('users/' + u.uid);
-  let snap;
-  try { snap = await ref.get(); } catch(e){ snap = {exists: false}; }
-  if(!snap.exists){
-    const base = {name: S.pendingName || u.displayName || (u.email || '').split('@')[0], email: u.email || '', createdAt: new Date().toISOString()};
-    const uref = FB.fs.doc(FB.db, 'users/' + u.uid);
-    // The security rules only allow the owner's email to start as admin; everyone else starts as pending.
-    try { await FB.fs.setDoc(uref, {...base, role: 'admin'}); }
-    catch(e){ try { await FB.fs.setDoc(uref, {...base, role: 'pending'}); } catch(e2){ console.error(e2); } }
-  }
-  if(S.unsubMe) S.unsubMe();
-  S.unsubMe = ref.onSnapshot(s => {
-    const d = s.exists ? s.data() : {role: 'pending'};
-    if(isOwnerEmail(u) && s.exists && d.role !== 'admin'){ ref.update({role: 'admin'}).catch(console.error); d.role = 'admin'; }
+  // already approved on this phone before → open straight away while the server confirms
+  let cached = ''; try { cached = localStorage.getItem(ROLE_CACHE + u.uid) || ''; } catch(e){}
+  const apply = d => {
     const prev = S.myRole; S.myRole = d.role || 'pending';
     if(d.name) S.names[u.uid] = d.name;
-    S.mySig = d.sigImg || ''; S.myDes = d.designation || '';
+    if('sigImg' in d) S.mySig = d.sigImg || ''; if('designation' in d) S.myDes = d.designation || '';
     S.canEdit = S.myRole === 'admin'; S.canWrite = S.myRole === 'admin' || S.myRole === 'staff';
-    if(S.canWrite && !(prev === 'admin' || prev === 'staff')){ startData(); }
-    if(!S.canWrite && (prev === 'admin' || prev === 'staff')){ stopData(); }
+    try { if(S.canWrite) localStorage.setItem(ROLE_CACHE + u.uid, S.myRole); else if(S.myRole === 'removed') localStorage.removeItem(ROLE_CACHE + u.uid); } catch(e){}
+    if(S.canWrite && !(prev === 'admin' || prev === 'staff')) startData();
+    if(!S.canWrite && (prev === 'admin' || prev === 'staff')) stopData();
     S.authState = S.canWrite ? 'in' : 'pending';
     render();
-  }, e => { console.error(e); S.authState = 'pending'; render(); });
+  };
+  if(cached === 'staff' || cached === 'admin') apply({role: cached});
+  // Read the record from the server; a failed read (weak signal) is never taken as "new account"
+  let snap = null;
+  for(let i = 0; i < 4 && !snap; i++){ try { snap = await ref.get(); } catch(e){ await new Promise(r => setTimeout(r, 1500 * (i + 1))); } }
+  if(snap && !snap.exists){
+    const base = {name: S.pendingName || u.displayName || (u.email || '').split('@')[0], email: u.email || '', createdAt: new Date().toISOString()};
+    const uref = FB.fs.doc(FB.db, 'users/' + u.uid);
+    // owner → admin; someone approved before (remembered by email) → staff straight away; everyone else → pending
+    try { await FB.fs.setDoc(uref, {...base, role: 'admin'}); }
+    catch(e){ try { await FB.fs.setDoc(uref, {...base, role: 'staff', roleBy: 'returning'}); }
+      catch(e1){ try { await FB.fs.setDoc(uref, {...base, role: 'pending'}); } catch(e2){ console.error(e2); } } }
+  }
+  if(S.unsubMe) S.unsubMe();
+  let triedBack = false;
+  const listen = () => { S.unsubMe = ref.onSnapshot(s => {
+    const d = s.exists ? s.data() : {role: 'pending'};
+    if(isOwnerEmail(u) && s.exists && d.role !== 'admin'){ ref.update({role: 'admin'}).catch(console.error); d.role = 'admin'; }
+    // approved before but the record says "pending" → try to restore (works once the updated rules are published)
+    if(s.exists && d.role === 'pending' && !triedBack){ triedBack = true; ref.update({role: 'staff', roleBy: 'returning'}).catch(() => {}); }
+    apply(d);
+  }, e => { console.warn('user record', e); // connection / token hiccup: keep the current access and listen again
+    if(!S.myRole){ S.authState = cached ? 'in' : 'pending'; render(); }
+    setTimeout(() => { if(FB.auth.currentUser && FB.auth.currentUser.uid === u.uid) listen(); }, 5000); }); };
+  listen();
 }
 (async function boot(){
   S.users = []; S.authState = 'loading';
