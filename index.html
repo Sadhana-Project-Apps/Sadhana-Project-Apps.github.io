@@ -268,7 +268,8 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .alerts .al.red{background:#fff1f0;border-left:4px solid #d92d20}.alerts .al.amber{background:#fffaeb;border-left:4px solid #f79009}.alerts .al.info{background:#f2f7f2;border-left:4px solid #2E7D32}
 .alerts .al.more{cursor:pointer;color:#555}
 .alerts .alph{padding:9px 12px 6px;cursor:pointer;border-top:1px solid var(--line)}.alerts.ok{border-left:4px solid #2E7D32;margin-bottom:16px}
-@media(max-width:640px){.alerts .al{flex-wrap:wrap}.alerts .al .btn{margin-left:32px}}
+@media(max-width:640px){.alerts .al{flex-wrap:wrap}.alerts .al .at{flex:1 1 calc(100% - 40px)}.alerts .al .abtns{flex:1 1 100%;justify-content:flex-start;margin-left:32px}.alerts .al .abtns .btn{margin-left:0}}
+.it .t b.full{-webkit-line-clamp:unset;display:block;white-space:normal}.it .t b.full b{display:inline;font-weight:700}
 .ftbl tr.tgrp td{background:#f2f2f2;font-weight:700;font-style:italic;padding:7px 10px}.ftbl tr.tgrp.main td{background:#E2EFDA;font-style:normal;text-transform:uppercase;letter-spacing:.03em}
 .ftbl tr.tgrp td::before{display:none}.ftbl input.tgin{background:transparent!important;border:1px dashed #9aa!important;font-weight:700;width:100%;text-transform:inherit}.ftbl tr.tno td{background:#fff1f0}
 .dsec td.ansNo{color:#b42318;font-weight:700}
@@ -1801,6 +1802,7 @@ function homeView(){
   <div class="pagehead"><div><div class="eyebrow">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><h1>Projects</h1></div><div class="sp"></div>
     ${S.canWrite && !intern() ? `<button class="btn pri" data-act="newproj">+ New project</button>` : ''}</div>
   ${installBanner()}
+  ${(() => { try { const mm = myMentions(); return mm.length ? `<div class="card" style="margin-bottom:16px;border-color:#1d4ed8"><div class="sechead"><h3>📌 Assigned to you</h3><div class="sp"></div><span class="pill" style="background:#e7f0ff;color:#1d4ed8">${mm.length}</span></div><div class="list">${mm.map(({p, a, v}) => `<div class="it" style="align-items:flex-start;flex-wrap:wrap"><span class="pill type">${esc(p.code)}</span><div class="t" style="white-space:normal"><b class="full" style="font-weight:500">${a.icon} ${a.text}</b><span>from ${esc(v.fromName || nameOf(v.from))} · ${esc(fmtDate(v.at))}${v.note ? ' — “' + esc(v.note) + '”' : ''}</span></div><span class="row" style="gap:6px">${S.canWrite ? alertBtn(a.act) : ''}<button class="btn sm" data-act="mndone" data-p="${esc(p.id)}" data-k="${esc(a.key)}">✓ Done</button></span></div>`).join('')}</div></div>` : ''; } catch(e){ return ''; } })()}
   ${(() => { const mr = myRequests(); return mr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--warn)"><div class="sechead"><h3>✍ Waiting for your signature</h3><div class="sp"></div><span class="pill pending"><span class="dot"></span>${mr.length}</span></div><div class="list">${mr.map(({d, r, p}) => `<div class="it" data-act="open" data-id="${esc(d.id)}"><span class="pill type">${esc(d.type)}</span><div class="t"><b>${esc(d.number)} — ${esc(docTitle(d))}</b><span>${esc(p.code)} · ${esc(r.role)} · asked by ${esc(r.fromName || '')}${r.note ? ' — “' + esc(r.note) + '”' : ''}</span></div><button class="btn sm pri" data-act="open" data-id="${esc(d.id)}">Sign</button></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { return alertsHome(); } catch(e){ console.error(e); return ''; } })()}
   <div class="kpis">
@@ -2843,7 +2845,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · More signatures, stamps, change my name</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Progress report reminder 3 days before cut-off · @ Assign pending items</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3841,7 +3843,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z31';
+const APP_VER = 'Z32';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4802,6 +4804,11 @@ document.addEventListener('click', async e => {
       const n = rows.filter(r => r && r._g).length + 1; rows.push({[c0]: (S.draft.type === 'EAIA' ? n + '. ' : '') + 'NEW ' + (S.draft.type === 'EAIA' ? 'ACTIVITY' : 'HEADING'), _g: 1}, {}); S.dirty = true; rerenderEditorField(k);
       const inp = document.querySelectorAll(`#fld_${k} .tgin`); const last = inp[inp.length - 1]; if(last){ last.focus(); last.select(); } break; }
     case 'pplpick': pplPicker(el.dataset.k); break;
+    case 'mention': mentionForm(el.dataset.p, el.dataset.k); break;
+    case 'mnclear': mentionSave(el.dataset.p, el.dataset.k, null); break;
+    case 'mnsend': { const who = $('#mnWho').value; if(!who){ toast('Choose who is in charge.', true); break; } const u = (S.users || []).find(x => x.id === who) || {};
+      mentionSave(el.dataset.p, el.dataset.k, {to: who, toName: u.name || u.email || '', from: S.me, fromName: S.names[S.me] || '', note: $('#mnNote').value.trim(), at: new Date().toISOString()}); break; }
+    case 'mndone': { const p = projById(el.dataset.p); confirmBox('Mark as done?', 'It will be removed from your list. If the problem is still there, the warning stays on the project.', 'Done', () => mentionSave(el.dataset.p, el.dataset.k, null)); break; }
     case 'pplall': { const ids = (el.dataset.names || '').split('|'); document.querySelectorAll('#modal [data-ppl]').forEach(c => { if(ids.includes(c.dataset.ppl)) c.checked = true; }); break; }
     case 'ppladd': pplAdd(el.dataset.k); break;
     case 'delrow': { const k = el.dataset.k; S.draft.data[k].splice(+el.dataset.i, 1); if(!S.draft.data[k].length) S.draft.data[k].push({}); S.dirty = true; rerenderEditorField(k); break; }
@@ -5266,7 +5273,7 @@ async function emailAuth(form){
 /* --- team management (admin) --- */
 
 /* ---------- ⚠ Project health warnings ---------- */
-const ALERT_CFG = {eotNotice: 14, eotWarn: 30, behindRed: 10, behindAmber: 5, prGap: 14, dsrAmber: 3, dsrRed: 7, signOld: 3};
+const ALERT_CFG = {eotNotice: 14, eotWarn: 30, behindRed: 10, behindAmber: 5, prGap: 14, prBefore: 3, dsrAmber: 3, dsrRed: 7, signOld: 3};
 const dDiff = (a, b) => Math.round((new Date(String(a).slice(0, 10) + 'T00:00:00') - new Date(String(b).slice(0, 10) + 'T00:00:00')) / 86400000);
 function workDaysSince(d0, t){ let n = 0, x = addDays(d0, 1); while(x <= t){ if(new Date(x + 'T00:00:00').getDay() !== 0) n++; x = addDays(x, 1); } return n; }
 function projAlerts(p){
@@ -5276,7 +5283,7 @@ function projAlerts(p){
   const prs = docs.filter(d => d.type === 'PR' && d.data && (d.data.to || d.data.from)).sort((a, b) => String(b.data.to || b.data.from).localeCompare(String(a.data.to || a.data.from)));
   const pr = prs[0], actual = pr && pr.data.actual !== '' && pr.data.actual != null ? numv(pr.data.actual) : null, planned = pr && pr.data.planned ? numv(pr.data.planned) : null;
   const done = actual != null && actual >= 100;
-  const add = (lvl, icon, text, act, act2) => A.push({lvl, icon, text, act, act2});
+  const add = (lvl, icon, text, act, act2) => A.push({lvl, icon, text, act, act2, p: p.id, key: alertKey(icon, act)});
   if(!p.end){ add('info', 'ℹ', 'No completion date set — add it in "Edit project" so the app can warn you about EOT deadlines.', {act: 'editproj', id: p.id, l: 'Edit project'}); }
   // ---- EOT notice: must go out 14 days before the completion date ----
   if(p.end && !done){
@@ -5315,10 +5322,10 @@ function projAlerts(p){
     // forecast at the current rate of work
     if(p.start && p.end && actual > 0){ const used = dDiff(pr.data.to || t, p.start) + 1; if(used > 7){ const finish = addDays(p.start, Math.ceil(used * 100 / actual)), late = dDiff(finish, p.end);
       if(late > 7) add(late > 30 ? 'red' : 'amber', '📆', `At the current rate the works finish around <b>${fmtDate(finish)}</b> — about ${late} days after the completion date.`, null); } }
-  } else if(!pr && p.start && p.end && dDiff(t, p.start) > 21 && planned == null){
-    add('amber', '📊', 'No progress report yet — the app cannot check progress against the programme.', {act: 'new', p: p.id, t: 'PR', l: '+ Progress report'});
   }
-  if(pr && dDiff(t, pr.data.to || pr.data.from) > ALERT_CFG.prGap && !done) add('amber', '📊', `Last progress report covers up to ${fmtDate(pr.data.to || pr.data.from)} (${dDiff(t, pr.data.to || pr.data.from)} days ago).`, {act: 'new', p: p.id, t: 'PR', l: '+ Progress report'});
+  // next progress report: only from 3 days before its cut-off date (nothing until the first report is made)
+  if(pr && !done){ const nc = nextPRCut(pr), left = dDiff(nc, t);
+    if(left <= ALERT_CFG.prBefore) add(left < 0 ? 'red' : 'amber', '📊', `Next ${esc((pr.data.period || '').toLowerCase())} progress report — cut-off <b>${fmtDate(nc)}</b> ${left > 1 ? `(in ${left} days)` : left === 1 ? '(tomorrow)' : left === 0 ? '(today)' : `(<b>${-left} day${left === -1 ? '' : 's'} overdue</b>)`}.`, {act: 'new', p: p.id, t: 'PR', l: '+ Progress report'}); }
   // open issues in the latest progress report
   if(pr){ const iss = (pr.data.issues || []).filter(r => r && (r.issue || r.desc) && !/^(closed|done|resolved|completed|selesai)/i.test(String(r.status || '').trim()));
     if(iss.length) add('amber', '⚠', `${iss.length} open issue${iss.length > 1 ? 's' : ''} affecting progress: ${esc(iss.slice(0, 2).map(r => r.issue || r.desc).join('; '))}${iss.length > 2 ? '…' : ''}`, {act: 'open', id: pr.id, l: 'View'}); }
@@ -5341,9 +5348,37 @@ function projAlerts(p){
   const rank = {red: 0, amber: 1, info: 2}; A.sort((a, b) => rank[a.lvl] - rank[b.lvl]);
   return A;
 }
+function nextPRCut(pr){ const x = pr.data || {}, to = String(x.to || x.from).slice(0, 10), per = x.period || '';
+  if(per === 'Weekly') return addDays(to, 7);
+  if(per === 'Fortnightly') return addDays(to, 14);
+  if(per === 'Monthly'){ if(to === monthEnd(to)) return monthEnd(addDays(to, 1)); const d = new Date(to + 'T00:00:00'), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1); const me = monthEnd(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01'); return me.slice(0, 8) + String(Math.min(day, +me.slice(8))).padStart(2, '0'); }
+  const len = x.from && x.to ? dDiff(x.to, x.from) + 1 : 30; return addDays(to, Math.max(7, len)); }
+function alertKey(icon, act){ return (icon + '_' + (act ? [act.act, act.t, act.c, act.k].filter(Boolean).join('_') : 'x')).replace(/[^\w]/g, c => c.charCodeAt(0).toString(36)).slice(0, 60); }
+/* ---------- @ assign a pending item to the person in charge ---------- */
+const mentionOf = a => { const p = projById(a.p); return p && p.mentions && p.mentions[a.key] || null; };
+function mentionForm(pid, key){
+  const p = projById(pid), a = projAlerts(p).find(x => x.key === key); if(!a) return;
+  const people = (S.users || []).filter(u => ['staff', 'admin'].includes(u.role)).sort((x, y) => String(x.name).localeCompare(String(y.name))), cur = mentionOf(a);
+  showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>@ Assign to the person in charge</h3></div><div class="mb"><div class="fgrid">
+    <div class="fld"><label>Pending item</label><div class="autobox" style="white-space:normal"><span>${esc(p.code)} · ${a.text}</span></div></div>
+    <div class="fld"><label>Who is in charge? <em>*</em></label><select id="mnWho"><option value=""></option>${people.map(u => `<option value="${esc(u.id)}" ${cur && cur.to === u.id ? 'selected' : ''}>${esc(u.name || u.email)}${u.id === S.me ? ' (me)' : ''}</option>`).join('')}</select></div>
+    <div class="fld"><label>Message (optional)</label><input id="mnNote" value="${esc(cur?.note || '')}" placeholder="e.g. Please settle this by Friday"></div>
+  </div><p class="small muted">They will see it on their home screen under <b>Assigned to you</b> until it is done.</p></div>
+  <div class="mf">${cur ? `<button class="btn ghost danger" data-act="mnclear" data-p="${esc(pid)}" data-k="${esc(key)}">Remove</button>` : ''}<button class="btn pri" data-act="mnsend" data-p="${esc(pid)}" data-k="${esc(key)}">Assign</button></div></div>`);
+}
+async function mentionSave(pid, key, val){
+  try { await S.db.doc('projects/' + pid).update({['mentions.' + key]: val}); const p = projById(pid); if(p){ p.mentions = {...(p.mentions || {}), [key]: val}; } closeModal(); toast(val ? 'Assigned to ' + val.toName + ' ✓' : 'Removed'); render(); }
+  catch(e){ dbErr(e); }
+}
+function myMentions(){
+  const out = []; S.projects.forEach(p => { const m = p.mentions || {}; if(!Object.values(m).some(v => v && v.to === S.me)) return;
+    projAlerts(p).forEach(a => { const v = m[a.key]; if(v && v.to === S.me) out.push({p, a, v}); }); });
+  return out;
+}
 function elapsedPct(p, t){ const tot = dDiff(p.end, p.start), u = dDiff(t, p.start); return tot > 0 ? Math.max(0, Math.min(100, u / tot * 100)) : 0; }
 function alertBtn(a){ if(!a) return ''; const ds = Object.entries(a).filter(([k]) => k !== 'l').map(([k, v]) => k === 'act' ? `data-act="${esc(v)}"` : `data-${k}="${esc(v)}"`).join(' '); return `<button class="btn sm" ${ds}>${esc(a.l)}</button>`; }
-function alertLines(A){ return A.map(a => `<div class="al ${a.lvl}"><span class="ai">${a.icon}</span><span class="at">${a.text}</span>${S.canWrite || a.act?.act === 'open' ? `<span class="abtns">${alertBtn(a.act)}${S.canWrite ? alertBtn(a.act2) : ''}</span>` : ''}</div>`).join(''); }
+function alertLines(A){ return A.map(a => { const m = a.key && mentionOf(a);
+  return `<div class="al ${a.lvl}"><span class="ai">${a.icon}</span><span class="at">${a.text}${m ? ` <span class="pill" style="background:#e7f0ff;color:#1d4ed8;white-space:nowrap">👤 ${esc(m.to === S.me ? 'You' : nameOf(m.to) !== 'Team member' ? nameOf(m.to) : m.toName)}</span>` : ''}</span>${S.canWrite || a.act?.act === 'open' ? `<span class="abtns">${alertBtn(a.act)}${S.canWrite ? alertBtn(a.act2) : ''}${S.canWrite && a.key ? `<button class="btn sm ghost" data-act="mention" data-p="${esc(a.p)}" data-k="${esc(a.key)}">${m ? '@ Change' : '@ Assign'}</button>` : ''}</span>` : ''}</div>`; }).join(''); }
 function alertsHome(){
   const rows = S.projects.map(p => ({p, A: projAlerts(p).filter(a => a.lvl !== 'info')})).filter(x => x.A.length)
     .sort((a, b) => b.A.filter(x => x.lvl === 'red').length - a.A.filter(x => x.lvl === 'red').length || b.A.length - a.A.length);
@@ -5355,7 +5390,7 @@ function alertsHome(){
 function alertsText(){
   const lines = ['*Sadhana — project warnings ' + fmtDate(today()) + '*'];
   S.projects.forEach(p => { const A = projAlerts(p).filter(a => a.lvl !== 'info'); if(!A.length) return; lines.push('', '*' + p.code + '* ' + p.name);
-    A.forEach(a => lines.push((a.lvl === 'red' ? '🔴 ' : '🟠 ') + a.text.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&'))); });
+    A.forEach(a => { const m = mentionOf(a); lines.push((a.lvl === 'red' ? '🔴 ' : '🟠 ') + a.text.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&') + (m ? ' — 👤 ' + (m.toName || nameOf(m.to)) : '')); }); });
   return lines.join('\n');
 }
 
