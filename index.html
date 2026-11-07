@@ -2846,7 +2846,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · WhatsApp Progress Update with project nickname and day count</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · WhatsApp Progress Update with nickname, day count and balance days</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3024,8 +3024,9 @@ function waText(d){
   if(p.start && p.end && x.date){ const total = dayDiff(p.start, p.end) + 1, day = dayDiff(p.start, x.date) + 1;
     if(day >= 1) L.push(`*Days : ${day}/${total} Days*` + (day > total ? ` (${day - total} day${day - total === 1 ? '' : 's'} over)` : '')); }
   L.push(`*Date: ${dmy(x.date)}*`);
-  if(p.start) L.push(`*Commencement date (Contract) : ${dmy(p.start)}*`);
-  if(p.end) L.push(`*Completion date (Contract) : ${dmy(p.end)}*`);
+  if(p.start) L.push(`*Commencement date : ${dmy(p.start)}*`);
+  if(p.end) L.push(`*Completion date : ${dmy(p.end)}*`);
+  if(p.end && x.date){ const bal = dayDiff(x.date, p.end); L.push(bal >= 0 ? `*Balance days before handover : ${bal} Day${bal === 1 ? '' : 's'}*` : `*Balance days before handover : 0 Days (${-bal} day${bal === -1 ? '' : 's'} overdue)*`); }
   const w = x.weatherAM && x.weatherPM && x.weatherAM !== x.weatherPM ? `AM ${x.weatherAM}, PM ${x.weatherPM}` : (x.weatherAM || x.weatherPM || '');
   if(w) L.push(`*Weather: ${w}*` + (numv(x.rainHours) ? ` (${x.rainHours} hr lost to rain)` : ''));
   (x.rainLog || []).filter(r => r && (r.from || r.to)).forEach(r => L.push(`🌧 ${r.from || '?'} – ${r.to || '?'} ${r.kind || 'rain'}${r.stop ? ' · work stopped: ' + r.stop : ''}${r.remarks ? ' · ' + r.remarks : ''}`));
@@ -3837,7 +3838,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z37';
+const APP_VER = 'Z38';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
