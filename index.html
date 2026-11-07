@@ -1724,16 +1724,36 @@ function go(name, params={}){
   if(S.view.name === 'edit' && S.dirty && name !== 'edit'){
     return confirmBox('Leave without saving?', 'Your changes to this document have not been saved.', 'Leave', () => { S.dirty = false; go(name, params); });
   }
-  S.view = {name, ...params}; S.dirty = false;
+  const nv = {name, ...params};
+  if(!S.navBack && S.view && S.view.name && JSON.stringify(S.view) !== JSON.stringify(nv)){
+    S.hist.push(S.view); if(S.hist.length > 40) S.hist.shift();
+    try { history.pushState({sde: 'app'}, ''); } catch(e){}
+  }
+  S.view = nv; S.dirty = false;
   render(); window.scrollTo(0,0);
 }
+/* ---------- phone back button: go to the previous page instead of closing the app ---------- */
+S.hist = [];
+try { history.replaceState({sde: 'root'}, ''); history.pushState({sde: 'app'}, ''); } catch(e){}
+window.addEventListener('popstate', e => {
+  const atRoot = !e.state || e.state.sde === 'root';
+  const stay = () => { try { history.pushState({sde: 'app'}, ''); } catch(err){} };
+  if(S.modalOpen){ stay(); toast('Close this window with ✕ first.'); return; }
+  if(S.view.name === 'edit' && S.dirty){ stay(); confirmBox('Leave without saving?', 'Your changes to this document have not been saved.', 'Leave', () => { S.dirty = false; history.back(); }); return; }
+  const prev = S.hist.pop();
+  if(prev){ if(atRoot) stay(); S.navBack = true; try { go(prev.name, prev); } finally { S.navBack = false; } return; }
+  if(atRoot){
+    if(S.view.name !== 'home'){ stay(); S.navBack = true; try { go('home'); } finally { S.navBack = false; } return; }
+    toast('Press back again to close the app'); // now at the first page of history: the next press closes the app
+  }
+});
 function softRender(){ if(S.view.name === 'edit' || S.modalOpen) return; render(); }
 // open a document from a shared link (#doc=ID&p=PROJECT)
 S.deepLink = (() => { const m = location.hash.match(/doc=([^&]+)(?:&p=([^&]+))?/); return m ? {id: decodeURIComponent(m[1]), p: m[2] ? decodeURIComponent(m[2]) : ''} : null; })();
 function checkDeepLink(){
   const L = S.deepLink; if(!L || !S.canWrite) return false;
   if(L.p) loadProjectDocs(L.p);
-  if(docById(L.id)){ S.deepLink = null; try { history.replaceState(null, '', location.pathname); } catch(e){} go('doc', {id: L.id}); return true; }
+  if(docById(L.id)){ S.deepLink = null; try { history.replaceState(history.state, '', location.pathname); } catch(e){} go('doc', {id: L.id}); return true; }
   return false;
 }
 function render(){
@@ -2846,7 +2866,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · WhatsApp Progress Update with nickname, day count and balance days</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Phone back button goes to the previous page</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3838,7 +3858,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z39';
+const APP_VER = 'Z40';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
