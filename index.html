@@ -76,6 +76,7 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:start}
 .sechead{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line2)}
 .sechead h3{font-size:16px}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.alerts .alph{display:flex;gap:8px;align-items:flex-start}.alerts .alph .pill{flex:none;margin-top:1px}.alerts .alph .clamp2{flex:1;min-width:0}
 .list .it{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line2);cursor:pointer}
 .list .it:last-child{border-bottom:0}
 .list .it:hover{background:#faf9f6}
@@ -3835,7 +3836,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z35';
+const APP_VER = 'Z36';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5381,8 +5382,8 @@ function alertsHome(){
     .sort((a, b) => b.A.filter(x => x.lvl === 'red').length - a.A.filter(x => x.lvl === 'red').length || b.A.length - a.A.length);
   if(!rows.length) return S.projects.some(p => (p.status || 'Active') === 'Active') ? `<div class="card pad alerts ok"><b>✅ All active projects on track</b> <span class="small muted">— no EOT deadlines, delays or missing reports found.</span></div>` : '';
   const nr = rows.reduce((a, x) => a + x.A.filter(y => y.lvl === 'red').length, 0), na = rows.reduce((a, x) => a + x.A.filter(y => y.lvl === 'amber').length, 0);
-  return `<div class="card alerts" style="margin-bottom:16px"><div class="sechead"><h3>⚠ Project warnings</h3><div class="sp"></div>${nr ? `<span class="pill" style="background:#fde2e1;color:#b42318">${nr} urgent</span>` : ''} ${na ? `<span class="pill pending">${na} to watch</span>` : ''}${S.canEdit ? ` <button class="btn sm ghost" data-act="alertshare">📤 Share</button>` : ''}</div>
-    ${rows.map(({p, A}) => `<div class="alp"><div class="alph" data-act="open-proj" data-id="${esc(p.id)}"><span class="pill type">${esc(p.code)}</span> <b>${esc(p.name)}</b></div>${alertLines(A.slice(0, 3))}${A.length > 3 ? `<div class="al more" data-act="open-proj" data-id="${esc(p.id)}"><span class="ai"></span><span class="at small">+ ${A.length - 3} more — open the project →</span></div>` : ''}</div>`).join('')}</div>`;
+  return `<div class="card alerts" style="margin-bottom:16px"><div class="sechead" style="flex-wrap:wrap;row-gap:6px"><h3 style="white-space:nowrap">⚠ Project warnings</h3><div class="sp"></div>${nr ? `<span class="pill" style="background:#fde2e1;color:#b42318">${nr} urgent</span>` : ''} ${na ? `<span class="pill pending">${na} to watch</span>` : ''}${S.canEdit ? ` <button class="btn sm ghost" data-act="alertshare">📤 Share</button>` : ''}</div>
+    ${rows.map(({p, A}) => `<div class="alp"><div class="alph" data-act="open-proj" data-id="${esc(p.id)}"><span class="pill type">${esc(p.code)}</span> <b class="clamp2" title="${esc(p.name)}">${esc(p.name)}</b></div>${alertLines(A.slice(0, 3))}${A.length > 3 ? `<div class="al more" data-act="open-proj" data-id="${esc(p.id)}"><span class="ai"></span><span class="at small">+ ${A.length - 3} more — open the project →</span></div>` : ''}</div>`).join('')}</div>`;
 }
 function alertsText(){
   const lines = ['*Sadhana — project warnings ' + fmtDate(today()) + '*'];
