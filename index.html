@@ -142,6 +142,7 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 @media (max-width:640px){ .sheet .metat tr{display:grid;grid-template-columns:38% 62%} .sheet .metat td.k{width:auto} }
 body.intern [data-v=team]{display:none}
 .sigprev{border:1px dashed var(--line);border-radius:9px;background:#fff;padding:10px;display:flex;align-items:center;justify-content:center;min-height:70px;max-width:340px}.sigprev img{max-height:80px;max-width:100%}.sigprev.big img{max-height:140px}.sigprev.empty{color:var(--muted)}
+.sigpick{display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 10px}.sigopt{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.fld label.sigopt,label.sigopt{display:flex;flex-direction:row;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-weight:500;font-size:14px;color:inherit;cursor:pointer}.sigopt .sigprev{min-width:120px;min-height:56px;padding:6px}.sigopt .sigprev img{max-height:60px}
 .sigchoose{display:flex;flex-wrap:wrap;gap:8px 18px;margin:2px 0 10px;font-size:14px}.fld .sigchoose label{display:flex;align-items:center;gap:8px;font-weight:500;color:inherit;margin:0;font-size:14px;text-transform:none;letter-spacing:0}.fld .sigchoose input{width:18px;height:18px;margin:0;padding:0;flex:none;accent-color:var(--hazard)}
 .al .abtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .recrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-4px 0 14px}
@@ -2825,7 +2826,7 @@ function storageCard(){
 function settingsView(){
   const c = company(), ed = S.canEdit;
   const f = (k,l,ph='') => `<div class="fld ${k==='address'?'':'half'}"><label>${l}</label>${k==='address'?`<textarea data-set="${k}" ${ed?'':'disabled'} style="min-height:70px">${esc(c[k])}</textarea>`:`<input data-set="${k}" value="${esc(c[k])}" placeholder="${esc(ph)}" ${ed?'':'disabled'}>`}</div>`;
-  return `<div class="pagehead"><div><div class="eyebrow">${ed ? 'My e-signature · letterhead & company details' : 'My e-signature'}</div><h1>Settings</h1></div></div>${esigCard()}
+  return `<div class="pagehead"><div><div class="eyebrow">${ed ? 'My name & signatures · letterhead & company details' : 'My name, signatures & stamps'}</div><h1>Settings</h1></div></div>${esigCard()}
   <div class="card pad form">
     ${ed?'':'<p class="muted small" style="margin-top:0">Only admins can change company details.</p>'}
     <div class="fgrid">
@@ -2842,7 +2843,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Toolbox talk: choose attendees from a list</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · More signatures, stamps, change my name</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3682,19 +3683,19 @@ function openSign(docId, idx){
   const T = TT(d), slot = T.sigs[idx];
   const myName = S.names[S.me] || '';
   if(idx === 0 && !(d.signatures || []).length){ const miss = missingRequired(d); if(miss.length){ toast('Fill in first: ' + miss.map(f => f.l).join(', '), true); S.draft = clone(d); go('edit'); setTimeout(() => flagMissing(miss), 300); return; } }
-  const mine = S.mySig || '';
+  const mine = S.mySig || '', sigsL = S.mySigs && S.mySigs.length ? S.mySigs : (mine ? [{img: mine}] : []), stampsL = S.myStamps || [];
   showModal(`<div class="box"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>${esc(slot.role)}</h3></div></div>
     <div class="mb">
       <div class="fgrid">
         <div class="fld half" id="fld_sn"><label>Full name <em>*</em></label><input id="sgName" value="${esc(idx===0 || mine ? myName : '')}" autocomplete="name"></div>
         <div class="fld half"><label>Designation</label><input id="sgDes" placeholder="${esc(slot.hint)}" value="${esc(mine || idx === 0 ? (S.myDes || '') : '')}"></div>
         <div class="fld"><label>Signature <em>*</em></label>
-          ${mine ? `<div class="sigchoose"><label><input type="radio" name="sgUse" value="saved" checked data-sguse> Use my e-signature</label><label><input type="radio" name="sgUse" value="draw" data-sguse> Draw now / someone else signs</label></div>
-          <div id="sgSaved" class="sigprev"><img src="${mine}" alt="My e-signature"></div>` : ''}
+          ${mine ? `<div class="sigpick">${sigsL.map((g, i) => `<label class="sigopt"><input type="radio" name="sgUse" value="saved" data-si="${i}" ${i === 0 ? 'checked' : ''} data-sguse><span class="sigprev"><img src="${g.img}" alt="My e-signature ${i + 1}"></span></label>`).join('')}<label class="sigopt draw"><input type="radio" name="sgUse" value="draw" data-sguse><span>✏ Draw now / someone else signs</span></label></div><div id="sgSaved"></div>` : ''}
           <div id="sgDraw" style="${mine ? 'display:none' : ''}"><div class="padbox"><canvas id="sgPad"></canvas><div class="line"></div><div class="x">✕</div></div>
           <div class="row" style="margin-top:6px"><span class="small muted">Sign with your finger or mouse.${mine ? '' : ' Tip: save your e-signature in Settings to skip this next time.'}</span><div class="sp"></div><button class="btn sm ghost" data-act="sgclear">Clear</button></div></div>
         </div>
       </div>
+      ${stampsL.length ? `<div class="fld" id="sgStampF"><label>Stamp</label><div class="sigpick"><label class="sigopt draw"><input type="radio" name="sgStamp" value="" checked><span>No stamp</span></label>${stampsL.map((g, i) => `<label class="sigopt"><input type="radio" name="sgStamp" value="${i}"><span class="sigprev"><img src="${g.img}" alt="Stamp ${i + 1}"></span></label>`).join('')}</div></div>` : ''}
       <div class="declare">By signing, I confirm the contents of <b>${esc(d.number)}</b> ${idx===0?'are true and accurate':'have been '+esc(slot.role.toLowerCase().replace(/ by$/,''))}. Once signed, the document is locked and the signature is recorded with today's date and time.</div>
     </div>
     <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="sgdo" data-id="${esc(docId)}" data-i="${idx}">Sign document</button></div></div>`);
@@ -3725,7 +3726,9 @@ function padImage(){
 async function doSign(docId, idx){
   const name = $('#sgName').value.trim(), des = $('#sgDes').value.trim();
   if(!name){ $('#fld_sn').classList.add('err'); toast('Enter the signer\'s full name.', true); return; }
-  const useSaved = !!S.mySig && document.querySelector('input[name=sgUse]:checked')?.value === 'saved';
+  const selU = document.querySelector('input[name=sgUse]:checked'), useSaved = !!S.mySig && selU?.value === 'saved';
+  const savedImg = useSaved ? ((S.mySigs || [])[+selU.dataset.si || 0]?.img || S.mySig) : '';
+  const stIdx = document.querySelector('input[name=sgStamp]:checked')?.value, stampImg = stIdx ? (S.myStamps || [])[+stIdx]?.img : '';
   if(useSaved && name !== (S.names[S.me] || name)){ toast('Your e-signature can only be used with your own name.', true); return; }
   if(!useSaved && (!PAD || PAD.strokes === 0 || (PAD.maxX-PAD.minX) < 12*PAD.dpr)){ toast('Please draw a signature.', true); return; }
   const btn = document.querySelector('[data-act=sgdo]'); btn.disabled = true; btn.textContent = 'Signing…';
@@ -3738,7 +3741,8 @@ async function doSign(docId, idx){
     for(let i=0;i<idx;i++) if(!sigs[i]){ closeModal(); toast('Earlier signatures are still missing.', true); return; }
     if(T.sigs[idx].needsResponse && T.fields.some(f => f.phase==='response' && f.req && isEmpty(cur.data?.[f.k]))){ closeModal(); toast('Add the response first.', true); return; }
     while(sigs.length < idx) sigs.push(null);
-    sigs[idx] = {name, designation:des, img: useSaved ? S.mySig : padImage(), at:new Date().toISOString(), uid:S.me||null, ...(useSaved ? {esig: true} : {})};
+    const sImg = useSaved ? savedImg : padImage();
+    sigs[idx] = {name, designation:des, img: stampImg ? await withStamp(sImg, stampImg) : sImg, at:new Date().toISOString(), uid:S.me||null, ...(useSaved ? {esig: true} : {}), ...(stampImg ? {stamped: true} : {})};
     await ref.update({signatures:sigs, updatedAt:new Date().toISOString(), updatedBy:S.me||null});
     closeModal(); toast('Signed ✓');
     try { const p = projById(cur.projectId); if(p && p.sigReq && p.sigReq[docId] && p.sigReq[docId].slot <= idx){ await S.db.doc('projects/' + cur.projectId).update({['sigReq.' + docId]: null}); p.sigReq[docId] = null; } } catch(e){ console.warn(e); }
@@ -3748,13 +3752,54 @@ async function doSign(docId, idx){
 
 /* ---------- ✍ my e-signature (saved on my own user record, used when I sign) ---------- */
 function esigCard(){
-  return `<div class="card pad form" style="margin-bottom:16px"><h3 style="font-size:16px;margin:0 0 4px">✍ My e-signature</h3>
-  <p class="small muted" style="margin-top:0">Save it once and use it whenever you sign — no need to draw each time. It can only be used with your own name.</p>
-  ${S.mySig ? `<div class="sigprev"><img src="${S.mySig}" alt="My e-signature"></div>` : `<div class="sigprev empty small muted">No e-signature saved yet</div>`}
-  <div class="fgrid" style="margin-top:10px"><div class="fld half"><label>My designation (printed with my signature)</label><input id="myDes" value="${esc(S.myDes || '')}" placeholder="e.g. Site Supervisor"></div></div>
-  <div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn sm pri" style="margin:0">📷 Upload signature picture<input type="file" accept="image/*" data-mysig hidden></label><button class="btn sm" data-act="drawsig">✏ Draw it</button><button class="btn sm" data-act="savedes">Save designation</button>${S.mySig ? '<button class="btn sm ghost danger" data-act="rmsig">Remove</button>' : ''}</div>
-  <p class="small muted" style="margin-bottom:0">Tip: sign with a dark pen on plain white paper and take a clear, straight photo — the white background is removed automatically. A PNG with a see-through background also works.</p></div>`;
+  const sl = S.mySigs && S.mySigs.length ? S.mySigs : (S.mySig ? [{img: S.mySig}] : []), st = S.myStamps || [];
+  return `<div class="card pad form" style="margin-bottom:16px"><h3 style="font-size:16px;margin:0 0 4px">👤 My name, signatures & stamps</h3>
+  <p class="small muted" style="margin-top:0">Your name shows on your records and when you sign. Saved signatures and stamps can only be used with your own name.</p>
+  <div class="fgrid"><div class="fld half"><label>My name</label><input id="myName" value="${esc(S.names[S.me] || '')}" placeholder="Full name" autocomplete="name"></div>
+  <div class="fld half"><label>My designation (printed with my signature)</label><input id="myDes" value="${esc(S.myDes || '')}" placeholder="e.g. Site Supervisor"></div></div>
+  <div class="row" style="gap:8px;margin-bottom:14px"><button class="btn sm pri" data-act="savedes">Save name & designation</button></div>
+  <div class="eyebrow" style="margin:4px 0 6px">✍ My signatures (${sl.length}/${SIG_MAX})</div>
+  ${sl.length ? `<div class="sigpick">${sl.map((g, i) => `<div class="sigopt"><span class="sigprev"><img src="${g.img}" alt="Signature ${i + 1}"></span><div class="row" style="gap:6px;margin-top:4px">${i === 0 ? '<span class="small" style="font-weight:600">★ Used first</span>' : `<button class="btn sm" data-act="sigdef" data-i="${i}">★ Use first</button>`}<button class="btn sm ghost danger" data-act="rmsig" data-i="${i}">Remove</button></div></div>`).join('')}</div>` : `<div class="sigprev empty small muted">No e-signature saved yet</div>`}
+  ${sl.length < SIG_MAX ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><label class="btn sm" style="margin:0">📷 Upload signature<input type="file" accept="image/*" data-mysig hidden></label><button class="btn sm" data-act="drawsig">✏ Draw signature</button></div>` : ''}
+  <div class="eyebrow" style="margin:16px 0 6px">🔵 My stamps (${st.length}/${STAMP_MAX})</div>
+  ${st.length ? `<div class="sigpick">${st.map((g, i) => `<div class="sigopt"><span class="sigprev"><img src="${g.img}" alt="Stamp ${i + 1}"></span><div class="row" style="gap:6px;margin-top:4px"><button class="btn sm ghost danger" data-act="rmstamp" data-i="${i}">Remove</button></div></div>`).join('')}</div>` : `<div class="sigprev empty small muted">No stamp saved yet</div>`}
+  ${st.length < STAMP_MAX ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><label class="btn sm" style="margin:0">📷 Upload stamp<input type="file" accept="image/*" data-mystamp hidden></label></div>` : ''}
+  <p class="small muted" style="margin-bottom:0">Tip: sign or stamp on plain white paper and take a clear, straight photo — the white background is removed automatically. A PNG with a see-through background also works. When signing, pick which signature to use and, if needed, a stamp.</p></div>`;
 }
+const SIG_MAX = 5, STAMP_MAX = 3;
+async function stampFromFile(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await loadImg(url), k = Math.min(1, 900 / Math.max(im.naturalWidth, im.naturalHeight)), W = Math.max(1, Math.round(im.naturalWidth * k)), H = Math.max(1, Math.round(im.naturalHeight * k));
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.drawImage(im, 0, 0, W, H);
+    const id = g.getImageData(0, 0, W, H), px = id.data; let x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = (y * W + x) * 4, r = px[i], gg = px[i + 1], b = px[i + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+      if(px[i + 3] < 40 || (mn > 175 && mx - mn < 40)){ px[i + 3] = 0; continue; }
+      if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+    if(x1 < 0 || x1 - x0 < 20 || y1 - y0 < 20) throw {code: 'nostamp'};
+    g.putImageData(id, 0, 0);
+    const m = 4, cx = Math.max(0, x0 - m), cy = Math.max(0, y0 - m), cw = Math.min(W, x1 + m) - cx, ch = Math.min(H, y1 + m) - cy, sc = Math.min(1, 360 / Math.max(cw, ch));
+    const o = document.createElement('canvas'); o.width = Math.max(1, Math.round(cw * sc)); o.height = Math.max(1, Math.round(ch * sc));
+    o.getContext('2d').drawImage(c, cx, cy, cw, ch, 0, 0, o.width, o.height); return o.toDataURL('image/png');
+  } finally { URL.revokeObjectURL(url); }
+}
+// signature drawn over the stamp, as one picture — so every PDF / Word / screen layout shows both
+async function withStamp(sig, stamp){
+  const [a, b] = await Promise.all([loadImg(sig), loadImg(stamp)]);
+  const H = 220, sw = Math.min(H * 1.1, b.naturalWidth / b.naturalHeight * H), sh = sw * b.naturalHeight / b.naturalWidth;
+  const gw = Math.min(460, a.naturalWidth / a.naturalHeight * 170), gh = gw * a.naturalHeight / a.naturalWidth;
+  const W = Math.round(gw * 0.78 + sw), c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.globalAlpha = .9; g.drawImage(b, W - sw, (H - sh) / 2, sw, sh); g.globalAlpha = 1; g.drawImage(a, 0, (H - gh) / 2, gw, gh);
+  return c.toDataURL('image/png');
+}
+async function saveMyMarks(sigs, stamps, msg){
+  const sl = sigs.map(x => ({img: x.img})), st = stamps.map(x => ({img: x.img}));
+  if(JSON.stringify(sl).length + JSON.stringify(st).length > 850000){ toast('Too many large pictures — remove one first.', true); return; }
+  try { await S.db.doc('users/' + S.me).update({sigList: sl, sigImg: sl[0]?.img || null, stamps: st, sigAt: new Date().toISOString()});
+    S.mySigs = sl; S.mySig = sl[0]?.img || ''; S.myStamps = st; closeModal(); toast(msg); render(); }
+  catch(e){ dbErr(e); }
+}
+const curSigs = () => S.mySigs && S.mySigs.length ? [...S.mySigs] : (S.mySig ? [{img: S.mySig}] : []);
 async function sigFromFile(file){
   const url = URL.createObjectURL(file);
   try {
@@ -3787,13 +3832,16 @@ function drawSigForm(){
     <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="savesigdraw">Save my e-signature</button></div></div>`);
   initPad();
 }
-async function saveMySig(img){
-  try { await S.db.doc('users/' + S.me).update({sigImg: img || null, sigAt: new Date().toISOString()}); S.mySig = img || ''; closeModal(); toast(img ? 'E-signature saved ✓' : 'E-signature removed'); render(); }
-  catch(e){ dbErr(e); }
+async function saveMySig(img){ const l = curSigs(); if(l.length >= SIG_MAX){ toast('Up to ' + SIG_MAX + ' signatures — remove one first.', true); return; } await saveMyMarks([...l, {img}], S.myStamps || [], 'E-signature saved ✓'); }
+function stampConfirm(img){
+  S.stampTemp = img;
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>Is this your stamp?</h3></div><div class="mb">
+    <div class="sigprev big"><img src="${img}" alt=""></div><p class="small muted">If it looks patchy, stamp again on plain white paper and take the photo in good light.</p></div>
+    <div class="mf"><button class="btn ghost" data-act="closemodal">Try again</button><button class="btn pri" data-act="savestamptemp">Save stamp</button></div></div>`);
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z30';
+const APP_VER = 'Z31';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4476,7 +4524,7 @@ document.addEventListener('input', e => { if(e.target.id === 'eaEnd' || e.target
   if(e.target.closest && e.target.closest('#modal')) mSnap(); });
 document.addEventListener('change', e => { if(e.target.id === 'dcalGo' && e.target.value){ dsrCal(S.dcal.pid, e.target.value.slice(0, 7), e.target.value); return; }
   if(e.target.dataset && e.target.dataset.sguse !== undefined){ const dr = e.target.value === 'draw';
-    $('#sgDraw').style.display = dr ? '' : 'none'; $('#sgSaved').style.display = dr ? 'none' : ''; if(dr && !PAD) initPad(); if(!dr){ $('#sgName').value = S.names[S.me] || ''; $('#sgDes').value = S.myDes || ''; } return; }
+    $('#sgDraw').style.display = dr ? '' : 'none'; if(dr && !PAD) initPad(); if(!dr){ $('#sgName').value = S.names[S.me] || ''; $('#sgDes').value = S.myDes || ''; } return; }
   if(e.target.dataset && e.target.dataset.tabsel){ S.view.tab = e.target.value; render(); return; } if(e.target.closest && e.target.closest('#modal')) mSnap(); });
 function closeModal(keep){ if(LIVE.on) stopListening(true); if(keep !== true && S.modalKey) MDRAFT.drop(S.modalKey); S.modalKey = ''; S.modalOpen = false; $('#modal').innerHTML = ''; PAD = null; }
 let CONFIRM_CB = null;
@@ -4852,8 +4900,11 @@ document.addEventListener('click', async e => {
     case 'drawsig': drawSigForm(); break;
     case 'savesigdraw': if(!PAD || PAD.strokes === 0 || (PAD.maxX - PAD.minX) < 12 * PAD.dpr){ toast('Please draw your signature.', true); break; } saveMySig(padImage()); break;
     case 'savesigtemp': saveMySig(S.sigTemp); break;
-    case 'rmsig': confirmBox('Remove your e-signature?', 'Documents you already signed keep their signature.', 'Remove', () => saveMySig(null)); break;
-    case 'savedes': { const v = ($('#myDes') || {}).value || ''; try { await S.db.doc('users/' + S.me).update({designation: v.trim()}); S.myDes = v.trim(); toast('Designation saved'); } catch(err){ dbErr(err); } break; }
+    case 'rmsig': { const i = +el.dataset.i || 0; confirmBox('Remove this signature?', 'Documents you already signed keep their signature.', 'Remove', () => { const l = curSigs(); l.splice(i, 1); saveMyMarks(l, S.myStamps || [], 'Signature removed'); }); break; }
+    case 'sigdef': { const i = +el.dataset.i, l = curSigs(); const [x] = l.splice(i, 1); l.unshift(x); saveMyMarks(l, S.myStamps || [], 'Will be offered first ✓'); break; }
+    case 'rmstamp': { const i = +el.dataset.i; confirmBox('Remove this stamp?', 'Documents you already signed keep their stamp.', 'Remove', () => { const l = [...(S.myStamps || [])]; l.splice(i, 1); saveMyMarks(curSigs(), l, 'Stamp removed'); }); break; }
+    case 'savestamptemp': { const l = [...(S.myStamps || [])]; if(l.length >= STAMP_MAX){ toast('Up to ' + STAMP_MAX + ' stamps — remove one first.', true); break; } l.push({img: S.stampTemp}); saveMyMarks(curSigs(), l, 'Stamp saved ✓'); break; }
+    case 'savedes': { const v = ($('#myDes') || {}).value || '', nm = (($('#myName') || {}).value || '').trim().replace(/\s+/g, ' '); if($('#myName') && nm.length < 2){ toast('Enter your name.', true); break; } try { await S.db.doc('users/' + S.me).update({designation: v.trim(), ...(nm ? {name: nm} : {})}); S.myDes = v.trim(); if(nm){ S.names[S.me] = nm; (S.users || []).forEach(u => { if(u.id === S.me || u.uid === S.me) u.name = nm; }); try { FB.auth?.currentUser && FB.authM?.updateProfile(FB.auth.currentUser, {displayName: nm}).catch(() => {}); } catch(e2){} } toast('Saved ✓'); render(); } catch(err){ dbErr(err); } break; }
     case 'eotapprove': if(!(S.canEdit || el.dataset.by === S.me || !el.dataset.by)){ toast('Only the person who sent the EOT letter (or an admin) updates the approved date.', true); break; } eotApproveForm(el.dataset.p); break;
     case 'eotsave': saveEotApproval(el.dataset.p, el); break;
     case 'fileaddcat': fileForm(el.dataset.p, {category: el.dataset.c, title: el.dataset.t || '', kind: 'upload'}); break;
@@ -4941,6 +4992,7 @@ document.addEventListener('change', async e => {
     $('#chatPhN').textContent = (S.chatPhotos || []).length + ' photo(s) attached'; return; }
   if(e.target.id === 'fmtType'){ S.fmtType = e.target.value; S.fmtCfg = clone(projFmt(S.fmtPid, e.target.value) || {}); fmtEditorRender(); return; }
   const t = e.target;
+  if(t.dataset.mystamp !== undefined && t.files?.length){ try { stampConfirm(await stampFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nostamp' ? 'No stamp found in that picture — stamp on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
   if(t.dataset.mysig !== undefined && t.files?.length){ try { sigConfirm(await sigFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nosig' ? 'No signature found in that picture — sign with a dark pen on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
   if(t.dataset.role){ const uid = t.dataset.role, role = t.value;
     rememberAccess(uid, role);
@@ -5859,7 +5911,7 @@ async function onSignedIn(u){
   const apply = d => {
     const prev = S.myRole; S.myRole = d.role || 'pending';
     if(d.name) S.names[u.uid] = d.name;
-    if('sigImg' in d) S.mySig = d.sigImg || ''; if('designation' in d) S.myDes = d.designation || '';
+    if('sigImg' in d || 'sigList' in d){ S.mySigs = Array.isArray(d.sigList) ? d.sigList.filter(x => x && x.img) : (d.sigImg ? [{img: d.sigImg}] : []); S.mySig = S.mySigs[0]?.img || ''; } if('stamps' in d) S.myStamps = (d.stamps || []).filter(x => x && x.img); if('designation' in d) S.myDes = d.designation || '';
     S.canEdit = S.myRole === 'admin'; S.canWrite = S.myRole === 'admin' || S.myRole === 'staff';
     try { if(S.canWrite) localStorage.setItem(ROLE_CACHE + u.uid, S.myRole); else if(S.myRole === 'removed') localStorage.removeItem(ROLE_CACHE + u.uid); } catch(e){}
     if(S.canWrite && !(prev === 'admin' || prev === 'staff')) startData();
