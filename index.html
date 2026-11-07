@@ -1171,7 +1171,7 @@ const TYPES = {
       {k:'duration', l:'Duration', t:'text', w:'half', def:'15 min'},
       {k:'points', l:'Key points discussed', t:'textarea', req:1},
       {k:'attCount', l:'Total attendance', t:'auto', calc: x => { const n = (x.attendees || []).filter(r => r && (r.name || r.id)).length; return n + ' person' + (n === 1 ? '' : 's'); }},
-      {k:'attendees', l:'Attendance', t:'table', cols:[{k:'name',l:'Name'},{k:'company',l:'Company / trade'},{k:'id',l:'IC / passport no.'}],
+      {k:'attendees', l:'Attendance', t:'table', people:1, hint:'Type a name to pick someone from earlier toolbox talks — company and IC fill in by themselves. Or tap "👥 Choose people".', cols:[{k:'name',l:'Name'},{k:'company',l:'Company / trade'},{k:'id',l:'IC / passport no.'}],
         def: () => [{},{},{},{}]}
     ]
   },
@@ -2842,7 +2842,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 6 Nov 2026 (${APP_VER}) · Simpler feedback, PR submission date, S-curve from work programme</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Toolbox talk: choose attendees from a list</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3436,6 +3436,45 @@ function startDictation(k, btn){
   try { rec.start(); } catch(e){ toast('Could not start the microphone.', true); return; }
   DICT.rec = rec; DICT.k = k; btn.classList.add('live');
 }
+/* ---------- people list for attendance (names from earlier toolbox talks) ---------- */
+function pplKey(n){ return String(n || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
+function pplDir(){
+  const m = new Map(), cur = S.draft?.id, pid = S.draft?.projectId;
+  S.docs.filter(d => d.type === 'TBT' && d.id !== cur).sort((a, b) => String(a.data?.date || '').localeCompare(String(b.data?.date || ''))).forEach(d => {
+    (d.data?.attendees || []).forEach(r => { const k = pplKey(r && r.name); if(!k) return; const o = m.get(k) || {n: 0};
+      m.set(k, {name: String(r.name).trim().replace(/\s+/g, ' '), company: String(r.company || '').trim() || o.company || '', id: String(r.id || '').trim() || o.id || '', n: o.n + 1, last: d.data?.date || '', here: o.here || d.projectId === pid}); }); });
+  return [...m.values()].sort((a, b) => (b.here - a.here) || (b.n - a.n) || a.name.localeCompare(b.name));
+}
+function pplDatalists(k){
+  const dir = pplDir(), comp = [...new Set(dir.map(p => p.company).filter(Boolean))].sort();
+  return `<datalist id="ppl_${k}_name">${dir.map(p => `<option value="${esc(p.name)}">${esc([p.company, p.id].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><datalist id="ppl_${k}_company">${comp.map(c => `<option value="${esc(c)}"></option>`).join('')}</datalist>`;
+}
+function pplAutofill(inp, row){
+  const p = pplDir().find(x => pplKey(x.name) === pplKey(inp.value)); if(!p) return;
+  const tr = inp.closest('tr');
+  if(inp.value !== p.name && document.activeElement !== inp){ inp.value = p.name; row.name = p.name; }
+  [['company', p.company], ['id', p.id]].forEach(([c, v]) => { if(!v || !isEmpty(row[c])) return; row[c] = v; const el = tr?.querySelector(`[data-col="${c}"]`); if(el) el.value = v; });
+}
+function pplPicker(k){
+  const dir = pplDir(), have = new Set((S.draft.data[k] || []).map(r => pplKey(r && r.name)).filter(Boolean));
+  const last = S.docs.filter(d => d.type === 'TBT' && d.id !== S.draft.id && d.projectId === S.draft.projectId).sort((a, b) => String(b.data?.date || '').localeCompare(String(a.data?.date || '')))[0];
+  const lastNames = last ? (last.data.attendees || []).map(r => pplKey(r && r.name)).filter(x => x && !have.has(x)) : [];
+  const list = dir.filter(p => !have.has(pplKey(p.name)));
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>👥 Choose people</h3></div><div class="mb">
+    ${!dir.length ? `<p class="muted">No names yet. Names typed in toolbox talks are kept here, so next time you can just choose them.</p>` : !list.length ? `<p class="muted">Everyone on the list is already in this attendance.</p>` : `
+    <input id="pplQ" class="npq" placeholder="Search name, company or IC" autocomplete="off">
+    ${lastNames.length ? `<button class="btn sm" style="margin:10px 0 4px;white-space:normal;max-width:100%;text-align:left" data-act="pplall" data-names="${esc(lastNames.join('|'))}">✓ Tick all from last toolbox (${esc(fmtDate(last.data.date))})</button>` : ''}
+    <div style="margin-top:8px">${list.map(p => `<label class="pplrow" data-s="${esc((p.name + ' ' + p.company + ' ' + p.id).toLowerCase())}" style="display:flex;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line,#e6e2d8)"><input type="checkbox" data-ppl="${esc(pplKey(p.name))}" style="width:20px;height:20px"><span><b>${esc(p.name)}</b><br><span class="small muted">${esc([p.company, p.id].filter(Boolean).join(' · ') || '—')}</span></span></label>`).join('')}</div>`}
+    </div><div class="mf">${list.length ? `<button class="btn pri" data-act="ppladd" data-k="${esc(k)}">Add selected</button>` : ''}</div></div>`);
+}
+function pplAdd(k){
+  const pick = [...document.querySelectorAll('#modal [data-ppl]:checked')].map(c => c.dataset.ppl);
+  if(!pick.length){ toast('Tick at least one person.', true); return; }
+  const dir = pplDir(), rows = S.draft.data[k] = S.draft.data[k] || [];
+  pick.forEach(key => { const p = dir.find(x => pplKey(x.name) === key); if(!p) return; const v = {name: p.name, company: p.company, id: p.id};
+    const blank = rows.findIndex(r => !r || (isEmpty(r.name) && isEmpty(r.company) && isEmpty(r.id))); if(blank >= 0) rows[blank] = v; else rows.push(v); });
+  S.dirty = true; closeModal(); rerenderEditorField(k); refreshAutos(); toast(pick.length + ' added');
+}
 function fieldInput(f, v){
   const dk = `data-f="${f.k}"`;
   switch(f.t){
@@ -3454,8 +3493,8 @@ function fieldInput(f, v){
       const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
       if(f.marks){ const di = S.draft?.data?.from ? dDiff(today(), S.draft.data.from) : -1; if(di >= 0 && di < fcols.filter(c => c.day != null).length) S._dayok = di; else S._dayok = null; }
       return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? 'Type here' : esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
-      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
+        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.people ? `<button class="addrow" data-act="pplpick" data-k="${f.k}" style="margin-left:6px">👥 Choose people</button>${pplDatalists(f.k)}` : ''}${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
     }
     case 'photos': {
       const ph = v || [];
@@ -3754,7 +3793,7 @@ async function saveMySig(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z29';
+const APP_VER = 'Z30';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4430,6 +4469,7 @@ function mSnap(){ if(!S.modalOpen || !S.modalKey) return; const o = {}; let any 
   mFields().forEach(([k, el]) => { const v = el.type === 'checkbox' ? el.checked : el.value; o[k] = v; if(el.type !== 'checkbox' && el.tagName !== 'SELECT' && String(v).trim() && v !== el.defaultValue) any = true; });
   if(any) MDRAFT.put(S.modalKey, o); else MDRAFT.drop(S.modalKey); }
 document.addEventListener('input', e => { if(e.target.id === 'eaEnd' || e.target.id === 'eaOn'){ const p = projById(document.querySelector('[data-act=eotsave]')?.dataset.p), v = $('#eaEnd').value; if(p && p.end && v) $('#eaDays').value = (dDiff(v, p.end) > 0 ? '+' : '') + dDiff(v, p.end) + ' days'; }
+  if(e.target.id === 'pplQ'){ const w = e.target.value.toLowerCase().split(/\s+/).filter(Boolean); document.querySelectorAll('#modal .pplrow').forEach(r => { r.style.display = w.every(x => r.dataset.s.includes(x)) ? '' : 'none'; }); return; }
   if(e.target.id === 'npQ'){ const w = e.target.value.toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
     document.querySelectorAll('#modal .npg').forEach(g => { let n = 0; g.querySelectorAll('.npi').forEach(b => { const ok = w.every(x => b.dataset.s.includes(x)); b.style.display = ok ? '' : 'none'; if(ok) n++; }); g.style.display = n ? '' : 'none'; any += n; });
     const no = document.querySelector('#modal .npnone'); if(no) no.style.display = any ? 'none' : ''; return; }
@@ -4713,6 +4753,9 @@ document.addEventListener('click', async e => {
     case 'addgrp': { const k = el.dataset.k, f = TT(S.draft).fields.find(x => x.k === k), c0 = f.cols[0].k, rows = (S.draft.data[k] = S.draft.data[k] || []);
       const n = rows.filter(r => r && r._g).length + 1; rows.push({[c0]: (S.draft.type === 'EAIA' ? n + '. ' : '') + 'NEW ' + (S.draft.type === 'EAIA' ? 'ACTIVITY' : 'HEADING'), _g: 1}, {}); S.dirty = true; rerenderEditorField(k);
       const inp = document.querySelectorAll(`#fld_${k} .tgin`); const last = inp[inp.length - 1]; if(last){ last.focus(); last.select(); } break; }
+    case 'pplpick': pplPicker(el.dataset.k); break;
+    case 'pplall': { const ids = (el.dataset.names || '').split('|'); document.querySelectorAll('#modal [data-ppl]').forEach(c => { if(ids.includes(c.dataset.ppl)) c.checked = true; }); break; }
+    case 'ppladd': pplAdd(el.dataset.k); break;
     case 'delrow': { const k = el.dataset.k; S.draft.data[k].splice(+el.dataset.i, 1); if(!S.draft.data[k].length) S.draft.data[k].push({}); S.dirty = true; rerenderEditorField(k); break; }
     case 'delph': { const k = el.dataset.k; S.draft.data[k].splice(+el.dataset.i, 1); S.dirty = true; rerenderEditorField(k); break; }
     case 'save': case 'savesign': {
@@ -4884,10 +4927,11 @@ document.addEventListener('input', e => {
     if(S.draft.type === 'LTR' && (t.dataset.f === 'category' || t.dataset.f === 'language')){ const y0 = window.scrollY; render(); window.scrollTo(0, y0); return; }
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
+    if(t.dataset.col === 'name' && t.getAttribute('list')) pplAutofill(t, rows[i]);
     refreshAutos(); }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
 });
-document.addEventListener('change', e => { const t = e.target; if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; refreshAutos();
+document.addEventListener('change', e => { const t = e.target; if(t.dataset?.tbl && t.dataset.col === 'name' && t.getAttribute('list') && S.draft){ const r = (S.draft.data[t.dataset.tbl] || [])[+t.dataset.row]; if(r) setTimeout(() => pplAutofill(t, r), 0); } if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; refreshAutos();
   const tf = TT(S.draft).fields.find(f => f.k === t.dataset.tbl); if(tf && tf.check && t.dataset.col === 'ans'){ t.closest('tr')?.classList.toggle('tno', t.value === (tf.bad || 'No')); const cnt = t.closest('.fld')?.querySelector('.row .small.muted'); if(cnt) cnt.innerHTML = chkCount(rows, tf); if(t.value === (tf.bad || 'No')) t.closest('tr')?.querySelector('[data-col=remarks]')?.focus(); } } });
 document.addEventListener('submit', e => { if(e.target.id === 'authForm'){ e.preventDefault(); emailAuth(e.target); } });
 document.addEventListener('change', async e => {
