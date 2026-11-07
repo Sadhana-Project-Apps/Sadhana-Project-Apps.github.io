@@ -3026,7 +3026,7 @@ function waText(d){
   L.push(`*Date: ${dmy(x.date)}*`);
   if(p.start) L.push(`*Commencement date : ${dmy(p.start)}*`);
   if(p.end) L.push(`*Completion date : ${dmy(p.end)}*`);
-  if(p.end && x.date){ const bal = dayDiff(x.date, p.end); L.push(bal >= 0 ? `*Balance days before handover : ${bal} Day${bal === 1 ? '' : 's'}*` : `*Balance days before handover : 0 Days (${-bal} day${bal === -1 ? '' : 's'} overdue)*`); }
+  if(p.end && x.date){ const bal = dayDiff(x.date, p.end); L.push(bal >= 0 ? `*Due days : ${bal} Day${bal === 1 ? '' : 's'}*` : `*Due days : 0 Days (${-bal} day${bal === -1 ? '' : 's'} overdue)*`); }
   const w = x.weatherAM && x.weatherPM && x.weatherAM !== x.weatherPM ? `AM ${x.weatherAM}, PM ${x.weatherPM}` : (x.weatherAM || x.weatherPM || '');
   if(w) L.push(`*Weather: ${w}*` + (numv(x.rainHours) ? ` (${x.rainHours} hr lost to rain)` : ''));
   (x.rainLog || []).filter(r => r && (r.from || r.to)).forEach(r => L.push(`🌧 ${r.from || '?'} – ${r.to || '?'} ${r.kind || 'rain'}${r.stop ? ' · work stopped: ' + r.stop : ''}${r.remarks ? ' · ' + r.remarks : ''}`));
@@ -3838,7 +3838,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z38';
+const APP_VER = 'Z39';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
