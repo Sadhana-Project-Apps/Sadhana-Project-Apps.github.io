@@ -2314,7 +2314,7 @@ function chatView(){
       ${re ? `<div class="cquote">↪ ${esc(re.name || '')}: ${esc(String(re.text || '').slice(0, 90))}</div>` : ''}
       <div class="ctext">${esc(m.text || '')}</div>${m.where ? `<div class="small muted">Page: ${esc(m.where)}</div>` : ''}
       ${(m.photos || []).length ? `<div class="dphotos" style="margin-top:6px">${m.photos.map(ph => `<figure><img ${photoAttr(ph)} data-act="zoom" data-zid="${esc(ph)}" alt=""></figure>`).join('')}</div>` : ''}
-      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${(S.canEdit || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
+      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${S.canEdit ? `<button class="btn sm ghost" data-act="chatcopy1" data-id="${esc(m.id)}">📋 Copy</button>` : ''}${(S.canEdit || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
   <div class="ccompose">${S.chatReply && byId(S.chatReply) ? `<div class="cquote">Replying to ${esc(byId(S.chatReply).name)} <button class="btn sm ghost" data-act="chatreply" data-id="">✕</button></div>` : ''}
     <div class="small muted" style="margin-bottom:6px">What is it about?</div>
     <div class="ckinds">${Object.entries(CHAT_KINDS).map(([k, K]) => `<button class="btn sm ${(S.chatKind || 'err') === k ? 'pri' : ''}" data-act="chatkind" data-k="${k}">${K.i} ${K.l}</button>`).join('')}</div>
@@ -2845,7 +2845,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Progress report reminder 3 days before cut-off · @ Assign pending items</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Feedback points only for suggestions & errors · copy one message · WhatsApp update without reference no.</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3041,7 +3041,6 @@ function waText(d){
   if(bullets(x.tomorrow).length) L.push('', `*Tomorrow's Plan*`, ...bullets(x.tomorrow));
   if(bullets(x.safety).length) L.push('', `*Safety*`, ...bullets(x.safety));
   if(bullets(x.issues).length) L.push('', `*Issues / Delays*`, ...bullets(x.issues));
-  L.push('', `_${d.number || 'Site Daily Report'}_`);
   return L.join('\n');
 }
 function waForm(id, draft){
@@ -3843,7 +3842,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z32';
+const APP_VER = 'Z33';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4915,6 +4914,11 @@ document.addEventListener('click', async e => {
     case 'eotapprove': if(!(S.canEdit || el.dataset.by === S.me || !el.dataset.by)){ toast('Only the person who sent the EOT letter (or an admin) updates the approved date.', true); break; } eotApproveForm(el.dataset.p); break;
     case 'eotsave': saveEotApproval(el.dataset.p, el); break;
     case 'fileaddcat': fileForm(el.dataset.p, {category: el.dataset.c, title: el.dataset.t || '', kind: 'upload'}); break;
+    case 'chatcopy1': { const m = S.chat.find(x => x.id === el.dataset.id); if(!m) break;
+      const txt = `[${(CHAT_KINDS[m.kind] || CHAT_KINDS.msg).l}] ${m.name || ''}, ${fmtDT(m.at)}${m.where ? ' — page: ' + m.where : ''}${(m.photos || []).length ? ' — ' + m.photos.length + ' screenshot(s) in the app' : ''}\n${String(m.text || '')}\n\nPlease fix / add this in the next update.`;
+      try { await navigator.clipboard.writeText(txt); toast('Copied — paste it to Claude.'); }
+      catch(err){ showModal(`<div class="box"><div class="mh"><h3>Copy this message</h3></div><div class="mb"><textarea style="width:100%;min-height:200px" readonly>${esc(txt)}</textarea></div></div>`); }
+      break; }
     case 'chatcopy': { const L = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && !chatAnswered(m)).sort((a, b) => String(a.at).localeCompare(String(b.at)));
       const txt = 'Sadhana app — open feedback (' + fmtDT(new Date().toISOString()) + ', app ' + APP_VER + ')\n\n' + L.map((m, i) => `${i + 1}. [${(CHAT_KINDS[m.kind] || CHAT_KINDS.msg).l}] ${m.name || ''}, ${fmtDT(m.at)}${m.where ? ' — page: ' + m.where : ''}${(m.photos || []).length ? ' — ' + m.photos.length + ' screenshot(s) in the app' : ''}\n   ${String(m.text || '').replace(/\n/g, '\n   ')}`).join('\n\n') + '\n\nPlease fix / add all of these in the next update.';
       try { await navigator.clipboard.writeText(txt); toast(`${L.length} item${L.length > 1 ? 's' : ''} copied — paste them to Claude. Reply to each person here when it's done.`); }
@@ -5398,7 +5402,7 @@ const typeName = t => (S.company && S.company.typeNames && S.company.typeNames[t
 
 /* ---------- 🏆 Team ranking (points from what people already do in the app) ---------- */
 const RANK_PTS = {rec: {PR: 30, SW: 25, ENM: 25, EMR: 20, EAIA: 20, ERO: 15, MM: 15, LTR: 15, DSR: 10}, recDef: 10, sign: 5, photo: 1, photoMax: 10, onTime: 5, day: 3,
-  fb: {err: 10, idea: 10, q: 3}, fbDone: 20, reply: 2, msgDayMax: 5};
+  fb: {err: 5, idea: 5}};
 const RANK_BADGES = [['rec', '📝', 'Record keeper', 'most records submitted'], ['sign', '✍', 'Sign-off champion', 'most signatures'], ['photo', '📸', 'Photographer', 'most site photos'],
   ['onTime', '⏱', 'On-time reporter', 'most daily reports signed the same day'], ['idea', '💡', 'Idea maker', 'most suggestions'], ['err', '🐞', 'Bug hunter', 'most errors reported'], ['days', '🔥', 'Most active', 'most active days']];
 function rankRange(per){ const t = today(); if(per === 'month') return [t.slice(0, 7) + '-01', t]; if(per === 'year') return [t.slice(0, 4) + '-01-01', t.slice(0, 4) + '-12-31']; if(per === 'last') { const d = new Date(t.slice(0, 7) + '-01T00:00:00'); d.setDate(0); const e = d.toISOString().slice(0, 10); return [e.slice(0, 7) + '-01', e]; } return ['2000-01-01', '2999-12-31']; }
@@ -5414,10 +5418,10 @@ function computeRanks(per){
       if(d.type === 'DSR' && d.data?.date && local(s0.at) <= d.data.date){ u.onTime++; u.pts += RANK_PTS.onTime; } }
     sigs.forEach(sg => { if(sg && sg.uid && inR(local(sg.at))){ const u = me(sg.uid); u.sign++; u.pts += RANK_PTS.sign; u.days.add(local(sg.at)); } }); });
   S.chat.forEach(m => { if(m.hidden || !m.by || !inR(local(m.at))) return; const u = me(m.by), long = String(m.text || '').trim().length >= 15 || (m.photos || []).length;
-    if(m.kind === 'msg'){ const dk = local(m.at); u.chat++; if(m.replyTo && (u.dayMsg[dk] || 0) < RANK_PTS.msgDayMax){ u.dayMsg[dk] = (u.dayMsg[dk] || 0) + RANK_PTS.reply; u.pts += RANK_PTS.reply; } return; }
+    // only suggestions and error reports score — plain messages, questions and replies don't
+    if(m.kind === 'msg'){ u.chat++; return; }
     if(!long) return;
-    u[m.kind] = (u[m.kind] || 0) + 1; u.pts += RANK_PTS.fb[m.kind] || 0;
-    if(chatAnswered(m) && m.kind !== 'q'){ u.done++; u.pts += RANK_PTS.fbDone; } });
+    u[m.kind] = (u[m.kind] || 0) + 1; u.pts += RANK_PTS.fb[m.kind] || 0; });
   const people = (S.users.length ? S.users.filter(u => u.role !== 'removed' && u.role !== 'pending').map(u => u.id) : Object.keys(S.names));
   people.forEach(id => me(id));
   const list = Object.values(P).filter(u => (people.includes(u.id) || u.pts > 0) && !isIntern(u.id)).map(u => { const days = u.days.size; return {...u, days, pts: u.pts + days * RANK_PTS.day}; });
@@ -5452,14 +5456,14 @@ function rankView(tabs){
     <div>📸 Photos in your records: <b>+1 each</b> (up to 10 per record)</div>
     <div>⏱ Daily site report signed on the same day: <b>+5 bonus</b></div>
     <div>🔥 Each day you are active (submit or sign): <b>+3</b></div>
-    <div>🐞 Report an error / 💡 suggest an improvement in Feedback: <b>+10</b> · when the admin marks it <b>Done</b>: <b>+20 more</b> · ❓ question <b>+3</b> · helpful replies <b>+2</b> (max 5 a day)</div>
+    <div>🐞 Report an error / 💡 suggest an improvement in Feedback: <b>+5</b> (questions, messages and replies don't score)</div>
     <div class="small muted" style="margin-top:6px">Empty drafts, deleted records and very short messages don't count. Everyone — including management — is on the table. Badges go to the leader of each category.</div></div>
     <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-act="feedback">💡 Share a suggestion</button>${S.canEdit ? `<button class="btn" data-act="rankcsv">⤓ Download ranking (CSV)</button>` : ''}</div></div>`;
 }
 async function rankCsv(){
   const per = S.rankPer || 'year', R = computeRanks(per);
-  const rows = [['Rank', 'Name', 'Points', 'Records', 'Signatures', 'Photos', 'On-time DSR', 'Suggestions', 'Errors reported', 'Feedback done', 'Active days', 'Badges'],
-    ...R.list.map(u => [u.pts ? u.pos : '', nameOf(u.id), u.pts, u.rec, u.sign, u.photo, u.onTime, u.idea, u.err, u.done, u.days, RANK_BADGES.filter(([k]) => (R.badges[k] || []).includes(u.id)).map(x => x[2]).join('; ')])];
+  const rows = [['Rank', 'Name', 'Points', 'Records', 'Signatures', 'Photos', 'On-time DSR', 'Suggestions', 'Errors reported', 'Active days', 'Badges'],
+    ...R.list.map(u => [u.pts ? u.pos : '', nameOf(u.id), u.pts, u.rec, u.sign, u.photo, u.onTime, u.idea, u.err, u.days, RANK_BADGES.filter(([k]) => (R.badges[k] || []).includes(u.id)).map(x => x[2]).join('; ')])];
   const csv = rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n');
   await S.dl.save({filename: `Sadhana team ranking ${R.a} to ${R.b}.csv`, data: '﻿' + csv});
 }
