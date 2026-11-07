@@ -3033,7 +3033,6 @@ function waText(d){
   (x.works || []).filter(r => r && r.work).forEach(r => { const pc = numv(r.pct); L.push(`• ${r.work}` + (!isEmpty(r.pct) ? ` — *${pc}%*` : '')); });
   L.push(...bullets(x.activities));
   if(bullets(x.tomorrow).length) L.push('', `*Tomorrow's Plan*`, ...bullets(x.tomorrow));
-  if(bullets(x.safety).length) L.push('', `*Safety*`, ...bullets(x.safety));
   if(bullets(x.issues).length) L.push('', `*Issues / Delays*`, ...bullets(x.issues));
   return L.join('\n');
 }
@@ -3836,7 +3835,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z34';
+const APP_VER = 'Z35';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
