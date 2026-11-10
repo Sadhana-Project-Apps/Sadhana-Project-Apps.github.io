@@ -1970,6 +1970,7 @@ function projectView(id, tab){
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
   <button class="btn" data-act="dcal" data-p="${esc(id)}">🗓 Daily reports</button>
   <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
+  ${S.canWrite ? `<label class="btn" style="margin:0" title="Upload daily site reports made before the app (SDESB-OPS-P03 PDF) — each one becomes a daily report draft in the app">📥 Import old daily reports<input type="file" accept="application/pdf,.pdf" multiple hidden data-olddsr="${esc(id)}"></label>` : ''}
   ${S.canWrite && !intern() ? `<button class="btn" data-act="scforms" data-p="${esc(id)}">📄 Subcon forms</button><label class="btn" style="margin:0" title="Upload a Word report sent back by the sub-contractor (or one of your existing reports) — the app makes it a Sadhana document">⇪ Upload subcon report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>` : ''}
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
@@ -2866,7 +2867,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Phone back button goes to the previous page</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Import old daily reports (PDF)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3255,7 +3256,7 @@ function docView(id){
     const rq = isNext ? sigReqOf(d) : null, rqOk = rq && rq.slot === i;
     return `<div class="sig wait ${isNext?'next':''}"><div class="role">${esc(s.role)}</div><div class="img">${isNext && S.canWrite ? (blocked ? `<span>Add the ${T.code==='PTW'?'close-out remarks':'response'} first</span>` : `<button class="btn pri sm" data-act="sign" data-id="${esc(d.id)}" data-i="${i}">✍ Sign here</button>`) : `<span>${isNext?'Awaiting signature':'Pending'}</span>`}</div><div class="ds">${esc(s.hint)}</div>${isNext && S.canWrite && !blocked ? (rqOk ? `<div class="small" style="margin-top:6px;color:var(--warn)">Requested from <b>${esc(rq.toName)}</b> <button class="btn sm ghost" data-act="askcancel" data-id="${esc(d.id)}">Cancel</button></div>` : `<button class="btn sm ghost" style="margin-top:6px" data-act="asksign" data-id="${esc(d.id)}">👤 Ask someone to sign</button>`) : ''}</div>`;
   }).join('');
-  const trail = [`<div><i></i><span>Created ${fmtDT(d.createdAt)}<br><span class="muted">by ${esc(nameOf(d.createdBy))}</span></span></div>`]
+  const trail = [`<div><i></i><span>Created ${fmtDT(d.createdAt)}<br><span class="muted">by ${esc(nameOf(d.createdBy))}</span></span></div>`, ...(d.data?._import ? [`<div><i></i><span>Imported from the old report <b>${esc(d.data._import.file || '')}</b>${d.data._import.writer ? `<br><span class="muted">written by ${esc(d.data._import.writer)}</span>` : ''}</span></div>`] : [])]
     .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b><br><span class="muted">${fmtDT(sigs[i].at)}</span></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('');
   return `
   <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
@@ -3563,6 +3564,7 @@ function missingRequired(d, phase){
     if(it.some(r => r.ans === (f.bad || 'No') && isEmpty(r.remarks))) out.push({...f, l: 'remarks / actions for every "' + (f.bad || 'No') + '" item'}); return out; });
   return chk.concat(T.fields.filter(f => f.k && f.req && (phase==='response' ? f.phase==='response' : f.phase!=='response'))
     .filter(f => shown(f, d.data))
+    .filter(f => !(f.t === 'photos' && d.data && d.data._import))
     .filter(f => f.t==='table' ? !cleanRows(f, d.data[f.k]).length : isEmpty(d.data[f.k])));
 }
 function flagMissing(list){
@@ -3858,7 +3860,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z40';
+const APP_VER = 'Z41';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4804,6 +4806,7 @@ document.addEventListener('click', async e => {
     case 'tab': S.view.tab = el.dataset.t; render(); break;
     case 'cat': S.view.cat = el.dataset.c; S.view.tab = 'ALL'; render(); break;
     case 'open': go('doc', {id}); break;
+    case 'opendoc': closeModal(); go('doc', {id}); break;
     case 'newproj': if(intern()){ toast('Interns can update reports only — ask an admin to add a project.', true); break; } projectForm(); break;
     case 'editproj': if(intern()){ toast('Interns can update reports only — ask an admin to change project details.', true); break; } projectForm(projById(id)); break;
     case 'saveproj': saveProject(id); break;
@@ -5020,6 +5023,7 @@ document.addEventListener('change', async e => {
     $('#chatPhN').textContent = (S.chatPhotos || []).length + ' photo(s) attached'; return; }
   if(e.target.id === 'fmtType'){ S.fmtType = e.target.value; S.fmtCfg = clone(projFmt(S.fmtPid, e.target.value) || {}); fmtEditorRender(); return; }
   const t = e.target;
+  if(t.dataset.olddsr && t.files?.length){ const fl = [...t.files]; t.value = ''; importOldDSR(t.dataset.olddsr, fl); return; }
   if(t.dataset.mystamp !== undefined && t.files?.length){ try { stampConfirm(await stampFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nostamp' ? 'No stamp found in that picture — stamp on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
   if(t.dataset.mysig !== undefined && t.files?.length){ try { sigConfirm(await sigFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nosig' ? 'No signature found in that picture — sign with a dark pen on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
   if(t.dataset.role){ const uid = t.dataset.role, role = t.value;
@@ -5553,6 +5557,98 @@ function loadJs(src){ return new Promise((res, rej) => { const sc = document.cre
 async function pdfjs(){
   if(!window.pdfjsLib){ await loadJs(PDFJS + 'pdf.min.js'); window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
   return window.pdfjsLib;
+}
+/* ---------- import daily site reports made before the app (SDESB-OPS-P03 PDF) ---------- */
+async function pdfRows(file){
+  const lib = await pdfjs(), pdf = await lib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise, out = [];
+  for(let i = 1; i <= pdf.numPages; i++){
+    const tc = await (await pdf.getPage(i)).getTextContent();
+    const its = tc.items.filter(it => it.str && it.str.trim()).map(it => ({x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height || 8, s: it.str}));
+    const rows = []; its.sort((a, b) => b.y - a.y || a.x - b.x).forEach(it => { let r = rows.find(r => Math.abs(r.y - it.y) < 2.5); if(!r) rows.push(r = {y: it.y, it: []}); r.it.push(it); });
+    rows.forEach(r => { r.it.sort((a, b) => a.x - b.x); const cells = []; let cur = null, px = null;
+      r.it.forEach(it => { const gap = px == null ? 0 : it.x - px; if(cur && gap < it.h * 0.9) cur.s += (gap > it.h * 0.12 ? ' ' : '') + it.s.replace(/^\s+/, ''); else { cur = {x: it.x, s: it.s.trim()}; cells.push(cur); } px = it.x + it.w; });
+      cells.forEach(c => c.s = c.s.replace(/\s+/g, ' ').trim());
+      out.push({page: i, y: r.y, cells: cells.filter(c => c.s), text: cells.map(c => c.s).join(' ').trim()}); });
+  }
+  return out;
+}
+const OLD_HEADS = [['works', /^SUMMARY OF WORKS/i], ['materials', /^MATERIALS DELIVERED/i], ['visitors', /^VISITORS\b/i], ['vendor', /^VENDOR DETAILS/i], ['manpower', /^CONTRACT WORK ?FORCE/i], ['machinery', /PLANT\s*&\s*MACHINERY/i], ['sign', /^Contractor Representative/i], ['weather', /^WEATHER CHART/i]];
+const MP_ALIAS = [[/general\s*work/i, 'General Workers'], [/operator/i, 'Machinery Operator'], [/(hse|safety)\s*manager/i, 'Safety Manager'], [/safety\s*(supervisor|officer)|\bsss\b|\bsso\b/i, 'Site Safety Supervisor'], [/site\s*supervisor/i, 'Site Supervisor'], [/site\s*manager/i, 'Site Manager'], [/project\s*manager/i, 'Project Manager']];
+function parseOldDSR(rows){
+  if(!rows.some(r => /daily\s*site\s*report/i.test(r.text))) throw new Error('not the Daily Site Report (SDESB-OPS-P03) format');
+  const val = re => { for(const r of rows){ const i = r.cells.findIndex(c => re.test(c.s)); if(i < 0) continue; const c = r.cells[i].s.replace(re, '').replace(/^\s*:\s*/, '').trim(); if(c) return c;
+    for(let j = i + 1; j < r.cells.length; j++){ const v = r.cells[j].s.replace(/^:\s*/, '').trim(); if(v && v !== ':') return v; } return ''; } return ''; };
+  const dm = val(/^Report Date/i).match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/);
+  if(!dm) throw new Error('report date not found');
+  const yr = dm[3].length === 2 ? '20' + dm[3] : dm[3], date = `${yr}-${dm[2].padStart(2, '0')}-${dm[1].padStart(2, '0')}`;
+  // sections, in reading order
+  const heads = []; rows.forEach((r, i) => { const h = OLD_HEADS.find(([, re]) => re.test(r.cells[0]?.s || '')); if(h) heads.push({k: h[0], i}); });
+  const sec = k => { const h = heads.find(x => x.k === k); if(!h) return []; const nx = heads.find(x => x.i > h.i); return rows.slice(h.i + 1, nx ? nx.i : rows.length); };
+  const isNum = v => /^\d+(\.\d+)?$/.test(String(v).trim());
+  // works executed (bullets; a line without a bullet continues the one before)
+  const works = []; sec('works').forEach(r => { const t = r.text; if(!t) return; const m = t.match(/^\s*(?:[●•▪■◦○\-–*·]|\d+[.)])\s*(.*)$/);
+    if(m || !works.length) works.push((m ? m[1] : t).trim()); else works[works.length - 1] += ' ' + t.trim(); });
+  const lines = k => sec(k).filter(r => !/^(VENDOR NAME|VENDOR DESCRIPT|NAME\b.*COMPANY)/i.test(r.text)).map(r => r.cells.map(c => c.s.replace(/^[●•▪■◦\-–*·]\s*/, '')).join(' – ')).filter(Boolean);
+  // manpower
+  const mp = []; sec('manpower').forEach(r => { if(/ROLE NAME|MANPOWER COUNT/i.test(r.text) || r.cells.length < 2) return; const name = r.cells[0].s, q = r.cells[r.cells.length - 1].s; if(isNum(q) && +q > 0) mp.push({name, qty: +q}); });
+  // machinery (work / idle columns by position)
+  const mrows = sec('machinery'), hdr = mrows.find(r => /MACHINERY NAME/i.test(r.text)), xW = hdr?.cells.find(c => /^WORK/i.test(c.s))?.x, xI = hdr?.cells.find(c => /^IDLE/i.test(c.s))?.x;
+  const mc = []; mrows.forEach(r => { if(r === hdr || r.cells.length < 2) return; let work = 0, idle = 0;
+    r.cells.slice(1).forEach(c => { if(!isNum(c.s)) return; if(xI != null && xW != null && Math.abs(c.x - xI) < Math.abs(c.x - xW)) idle += +c.s; else work += +c.s; });
+    if(work || idle) mc.push({name: r.cells[0].s, work, idle}); });
+  // weather: words written in the AM / PM rows of the chart
+  const wx = lab => { const r = sec('weather').find(r => new RegExp('^' + lab + '$', 'i').test(r.cells[0]?.s || '')); const t = r ? r.cells.slice(1).map(c => c.s).join(' ') : '';
+    return /heavy|lebat/i.test(t) ? 'Heavy rain' : /thunder|ribut|petir/i.test(t) ? 'Thunderstorm' : /rain|hujan|\bR\b/i.test(t) ? 'Light rain' : /cloud|mendung|\bC\b/i.test(t) ? 'Cloudy' : /sun|cerah|panas|fine|clear|\bS\b/i.test(t) ? 'Sunny' : ''; };
+  const sg = sec('sign'), nameL = sg.find(r => /^Name:/i.test(r.cells[0]?.s || '')), desL = sg.find(r => /^Designation:/i.test(r.cells[0]?.s || ''));
+  return {date, writer: val(/^Report Writer/i) || (nameL ? nameL.cells[0].s.replace(/^Name:\s*/i, '') : ''), designation: desL ? desL.cells[0].s.replace(/^Designation:\s*/i, '') : '',
+    hours: val(/^Hours Worked/i), dayType: val(/^Work\s*\/\s*Holiday/i), shift: val(/^Shift/i), location: val(/^Location/i),
+    weatherAM: wx('AM'), weatherPM: wx('PM'), works, materials: lines('materials'), visitors: lines('visitors'), vendors: lines('vendor'), manpower: mp, machinery: mc};
+}
+function oldToDSR(pid, o, fileName){
+  const d = newDraft(pid, 'DSR'), x = d.data;
+  x.date = o.date;
+  x.hours = /holiday|cuti|off/i.test(o.dayType) ? 'Holiday / off day' : (o.hours ? o.hours.replace(/\bHours?\b/i, m => m.toLowerCase()) : '');
+  x.weatherAM = o.weatherAM; x.weatherPM = o.weatherPM;
+  x.works = o.works.length ? o.works.map(w => ({work: w, pct: ''})) : [{}];
+  const mp = MANPOWER_LIST.map(trade => ({trade}));
+  o.manpower.forEach(m => { const al = MP_ALIAS.find(([re]) => re.test(m.name)), nm = al ? al[1] : m.name, row = mp.find(r => r.trade.toLowerCase() === nm.toLowerCase());
+    if(row) row.qty = (numv(row.qty) || 0) + m.qty; else mp.push({trade: m.name.replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()), qty: m.qty}); });
+  x.manpower = mp;
+  const mc = MACHINERY_LIST.map(item => ({item}));
+  o.machinery.forEach(m => { const nm = m.name.replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()), row = mc.find(r => r.item.toLowerCase() === nm.toLowerCase());
+    const v = {qty: m.work || '', remarks: m.idle ? `Idle: ${m.idle}` : ''}; if(row) Object.assign(row, v); else mc.push({item: nm, ...v}); });
+  x.machinery = mc;
+  const notes = [];
+  if(o.materials.length) notes.push('Materials delivered: ' + o.materials.join('; '));
+  if(o.visitors.length) notes.push('Visitors: ' + o.visitors.join('; '));
+  if(o.vendors.length) notes.push('Vendors: ' + o.vendors.join('; '));
+  x.activities = notes.join('\n');
+  x._import = {file: fileName, writer: o.writer, designation: o.designation, at: new Date().toISOString(), by: S.me || null};
+  return d;
+}
+async function importOldDSR(pid, files){
+  const p = projById(pid); if(!p) return;
+  if(!navigator.onLine){ toast('No internet — importing needs a connection.', true); return; }
+  toast(`Reading ${files.length} report${files.length === 1 ? '' : 's'}…`);
+  const ok = [], bad = [], have = new Set(S.docs.filter(d => d.type === 'DSR' && d.projectId === pid && !d.deleted).map(d => d.data?.date));
+  for(const f of files){
+    try { if(f.size > 25 * 1024 * 1024) throw new Error('file too large'); const o = parseOldDSR(await pdfRows(f)); ok.push({f, o}); }
+    catch(e){ bad.push({name: f.name, why: e && /Invalid PDF|password/i.test(e.message || e.name || '') ? 'could not open the PDF' : (e.message || 'could not read it')}); }
+  }
+  ok.sort((a, b) => a.o.date.localeCompare(b.o.date));
+  const made = [], keepDraft = S.draft;
+  for(const {f, o} of ok){
+    if(have.has(o.date)){ bad.push({name: f.name, why: `there is already a daily report for ${fmtDate(o.date)}`}); continue; }
+    try { S.draft = oldToDSR(pid, o, f.name); if(await saveDraft()){ have.add(o.date); made.push({id: S.draft.id, date: o.date, o}); } else bad.push({name: f.name, why: 'could not save'}); }
+    catch(e){ bad.push({name: f.name, why: 'could not save'}); }
+  }
+  S.draft = keepDraft; S.dirty = false;
+  showModal(`<div class="box" style="max-width:560px"><div class="mh"><h3>📥 Old daily reports imported</h3></div><div class="mb">
+    ${made.length ? `<p><b>${made.length}</b> report${made.length === 1 ? ' is' : 's are'} now in the app as ${made.length === 1 ? 'a <b>draft</b>' : '<b>drafts</b>'}. Open ${made.length === 1 ? 'it' : 'each one'}, check it (weather, progress %, photos if you have them) and sign to submit. Photos are not required for imported reports.</p>
+    <div class="list">${made.map(m => `<div class="it" data-act="opendoc" data-id="${esc(m.id)}" style="cursor:pointer"><span class="pill type">DSR</span><div class="t"><b>${esc(fmtDate(m.date))}</b><span>${m.o.works.length} work item${m.o.works.length === 1 ? '' : 's'} · manpower ${m.o.manpower.reduce((a, r) => a + r.qty, 0)} · machinery ${m.o.machinery.reduce((a, r) => a + r.work, 0)}${m.o.weatherAM || m.o.weatherPM ? '' : ' · <b>add weather</b>'}</span></div><span class="small">Open ›</span></div>`).join('')}</div>` : ''}
+    ${bad.length ? `<p style="margin-top:12px"><b>Not imported (${bad.length}):</b></p><ul class="small">${bad.map(b => `<li>${esc(b.name)} — ${esc(b.why)}</li>`).join('')}</ul>` : ''}
+    </div></div>`);
+  render();
 }
 const canvasBlob = (c, q) => new Promise(r => c.toBlob(r, 'image/jpeg', q));
 const baseName = n => String(n || 'file').replace(/\.[^.]+$/, '');
