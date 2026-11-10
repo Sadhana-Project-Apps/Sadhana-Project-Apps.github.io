@@ -2867,7 +2867,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Import old daily reports (PDF)</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Edit name under a signature · project files open inside the app on phones</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3250,14 +3250,15 @@ function docView(id){
   const cols = Math.min(T.sigs.length, 4);
   const sigHTML = T.sigs.map((s,i) => {
     const g = sigs[i];
-    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div><div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div><div class="nm">${esc(g.name)}</div><div class="ds">${esc(g.designation||'')}</div><div class="when">${fmtDT(g.at)}</div></div>`;
+    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div><div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div><div class="nm">${esc(g.name)}</div><div class="ds">${esc(g.designation||'')}</div><div class="when">${fmtDT(g.at)}</div>${S.canEdit ? `<button class="btn sm ghost" style="margin-top:6px" data-act="sigedit" data-id="${esc(d.id)}" data-i="${i}">✎ Edit name / designation</button>` : ''}</div>`;
     const isNext = i === st.next;
     const blocked = isNext && s.needsResponse && !respFilled;
     const rq = isNext ? sigReqOf(d) : null, rqOk = rq && rq.slot === i;
     return `<div class="sig wait ${isNext?'next':''}"><div class="role">${esc(s.role)}</div><div class="img">${isNext && S.canWrite ? (blocked ? `<span>Add the ${T.code==='PTW'?'close-out remarks':'response'} first</span>` : `<button class="btn pri sm" data-act="sign" data-id="${esc(d.id)}" data-i="${i}">✍ Sign here</button>`) : `<span>${isNext?'Awaiting signature':'Pending'}</span>`}</div><div class="ds">${esc(s.hint)}</div>${isNext && S.canWrite && !blocked ? (rqOk ? `<div class="small" style="margin-top:6px;color:var(--warn)">Requested from <b>${esc(rq.toName)}</b> <button class="btn sm ghost" data-act="askcancel" data-id="${esc(d.id)}">Cancel</button></div>` : `<button class="btn sm ghost" style="margin-top:6px" data-act="asksign" data-id="${esc(d.id)}">👤 Ask someone to sign</button>`) : ''}</div>`;
   }).join('');
+  const sigEditsTrail = (d.signatures || []).flatMap(g => (g && g.edited || []).map(e => `<div><i></i><span>Name under a signature changed from <b>${esc(e.name)}</b>${e.designation ? ' (' + esc(e.designation) + ')' : ''} to <b>${esc(g.name)}</b><br><span class="muted">${fmtDT(e.at)} by ${esc(nameOf(e.by))}</span></span></div>`));
   const trail = [`<div><i></i><span>Created ${fmtDT(d.createdAt)}<br><span class="muted">by ${esc(nameOf(d.createdBy))}</span></span></div>`, ...(d.data?._import ? [`<div><i></i><span>Imported from the old report <b>${esc(d.data._import.file || '')}</b>${d.data._import.writer ? `<br><span class="muted">written by ${esc(d.data._import.writer)}</span>` : ''}</span></div>`] : [])]
-    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b><br><span class="muted">${fmtDT(sigs[i].at)}</span></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('');
+    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b><br><span class="muted">${fmtDT(sigs[i].at)}</span></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('') + sigEditsTrail.join('');
   return `
   <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
   <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}${d.data?._subcon ? ` <span class="pill draft">From sub-contractor: ${esc(d.data._subcon)}</span>` : ''}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
@@ -3742,6 +3743,28 @@ function padImage(){
   o.getContext('2d').drawImage(c, x, y, w, h, 0, 0, o.width, o.height);
   return o.toDataURL('image/png');
 }
+/* ---------- correct the name / designation under a signature (the signature itself is kept) ---------- */
+function sigEditForm(docId, idx){
+  const d = S.docs.find(x => x.id === docId), g = d && (d.signatures || [])[idx]; if(!g || !S.canEdit) return;
+  showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Edit name / designation</h3></div><div class="mb">
+    <div class="sigprev" style="margin-bottom:10px"><img src="${esc(g.img)}" alt=""></div>
+    <div class="fgrid"><div class="fld"><label>Name <em>*</em></label><input id="seName" value="${esc(g.name || '')}"></div>
+    <div class="fld"><label>Designation</label><input id="seDes" value="${esc(g.designation || '')}"></div></div>
+    ${g.uid === S.me ? `<button class="btn sm" data-act="sigeditme">Use my profile name & designation</button>` : ''}
+    <p class="small muted">The signature, date and time stay as they are. The change is noted in the record trail.</p></div>
+    <div class="mf"><button class="btn pri" data-act="sigeditsave" data-id="${esc(docId)}" data-i="${idx}">Save</button></div></div>`);
+}
+async function sigEditSave(docId, idx){
+  const name = $('#seName').value.trim().replace(/\s+/g, ' '), des = $('#seDes').value.trim();
+  if(name.length < 2){ toast('Enter the name.', true); return; }
+  try { const ref = S.db.doc('docs/' + docId), snap = await ref.get(); if(!snap.exists) throw {code: 'gone'};
+    const sigs = [...(snap.data().signatures || [])], g = sigs[idx]; if(!g) throw {code: 'gone'};
+    if(g.name === name && (g.designation || '') === des){ closeModal(); return; }
+    sigs[idx] = {...g, name, designation: des, edited: [...(g.edited || []), {at: new Date().toISOString(), by: S.me || null, name: g.name || '', designation: g.designation || ''}]};
+    await ref.update({signatures: sigs, updatedAt: new Date().toISOString(), updatedBy: S.me || null});
+    closeModal(); toast('Saved — signature kept ✓'); render(); }
+  catch(e){ dbErr(e); }
+}
 async function doSign(docId, idx){
   const name = $('#sgName').value.trim(), des = $('#sgDes').value.trim();
   if(!name){ $('#fld_sn').classList.add('err'); toast('Enter the signer\'s full name.', true); return; }
@@ -3860,7 +3883,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z41';
+const APP_VER = 'Z42';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4960,6 +4983,9 @@ document.addEventListener('click', async e => {
     case 'sentsave': saveSentLetter(el.dataset.p, el); break;
     case 'sgclear': if(PAD){ PAD.g.clearRect(0,0,PAD.c.width,PAD.c.height); Object.assign(PAD,{strokes:0,minX:1e9,minY:1e9,maxX:-1,maxY:-1}); } break;
     case 'sgdo': doSign(id, +el.dataset.i); break;
+    case 'sigedit': sigEditForm(id, +el.dataset.i); break;
+    case 'sigeditme': $('#seName').value = S.names[S.me] || ''; $('#seDes').value = S.myDes || ''; break;
+    case 'sigeditsave': sigEditSave(id, +el.dataset.i); break;
     case 'closemodal': closeModal(true); render(); break;
     case 'mdraftclear': { MDRAFT.drop(S.modalKey); const k = S.modalKey; mFields().forEach(([, el]) => { if(el.type === 'checkbox') el.checked = el.defaultChecked; else if(el.tagName === 'SELECT'){ const o = [...el.options].find(o => o.defaultSelected); el.value = o ? o.value : el.options[0]?.value; } else el.value = el.defaultValue; }); el.closest('.mrestored')?.remove(); S.modalKey = k; break; }
     case 'confirmok': { const cb = CONFIRM_CB; CONFIRM_CB = null; closeModal(); cb && cb(); break; }
@@ -5733,6 +5759,7 @@ function filesView(pid){
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">Project files</h1><div class="muted small">Tender, LOA, insurance, stamp duty and other reference documents — everyone on the team can open them.</div></div><div class="sp"></div>
   ${S.canWrite ? `<div class="row"><label class="btn pri" style="margin:0">⇪ Upload files<input type="file" multiple hidden data-bulk="files" data-p="${esc(pid)}"></label>${'webkitdirectory' in document.createElement('input') && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<label class="btn" style="margin:0">📁 Upload a folder<input type="file" webkitdirectory multiple hidden data-bulk="folder" data-p="${esc(pid)}"></label>` : ''}<button class="btn ghost" data-act="fileadd" data-p="${esc(pid)}">+ Add one (with details or link)</button></div>` : ''}</div>
   ${S.canWrite && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<div class="dropzone small muted">Tip: drag a folder or files from your computer onto this page to upload them all at once. Sub-folders become groups.</div>` : ''}
+  ${S.filesErr ? `<div class="card pad" style="margin-bottom:14px;border-color:var(--bad)"><b>⚠ Project files could not be loaded${S.filesErr === 'permission-denied' ? ' — no permission' : ''}.</b><div class="small muted">${S.filesErr === 'permission-denied' ? (S.canEdit ? 'The Firebase rules are blocking this account. Publish the latest rules (Firebase console › Firestore › Rules).' : 'Your account is not allowed to open project files. Please tell the admin.') : 'Check your internet connection and open this page again.'}</div></div>` : ''}
   <div class="filters card" style="margin-bottom:14px"><input id="fileq" placeholder="Search title, reference no., notes…" value="${esc(S.fileQ || '')}"></div>
   ${groups.length ? groups.map(([c, fs]) => `<div class="card" style="margin-bottom:14px"><div class="sechead"><h3>${esc(c)}</h3><div class="sp"></div><span class="small muted">${fs.length}</span>${S.canEdit ? `<button class="btn sm ghost" data-act="renamegroup" data-p="${esc(pid)}" data-g="${esc(c)}" title="Rename group">✎</button>` : ''}</div><div class="list">${fs.map(row).join('')}</div></div>`).join('')
     : `<div class="card empty">${q ? 'No documents match your search.' : 'No documents yet. Upload your project folder (tender, LOA, insurance, stamp duty, permits…) so the whole team can find everything.'}</div>`}
@@ -5787,13 +5814,37 @@ async function fileBlob(f){
   const bin = atob(parts.join('')); const u8 = new Uint8Array(bin.length);
   for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
   const blob = new Blob([u8], {type: f.mime || 'application/octet-stream'});
-  if(f.enc === 'gzip') return new Blob([await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()], {type: f.mime || 'application/octet-stream'});
+  if(f.enc === 'gzip'){
+    if(typeof DecompressionStream !== 'undefined') return new Blob([await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()], {type: f.mime || 'application/octet-stream'});
+    if(!window.pako) await loadJs('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js');   // older phones
+    return new Blob([window.pako.ungzip(u8)], {type: f.mime || 'application/octet-stream'});
+  }
   return blob;
+}
+function fileErrMsg(e){
+  const c = e && (e.code || e.message || '');
+  return /permission/i.test(c) ? 'You don\'t have permission to open this file — please tell the admin.' : /missing part/i.test(c) ? 'This file did not finish uploading. Please ask the person who uploaded it to upload it again.' : /Could not load/i.test(c) ? 'Could not load the file viewer — check your connection.' : 'Could not open the file — check your connection and try again.';
+}
+// phones: show PDFs and photos inside the app (no download needed)
+async function fileViewer(f){
+  showModal(`<div class="box" style="max-width:900px"><div class="mh"><h3 style="white-space:normal">${fileIcon(f)} ${esc(f.title)}</h3></div><div class="mb" id="fvBody" style="padding:8px;background:#e9e6df;min-height:200px"><p class="small muted" style="padding:12px">Opening…</p></div>
+    <div class="mf"><button class="btn" data-act="filedl" data-id="${esc(f.id)}">⤓ Download</button></div></div>`);
+  try {
+    const blob = await fileBlob(f), body = $('#fvBody'); if(!body) return;
+    if(/image/.test(f.mime || '')){ body.innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="" style="width:100%;height:auto;display:block;background:#fff">`; return; }
+    const lib = await pdfjs(), pdf = await lib.getDocument({data: new Uint8Array(await blob.arrayBuffer())}).promise; body.innerHTML = '';
+    const W = Math.min(body.clientWidth || 360, 900) - 16;
+    for(let i = 1; i <= pdf.numPages; i++){ if(!document.body.contains(body)) return;
+      const pg = await pdf.getPage(i), vp0 = pg.getViewport({scale: 1}), sc = W / vp0.width * Math.min(2, window.devicePixelRatio || 1), vp = pg.getViewport({scale: sc});
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.style.cssText = 'width:100%;height:auto;display:block;margin:0 0 8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15)';
+      body.appendChild(c); await pg.render({canvasContext: c.getContext('2d'), viewport: vp}).promise; }
+  } catch(e){ console.error(e); const body = $('#fvBody'); if(body) body.innerHTML = `<p style="padding:12px;color:var(--bad)">${esc(fileErrMsg(e))}</p>`; }
 }
 async function openFile(id, download){
   const f = S.files.find(x => x.id === id); if(!f) return;
   if(f.kind === 'link'){ window.open(f.url, '_blank', 'noopener'); return; }
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(mobile && !download && /pdf|image/.test(f.mime || '')){ fileViewer(f); return; }
   // phones can't show a PDF inside a tab, so they download it and open it in the phone's PDF viewer
   const viewable = !download && (/image/.test(f.mime || '') || (/pdf/.test(f.mime || '') && !mobile));
   const w = viewable ? window.open('', '_blank') : null;   // opened during the tap so it isn't blocked
@@ -5803,7 +5854,7 @@ async function openFile(id, download){
     const blob = await fileBlob(f);
     if(w){ w.location.href = URL.createObjectURL(blob); }
     else await S.dl.save({filename: f.name || (f.title + '.pdf'), data: blob});
-  } catch(e){ if(w) w.close(); console.error(e); toast('Could not open the file — check your connection.', true); }
+  } catch(e){ if(w) w.close(); console.error(e); toast(fileErrMsg(e), true); }
 }
 async function deleteFile(id){
   const f = S.files.find(x => x.id === id); if(!f) return;
@@ -6040,7 +6091,7 @@ function startData(){
   const db = S.db;
   const onErr = e => { console.error(e); if(e && e.code === 'permission-denied') return; toast('Lost connection to records — reload the page.', true); };
   unsubs.push(db.collection('projects').onSnapshot(s => { S.projects = s.docs.map(x => ({id: x.id, ...x.data()})); S.loaded.p = 1; softRender(); }, onErr));
-  unsubs.push(db.collection('files').onSnapshot(s => { S.files = s.docs.map(x => ({id: x.id, ...x.data()})); softRender(); }, () => {}));
+  unsubs.push(db.collection('files').onSnapshot(s => { S.files = s.docs.map(x => ({id: x.id, ...x.data()})); S.filesErr = ''; softRender(); }, e => { S.filesErr = (e && e.code) || 'error'; console.warn('files', e); softRender(); }));
   // Only recent documents stream live (keeps daily database reads inside the free plan).
   // Older ones load when a project or the full register is opened.
   unsubs.push(db.collection('docs').orderBy('createdAt', 'desc').limit(RECENT_LIMIT).onSnapshot(s => {
