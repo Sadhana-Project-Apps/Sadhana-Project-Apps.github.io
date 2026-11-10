@@ -1970,7 +1970,6 @@ function projectView(id, tab){
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
   <button class="btn" data-act="dcal" data-p="${esc(id)}">🗓 Daily reports</button>
   <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
-  ${S.canWrite ? `<label class="btn" style="margin:0" title="Upload daily site reports made before the app (SDESB-OPS-P03 PDF) — each one becomes a daily report draft in the app">📥 Import old daily reports<input type="file" accept="application/pdf,.pdf" multiple hidden data-olddsr="${esc(id)}"></label>` : ''}
   ${S.canWrite && !intern() ? `<button class="btn" data-act="scforms" data-p="${esc(id)}">📄 Subcon forms</button><label class="btn" style="margin:0" title="Upload a Word report sent back by the sub-contractor (or one of your existing reports) — the app makes it a Sadhana document">⇪ Upload subcon report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>` : ''}
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
@@ -2867,7 +2866,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Cleaner PDFs (no repeated details, tidier tables)</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Import old daily reports from the Daily reports page</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3883,7 +3882,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z43';
+const APP_VER = 'Z44';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -3964,13 +3963,14 @@ function dsrCal(pid, ym, pickIn){
     cells += `<button class="dcd ${cls} ${k === S.dcal.pick ? 'sel' : ''} ${k === t ? 'tod' : ''}" data-act="dcalday" data-d="${k}" ${k > t ? 'disabled' : ''}>${dd}${L.length ? `<i>${done ? '✓' : '•'}</i>` : ''}</button>`; }
   const pick = S.dcal.pick, L = pick ? (byDay[pick] || []) : [];
   showModal(`<div class="box" style="max-width:520px"><div class="mh"><div><div class="eyebrow">${esc(p.code)} · ${esc(p.name)}</div><h3>Daily reports</h3></div></div><div class="mb">
+    ${S.canWrite ? `<label class="btn" style="margin:0 0 12px;width:100%;justify-content:center;border-style:dashed">📥 Import old daily reports (PDF)<input type="file" accept="application/pdf,.pdf" multiple hidden data-olddsr="${esc(pid)}"></label>` : ''}
     <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn sm" data-act="dcalm" data-m="${fy(prevYm)}">‹</button><b style="flex:1;text-align:center">${first.toLocaleString('en-GB', {month: 'long', year: 'numeric'})}</b><button class="btn sm" data-act="dcalm" data-m="${fy(nextYm)}" ${fy(nextYm) > t.slice(0, 7) ? 'disabled' : ''}>›</button>
       <input type="date" id="dcalGo" value="${esc(pick || '')}" max="${t}" title="Go to a date" style="width:150px"></div>
     <div class="dcal"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>${cells}</div>
     <div class="small muted" style="margin:8px 0 12px"><span class="dkey ok">✓</span> signed &nbsp; <span class="dkey part">•</span> draft / waiting signature &nbsp; <span class="dkey miss"></span> no report (working day)</div>
     ${pick ? `<div class="card pad" style="margin-bottom:10px"><b>${fmtDate(pick)}</b>${L.length ? L.map(d => `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><span class="mono small">${esc(d.number)}</span><span class="pill ${statusOf(d).cls}">${esc(statusOf(d).label)}</span><div class="sp"></div>
         <button class="btn sm" data-act="open" data-id="${esc(d.id)}">Open</button><button class="btn sm dark" data-act="pdf" data-id="${esc(d.id)}">⤓ PDF / print</button></div>`).join('')
-      : `<div class="small muted" style="margin-top:6px">No daily report for this date.</div>${S.canWrite ? `<button class="btn sm pri" style="margin-top:8px" data-act="dcalnew" data-p="${esc(pid)}" data-d="${pick}">+ Make the daily report for this date</button>` : ''}`}</div>` : '<div class="small muted">Tap a date to open or print its daily report.</div>'}
+      : `<div class="small muted" style="margin-top:6px">No daily report for this date.</div>${S.canWrite ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn sm pri" data-act="dcalnew" data-p="${esc(pid)}" data-d="${pick}">+ Make the daily report for this date</button><label class="btn sm" style="margin:0">📥 Import the old report<input type="file" accept="application/pdf,.pdf" multiple hidden data-olddsr="${esc(pid)}"></label></div>` : ''}`}</div>` : '<div class="small muted">Tap a date to open or print its daily report.</div>'}
     <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><span class="small muted" style="flex:1">${monthDocs.length} daily report${monthDocs.length === 1 ? '' : 's'} this month</span>
       ${monthDocs.length ? `<button class="btn sm" data-act="dcalzip" data-p="${esc(pid)}">⤓ All this month (ZIP of PDFs)</button>` : ''}</div>
     <div id="dcalProg" class="small muted"></div></div></div>`);
