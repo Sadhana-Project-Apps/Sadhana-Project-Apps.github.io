@@ -2328,7 +2328,7 @@ function chatView(){
   setTimeout(() => { const b = $('#chatlist'); if(b) b.scrollTop = b.scrollHeight; updateChatBadge(); }, 0);
   const byId = id => S.chat.find(m => m.id === id);
   const openN = S.chat.filter(m => !m.hidden && m.kind !== 'msg' && !chatAnswered(m)).length;
-  return `<div class="pagehead"><div><div class="eyebrow">Help us improve the app</div><h1>Feedback chat</h1></div>${S.canEdit && openN ? `<button class="btn pri" data-act="chatcopy" title="Copies every open error and suggestion as one list — paste it to Claude to get them all fixed in the next update">📋 Copy ${openN} open item${openN > 1 ? 's' : ''} for the next update</button>` : ''}</div>
+  return `<div class="pagehead"><div><div class="eyebrow">Help us improve the app</div><h1>Feedback chat</h1></div></div>
   <div class="tabs">${[['all', 'All'], ['open', 'Not replied yet'], ['err', '🐞 Errors'], ['idea', '💡 Suggestions'], ['q', '❓ Questions']].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="chatf" data-f="${k}">${l}</button>`).join('')}</div>
   <div class="card chatbox"><div id="chatlist" class="chatlist">${list.length ? list.map(m => { const K = CHAT_KINDS[m.kind] || CHAT_KINDS.msg, mine = m.by === S.me, re = m.replyTo && byId(m.replyTo);
     return `<div class="cmsg ${mine ? 'mine' : ''}"><div class="cmeta"><b>${esc(m.name || '')}</b> · ${fmtDT(m.at)}${m.kind !== 'msg' ? ` · <span style="color:${K.c};font-weight:700">${K.i} ${K.l}</span>` : ''}${m.kind !== 'msg' && chatAnswered(m) ? ' · <span class="small" style="color:#2E7D32;font-weight:700">↩ Replied</span>' : ''}</div>
@@ -2617,6 +2617,22 @@ function scurveCanvas(rows){
   g.fillStyle = '#E8711A'; g.fillRect(W / 2 + 40, Hh - 28, 30, 6); g.fillStyle = '#333'; g.fillText('Actual', W / 2 + 80, Hh - 18);
   return c.toDataURL('image/png');
 }
+/* ---------- what not to print twice (shared by PDF and Word) ---------- */
+function printRules(T, d, p){
+  const data = d.data || {}, hN = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const pN = hN(p.name), cN = hN(p.contractNo), nN = hN(d.number), lN = hN(p.location), clN = hN(p.client);
+  const signedAny = (d.signatures || []).some(Boolean);
+  // a field that only repeats the header table (project, client, location, contract no., doc no., document date)
+  const dupField = f => { if(T.cover || f.sec || !['date','datetime','text','auto','select'].includes(f.t)) return false;
+    if(f.k === T.dateField) return true;
+    const v = hN(valueText(f, data[f.k])); if(!v) return false;
+    return v === pN || v === nN || (cN && v === cN) || (pN.length > 12 && v.includes(pN)) || (lN.length > 8 && v === lN) || (clN.length > 4 && v === clN && /client|owner/i.test(f.l)); };
+  // a label that just repeats its section title, or a table title that repeats its first column
+  const sameAsSec = (f, sec) => !!sec && hN(f.l) === hN(sec);
+  const subDup = f => f.t === 'table' && f.cols && f.cols[0] && hN(f.l) === hN(f.cols[0].l);
+  const numLabel = f => f.numLabel || (f.cols && f.cols[0] && hN(f.cols[0].l) === 'item' ? 'NO.' : 'ITEM');
+  return {hN, dupField, sameAsSec, subDup, numLabel, signedAny};
+}
 async function makeDocx(id){
   const d = docById(id); if(!d) return;
   const btn = document.querySelector('[data-act=docx]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing Word…'; }
@@ -2681,24 +2697,26 @@ async function makeDocx(id){
           .map(([a, b]) => { const w = widths([45, 125]); return row([cell(a, w[0], {bold: true, fill: LIGHT}), cell(b || '-', w[1])]); })));
       } else {
         body.push(P([t(docTitleTxt.toUpperCase(), {bold: true, size: 30})], {align: AlignmentType.CENTER, after: 60}));
-        body.push(P(`No. ${d.number}     |     Date: ${fmtDate(docDate(d))}     |     Status: ${st.label}`, {size: 20, align: AlignmentType.CENTER, after: 160}));
+        body.push(P(`${(data.from && data.to) ? 'Period: ' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + '     |     ' : ''}Status: ${st.label}`, {size: 20, align: AlignmentType.CENTER, after: 160}));
         body.push(kvTable([['PROJECT', p.name || ''], ['DOC NO.', d.number], ['CLIENT', p.client || '-'], ['DATE', fmtDate(docDate(d))], ['LOCATION', p.location || '-'], ['CONTRACT NO.', p.contractNo || '-'], ...(data._subcon ? [['SUBCON', data._subcon], ['PREPARED BY', data._subconBy || '-']] : [])]));
       }
       const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase === 'response' && !isEmpty(data[f.k]));
       const hasC = f => { const v = data[f.k]; if(f.t === 'table' && f.nil) return true; if(f.t === 'table') return (v || []).some(r => r && f.cols.some((cc, i) => (f.keepRows ? i > 0 : true) && !isEmpty(r[cc.k]))); if(f.t === 'photos') return (v || []).length > 0; return f.t === 'calc' || f.t === 'auto' || !isEmpty(v); };
+      const PR_ = printRules(T, d, p); let curSec = '';
       let kv = [], skip = false;
       const flush = () => { if(kv.length){ body.push(kvTable(kv)); kv = []; } };
       for(let fi = 0; fi < T.fields.length; fi++){ const f = T.fields[fi];
         if(f.phase === 'response' && !showResp) continue; if(f.pdf === false) continue;
         if(f.sec){ flush(); skip = false;
-          if(T.cover){ let any = false; for(let j = fi + 1; j < T.fields.length && !T.fields[j].sec; j++) if(T.fields[j].pdf !== false && hasC(T.fields[j])) any = true; if(!any){ skip = true; continue; } }
+          curSec = f.sec;
+          if(T.cover || PR_.signedAny){ let any = false; for(let j = fi + 1; j < T.fields.length && !T.fields[j].sec; j++) if(T.fields[j].pdf !== false && (T.fields[j].phase !== 'response' || showResp) && hasC(T.fields[j]) && !PR_.dupField(T.fields[j])) any = true; if(!any){ skip = true; continue; } }
           body.push(H(f.sec)); continue; }
         if(skip) continue;
-        if(['date','datetime','select','text','number','auto'].includes(f.t)){ kv.push([f.l.toUpperCase(), valueText(f, data[f.k]) || '-']); continue; }
+        if(['date','datetime','select','text','number','auto'].includes(f.t)){ if(PR_.dupField(f)) continue; kv.push([f.l.toUpperCase(), valueText(f, data[f.k]) || '-']); continue; }
         flush();
-        if((T.cover || f.opt || f.hideEmpty) && !hasC(f)) continue;
+        if((T.cover || f.opt || f.hideEmpty || (PR_.signedAny && f.t === 'photos')) && !hasC(f)) continue;
         if(f.t === 'textarea' || f.t === 'checks'){ const w = widths([170]);
-          body.push(table(w, [row([cell(f.l.toUpperCase(), w[0], {bold: true, fill: GREEN})]), row([cell(String(valueText(f, data[f.k]) || '-').split('\n').map(l => P(l, {after: 20})), w[0])])]), P('', {after: 80})); }
+          body.push(table(w, [...(PR_.sameAsSec(f, curSec) ? [] : [row([cell(f.l.toUpperCase(), w[0], {bold: true, fill: GREEN})])]), row([cell(String(valueText(f, data[f.k]) || '-').split('\n').map(l => P(l, {after: 20})), w[0])])]), P('', {after: 80})); }
         else if(f.t === 'table'){
           const days = periodDays(data, f.maxDays || 7), cols = f.cols.filter(cc => cc.day == null || cc.day < days);
           let rows = f.keepRows ? (data[f.k] || []).filter(r => r && !isEmpty(r[f.cols[0].k]) && (!f.printFilled || f.cols.slice(1).some(cc => !isEmpty(r[cc.k])))) : cleanRows(f, data[f.k]);
@@ -2709,14 +2727,14 @@ async function makeDocx(id){
             try { const url = scurveCanvas(rows); body.push(new Paragraph({alignment: AlignmentType.CENTER, children: [new ImageRun({type: 'png', data: durl2u8(url), transformation: {width: 600, height: 300}})]})); } catch(e){}
             continue; }
           const dayCols = cols.filter(cc => cc.day != null);
-          const head = [...(f.num ? [f.numLabel || 'ITEM'] : []), ...cols.map(cc => (cc.day != null ? dayLabel(data.from, cc.day).slice(0, days > 14 ? 2 : 5) : cc.l).toUpperCase()), ...(f.rowTotal ? ['TOTAL'] : [])];
+          const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => (cc.day != null ? dayLabel(data.from, cc.day).slice(0, days > 14 ? 2 : 5) : cc.l).toUpperCase()), ...(f.rowTotal ? ['TOTAL'] : [])];
           const lenOf = cc => Math.max(String(cc.l).length * 0.8, ...rows.map(r => Math.min(70, String(r[cc.k] ?? '').length)));
           const wts = [...(f.num ? [15] : []), ...cols.map(cc => cc.day != null ? 6 : (cc.pw || Math.max(17, Math.min(55, lenOf(cc) * (cc.n ? 1.6 : 1.2))))), ...(f.rowTotal ? [13] : [])], w = widths(wts);
           const small = head.length > 12 ? 13 : head.length > 8 ? 15 : 17;
           const tc0 = cols.find(cc => !cc.n && cc.day == null);
           const isGrp = r => !f.keepRows && tc0 && (r._g || (cols.filter(cc => cc !== tc0).every(cc => isEmpty(r[cc.k])) && String(r[tc0.k] || '').trim() === String(r[tc0.k] || '').trim().toUpperCase() && /[A-Z]{3}/.test(r[tc0.k] || '')));
           const grpOn = cols.length > 1 && rows.some(isGrp) && rows.some(r => !isGrp(r));
-          if(f.sub !== false) body.push(P([t(f.l.toUpperCase(), {bold: true, size: 17})], {before: 80, after: 60, keepNext: true}));
+          if(f.sub !== false && !PR_.subDup(f) && !PR_.sameAsSec(f, curSec)) body.push(P([t(f.l.toUpperCase(), {bold: true, size: 17})], {before: 80, after: 60, keepNext: true}));
           const hgw = !dayCols.length && !f.num && !f.rowTotal ? headGroupRows(f, head) : null;
           const out = hgw ? (() => { let i = 0; const top = hgw.top.map(h => { const ww = w.slice(i, i + (h.cs || 1)).reduce((a, b) => a + b, 0); i += h.cs || 1; return cell(h.l, ww, {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small, span: h.cs, rs: h.rs}); });
               const bi = []; i = 0; hgw.top.forEach(h => { if(h.cs) for(let j = 0; j < h.cs; j++) bi.push(i + j); i += h.cs || 1; });
@@ -2866,7 +2884,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Import old daily reports from the Daily reports page</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · No repeated details in PDF & Word</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3882,7 +3900,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z44';
+const APP_VER = 'Z45';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4259,7 +4277,7 @@ async function makePDF(id, opt){
       doc.setFont('helvetica','normal'); doc.setFontSize(10);
       doc.text(fitTxt(doc, pt(((data.from && data.to) ? 'Period: ' + periodTxt + '     |     ' : '') + 'Status: ' + st.label), CW), HS.W/2, y + 11, {align:'center'});
       y += 16;
-      if(T.formRef){ doc.setFontSize(7.5); doc.setTextColor(110); doc.text(pt('Form ' + T.code + ' · ' + T.formRef), HS.W/2, y - 1, {align:'center'}); doc.setTextColor(...INK); y += 3; }
+      if(T.formRef){ doc.setFontSize(7.5); doc.setTextColor(110); doc.text(pt(T.formRef), HS.W/2, y - 1, {align:'center'}); doc.setTextColor(...INK); y += 3; }
       doc.autoTable({...base, startY:y, body:[
         ['PROJECT', pt(p.name || ''), 'DOC NO.', pt(d.number)],
         ['CLIENT', pt(p.client || '-'), 'DATE', docDateTxt],
@@ -4274,13 +4292,7 @@ async function makePDF(id, opt){
     const flush = () => { if(!kv.length) return; const rows = []; for(let i = 0; i < kv.length; i += 2) rows.push(kv[i+1] ? [kv[i][0], kv[i][1], kv[i+1][0], kv[i+1][1]] : [kv[i][0], {content: kv[i][1], colSpan: 3}]);
       const vw = (CW - 72) / 2;
       doc.autoTable({...base, startY:y + 1, body:rows, columnStyles:{0:{cellWidth:36, fontStyle:'bold', fillColor:LABEL_FILL}, 1:{cellWidth: kv.length > 1 ? vw : 'auto'}, 2:{cellWidth:36, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth: vw}}}); after(); kv = []; };
-    // fields that only repeat what the header table already shows (project name, contract no., doc no., document date)
-    const hN = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''), pN = hN(p.name), cN = hN(p.contractNo), nN = hN(d.number);
-    const dupField = f => { if(T.cover || f.sec || !['date','datetime','text','auto','select'].includes(f.t)) return false;
-      if(f.k === T.dateField) return true;
-      const v = hN(valueText(f, data[f.k])); if(!v) return false;
-      return v === pN || v === nN || (cN && v === cN) || (pN.length > 12 && v.includes(pN)); };
-    const signedAny = (d.signatures || []).some(Boolean);
+    const PR_ = printRules(T, d, p), hN = PR_.hN, dupField = PR_.dupField, signedAny = PR_.signedAny;
     let curSec = '';
     let started = false, pendingSub = null;
     // reports with a cover: leave out sections that have nothing in them
@@ -4343,7 +4355,7 @@ async function makePDF(id, opt){
         const tc0 = cols.find(cc => !cc.n && cc.day == null);
         const isGrp = r => !f.keepRows && tc0 && (r._g || (cols.filter(cc => cc !== tc0 && !cc.calc && !cc.mul).every(cc => isEmpty(r[cc.k])) && /^(\d+[.)]\s|[A-Z0-9 &/(),.'–-]{4,}$)/.test(String(r[tc0.k] || '').trim()) && String(r[tc0.k] || '').trim() === String(r[tc0.k] || '').trim().toUpperCase()));
         const grpOn = cols.length > 1 && rows.some(isGrp) && rows.some(r => !isGrp(r));
-        const head = [...(f.num ? [f.numLabel || 'ITEM'] : []), ...cols.map(cc => pt((cc.day != null ? (days > 14 ? dayLabel(data.from, cc.day).slice(0, 2) : dayLabel(data.from, cc.day)) : cc.l).toUpperCase()))];
+        const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => pt((cc.day != null ? (days > 14 ? dayLabel(data.from, cc.day).slice(0, 2) : dayLabel(data.from, cc.day)) : cc.l).toUpperCase()))];
         const dayCols = cols.filter(cc => cc.day != null);
         if(f.rowTotal) head.push('TOTAL');
         let gN = 0, iN = 0;
@@ -4375,9 +4387,10 @@ async function makePDF(id, opt){
           foot = [[...(f.num ? [''] : []), ...cols.map(cc => cc.day != null ? String(sums[dayCols.indexOf(cc)]) : (cc === cols[0] ? 'TOTAL' : '')), ...(f.rowTotal ? [String(sums.reduce((a, b) => a + b, 0))] : [])]];
         }
         // label above the table is drawn only after deciding where the table goes (never left alone at the bottom of a page)
-        const preH = (f.sub !== false ? 6.5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
+        const showSub = f.sub !== false && !PR_.subDup(f) && !PR_.sameAsSec(f, curSec);
+        const preH = (showSub ? 6.5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
         const drawPre = () => {
-          if(f.sub !== false){ y += 1.5; doc.setFont('helvetica','bold'); doc.setFontSize(8.8 * hs); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), halfX, y + 3.5 * hs); y += 5 * hs; }
+          if(showSub){ y += 1.5; doc.setFont('helvetica','bold'); doc.setFontSize(8.8 * hs); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), halfX, y + 3.5 * hs); y += 5 * hs; }
           if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(data.from + 'T00:00:00'), m2 = new Date((data.to || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + ')'), L, y + 3); } y += 5; } };
         const colStyles = {}; let ci = 0;
         if(f.num) colStyles[ci++] = {cellWidth:12, halign:'center'};
