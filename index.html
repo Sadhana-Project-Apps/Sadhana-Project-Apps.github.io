@@ -2884,7 +2884,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · No repeated details in PDF & Word</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Add / remove signatures on any document</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3287,6 +3287,7 @@ function docView(id){
         <tr><td class="k">Location</td><td>${esc(p.location||'—')}</td><td class="k">Contract no.</td><td>${esc(p.contractNo||'—')}</td></tr></table>
       ${docBodyHTML(d)}
       <div class="sigs" style="grid-template-columns:repeat(${cols},1fr)">${sigHTML}</div>
+      ${S.canWrite && st.next !== -1 && (!sigs.some(Boolean) || S.canEdit) ? `<div style="text-align:right;margin-top:6px"><button class="btn sm ghost" data-act="sigsetup" data-id="${esc(d.id)}">✍ Add / remove signatures</button></div>` : ''}
     </div>
     <aside class="side">
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
@@ -3564,7 +3565,7 @@ function editView(){
   ${d.type === 'ENM' && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⤓</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Fill from this month's records</b><br>Copies the results of this month's Environmental Monitoring Report and every BMP inspection checklist (with photos) signed this month.</span><button class="btn sm pri" data-act="fillenv">Fill now</button></div>` : ''}
   ${d.data?._from && !resp ? `<div class="vhint form" style="align-items:center"><b>↻</b><span>Started from <b>${esc(d.data._from)}</b> — update what has changed.</span></div>` : ''}
   ${(d.type === 'PR' || d.type === 'MM') && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⤓</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Fill from daily reports</b><br>Copies ${d.type === 'PR' ? 'weather, ' : ''}manpower and machinery for this period from the daily site reports.</span><button class="btn sm pri" data-act="fillpr">Fill now</button></div>` : ''}
-  <div class="form">${html}</div>
+  <div class="form">${html}${!resp ? `<div class="fsec"><h3>Signatures</h3></div><div class="card pad" style="box-shadow:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">✍ ${T.sigs.map(s => `<b>${esc(s.role)}</b>${s.hint ? ` <span class="muted small">(${esc(s.hint)})</span>` : ''}`).join(' · ')}</span><button class="btn sm" data-act="sigsetup">Add / remove signatures</button></div>` : ''}</div>
   ${S.sample ? '' : '<!--'}<button class="fab" data-act="voice" aria-label="Speak (voice note)"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg><span>Tap to speak</span></button>${S.sample ? '' : '-->'}
   <div class="actbar"><div class="in">
     <button class="btn ghost" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">Cancel</button><div class="sp"></div>
@@ -3761,6 +3762,48 @@ function padImage(){
   return o.toDataURL('image/png');
 }
 /* ---------- correct the name / designation under a signature (the signature itself is kept) ---------- */
+/* ---------- add / remove signatures on a document (and remember them for the project) ---------- */
+function sigSetup(docId){
+  const d = docId ? S.docs.find(x => x.id === docId) : S.draft; if(!d) return;
+  const T = TT(d), n = (d.signatures || []).filter(Boolean).length;
+  S.sgs = {docId, list: T.sigs.map(s => ({role: s.role, hint: s.hint || ''})), locked: n, remember: true};
+  sigSetupRender();
+}
+function sigSetupRender(){
+  const g = S.sgs, d = g.docId ? S.docs.find(x => x.id === g.docId) : S.draft, T = TT(d), p = projById(d.projectId) || {};
+  showModal(`<div class="box" style="max-width:560px"><div class="mh"><h3>✍ Signatures</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0">Who signs this ${esc(T.name)}, in order. Add a line for each person (e.g. the client's engineer, safety and security).</p>
+    ${g.list.map((s, i) => i < g.locked ? `<div class="row" style="gap:8px;margin:6px 0;opacity:.7"><span class="pill ok">Signed</span><b>${esc(s.role)}</b><span class="small muted">${esc(s.hint)}</span></div>`
+      : `<div style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:8px"><b class="small muted" style="width:18px;padding-top:9px">${i + 1}.</b>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+          <input data-sgsr="${i}" value="${esc(s.role)}" placeholder="Role, e.g. Checked by" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px;font-weight:600">
+          <input data-sgsh="${i}" value="${esc(s.hint)}" placeholder="Who, e.g. Proton – Security & Admin Service" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px"></div>
+        <div style="display:flex;flex-direction:column;gap:4px"><button class="btn sm ghost danger" data-act="sgsdel" data-i="${i}" title="Remove" ${g.list.length <= 1 ? 'disabled' : ''}>✕</button>
+        <button class="btn sm ghost" data-act="sgsup" data-i="${i}" title="Move up" ${i <= g.locked ? 'disabled' : ''}>↑</button></div></div>`).join('')}
+    <button class="btn sm" data-act="sgsadd" style="margin-top:6px">+ Add signature</button>
+    <label style="display:flex;gap:10px;margin-top:14px;align-items:flex-start;text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:inherit"><input type="checkbox" id="sgsRemember" ${g.remember ? 'checked' : ''} style="width:20px;height:20px;margin-top:1px;flex:none"><span>Use these signatures for every new <b>${esc(T.name)}</b> in <b>${esc(p.code || 'this project')}</b></span></label>
+    </div><div class="mf"><button class="btn pri" data-act="sgssave">Save</button></div></div>`);
+}
+function sigSetupCollect(){
+  const g = S.sgs; if(!g) return;
+  document.querySelectorAll('[data-sgsr]').forEach(i => { const k = +i.dataset.sgsr; if(g.list[k]) g.list[k].role = i.value; });
+  document.querySelectorAll('[data-sgsh]').forEach(i => { const k = +i.dataset.sgsh; if(g.list[k]) g.list[k].hint = i.value; });
+  const r = $('#sgsRemember'); if(r) g.remember = r.checked;
+}
+async function sigSetupSave(){
+  sigSetupCollect(); const g = S.sgs, d = g.docId ? S.docs.find(x => x.id === g.docId) : S.draft; if(!d) return;
+  const list = g.list.map(s => ({role: s.role.trim().replace(/\s+/g, ' '), hint: s.hint.trim()})).filter((s, i) => i < g.locked || s.role);
+  if(!list.length){ toast('Keep at least one signature.', true); return; }
+  if(list.length > 8){ toast('Up to 8 signatures.', true); return; }
+  const fmt = {...(d.fmt || {}), sigs: list};
+  try {
+    if(g.docId){ await S.db.doc('docs/' + d.id).update({fmt, updatedAt: new Date().toISOString(), updatedBy: S.me || null}); d.fmt = fmt; }
+    else { d.fmt = fmt; S.dirty = true; }
+    if(g.remember){ const p = projById(d.projectId), cur = clone(projFmt(d.projectId, d.type) || {}); cur.sigs = list;
+      await S.db.doc('projects/' + d.projectId).update({['formCfg.' + d.type]: cur}); if(p) p.formCfg = {...(p.formCfg || {}), [d.type]: cur}; }
+    closeModal(); toast(g.remember ? 'Signatures saved — new ' + TT(d).name + 's in this project will use them' : 'Signatures saved'); render();
+  } catch(e){ dbErr(e); }
+}
 function sigEditForm(docId, idx){
   const d = S.docs.find(x => x.id === docId), g = d && (d.signatures || [])[idx]; if(!g || !S.canEdit) return;
   showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Edit name / designation</h3></div><div class="mb">
@@ -3900,7 +3943,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z45';
+const APP_VER = 'Z46';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5008,6 +5051,11 @@ document.addEventListener('click', async e => {
     case 'sgclear': if(PAD){ PAD.g.clearRect(0,0,PAD.c.width,PAD.c.height); Object.assign(PAD,{strokes:0,minX:1e9,minY:1e9,maxX:-1,maxY:-1}); } break;
     case 'sgdo': doSign(id, +el.dataset.i); break;
     case 'sigedit': sigEditForm(id, +el.dataset.i); break;
+    case 'sigsetup': sigSetup(el.dataset.id || null); break;
+    case 'sgsadd': sigSetupCollect(); S.sgs.list.push({role: '', hint: ''}); sigSetupRender(); setTimeout(() => { const ins = document.querySelectorAll('[data-sgsr]'); ins[ins.length - 1]?.focus(); }, 30); break;
+    case 'sgsdel': sigSetupCollect(); S.sgs.list.splice(+el.dataset.i, 1); sigSetupRender(); break;
+    case 'sgsup': { sigSetupCollect(); const i = +el.dataset.i, L = S.sgs.list; if(i > S.sgs.locked){ [L[i - 1], L[i]] = [L[i], L[i - 1]]; } sigSetupRender(); break; }
+    case 'sgssave': sigSetupSave(); break;
     case 'sigeditme': $('#seName').value = S.names[S.me] || ''; $('#seDes').value = S.myDes || ''; break;
     case 'sigeditsave': sigEditSave(id, +el.dataset.i); break;
     case 'closemodal': closeModal(true); render(); break;
