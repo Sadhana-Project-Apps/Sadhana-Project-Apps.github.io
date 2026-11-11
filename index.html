@@ -1823,6 +1823,7 @@ function homeView(){
   <div class="pagehead"><div><div class="eyebrow">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><h1>Projects</h1></div><div class="sp"></div>
     ${S.canWrite && !intern() ? `<button class="btn pri" data-act="newproj">+ New project</button>` : ''}</div>
   ${installBanner()}
+  ${(() => { if(!S.canEdit) return ''; const dr = S.docs.filter(x => x.delReq); return dr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--bad)"><div class="sechead"><h3>🗑 Deletion requests</h3><div class="sp"></div><span class="pill" style="background:#fde8e8;color:#b42318">${dr.length}</span></div><div class="list">${dr.map(x => `<div class="it" data-act="open" data-id="${esc(x.id)}" style="cursor:pointer;flex-wrap:wrap"><span class="pill type">${esc(TT(x).code)}</span><div class="t" style="white-space:normal"><b style="font-weight:500">${esc(x.number)} · ${esc(docTitle(x))}</b><span>${esc(x.delReq.name || nameOf(x.delReq.by))}: “${esc(x.delReq.reason || '')}”</span></div><span class="small">Review ›</span></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { const mm = myMentions(); return mm.length ? `<div class="card" style="margin-bottom:16px;border-color:#1d4ed8"><div class="sechead"><h3>📌 Assigned to you</h3><div class="sp"></div><span class="pill" style="background:#e7f0ff;color:#1d4ed8">${mm.length}</span></div><div class="list">${mm.map(({p, a, v}) => `<div class="it" style="align-items:flex-start;flex-wrap:wrap"><span class="pill type">${esc(p.code)}</span><div class="t" style="white-space:normal"><b class="full" style="font-weight:500">${a.icon} ${a.text}</b><span>from ${esc(v.fromName || nameOf(v.from))} · ${esc(fmtDate(v.at))}${v.note ? ' — “' + esc(v.note) + '”' : ''}</span></div><span class="row" style="gap:6px">${S.canWrite ? alertBtn(a.act) : ''}<button class="btn sm" data-act="mndone" data-p="${esc(p.id)}" data-k="${esc(a.key)}">✓ Done</button></span></div>`).join('')}</div></div>` : ''; } catch(e){ return ''; } })()}
   ${(() => { const mr = myRequests(); return mr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--warn)"><div class="sechead"><h3>✍ Waiting for your signature</h3><div class="sp"></div><span class="pill pending"><span class="dot"></span>${mr.length}</span></div><div class="list">${mr.map(({d, r, p}) => `<div class="it" data-act="open" data-id="${esc(d.id)}"><span class="pill type">${esc(d.type)}</span><div class="t"><b>${esc(d.number)} — ${esc(docTitle(d))}</b><span>${esc(p.code)} · ${esc(r.role)} · asked by ${esc(r.fromName || '')}${r.note ? ' — “' + esc(r.note) + '”' : ''}</span></div><button class="btn sm pri" data-act="open" data-id="${esc(d.id)}">Sign</button></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { return alertsHome(); } catch(e){ console.error(e); return ''; } })()}
@@ -2884,7 +2885,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Add / remove signatures on any document</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Delete your own mistakes · ask admin to delete signed documents</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3305,9 +3306,12 @@ function docView(id){
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
         ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
         ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
-        ${(S.canEdit || (st.next===0 && d.createdBy===S.me && !intern())) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">Delete</button>`:''}
+        ${S.canEdit || canSelfDelete(d) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
+          : S.canWrite && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}
         </div></details>
       </div></div>
+      ${d.delReq ? `<div class="card pad" style="border-color:var(--bad);margin-bottom:12px"><b>🗑 Deletion requested</b> by ${esc(d.delReq.name || nameOf(d.delReq.by))} · ${fmtDT(d.delReq.at)}<div class="small" style="margin:4px 0 8px">${esc(d.delReq.reason || '')}</div>
+        ${S.canEdit ? `<div class="row" style="gap:8px"><button class="btn sm danger" data-act="del" data-id="${esc(d.id)}">Delete it</button><button class="btn sm" data-act="delkeep" data-id="${esc(d.id)}">Keep it</button></div>` : '<div class="small muted">Waiting for the admin.</div>'}</div>` : ''}
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Record trail</div><div class="trail">${trail}</div></div>
     </aside>
   </div>`;
@@ -3763,6 +3767,12 @@ function padImage(){
 }
 /* ---------- correct the name / designation under a signature (the signature itself is kept) ---------- */
 /* ---------- add / remove signatures on a document (and remember them for the project) ---------- */
+// staff may delete what they made while nobody else has signed it (interns ask the admin instead)
+function canSelfDelete(d){
+  if(!d || !S.canWrite || intern() || d.createdBy !== S.me) return false;
+  const sg = (d.signatures || []).filter(Boolean);
+  return sg.length === 0 || (sg.length === 1 && (d.signatures || [])[0] && d.signatures[0].uid === S.me && (d.signatures || []).length === 1);
+}
 function sigSetup(docId){
   const d = docId ? S.docs.find(x => x.id === docId) : S.draft; if(!d) return;
   const T = TT(d), n = (d.signatures || []).filter(Boolean).length;
@@ -3943,7 +3953,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z46';
+const APP_VER = 'Z47';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5070,8 +5080,17 @@ document.addEventListener('click', async e => {
     case 'zoom': showModal(`<div class="box wide lightbox"><div class="mh"><h3 style="font-size:15px">${esc(el.dataset.cap||'Photo')}</h3><div class="sp"></div><button class="btn sm" data-act="closemodal">Close</button></div><div class="mb"><img ${photoAttr(el.dataset.zid)} alt=""></div></div>`); break;
     case 'revert': confirmBox('Return to draft?', 'All signatures on this document will be removed so it can be edited again. This is recorded as an update.', 'Return to draft', async () => {
       try { await S.db.doc('docs/'+id).update({signatures:[], updatedAt:new Date().toISOString(), updatedBy:S.me||null, revertedAt:new Date().toISOString()}); toast('Returned to draft'); render(); } catch(err){ dbErr(err); } }, true); break;
+    case 'delreq': showModal(`<div class="box" style="max-width:460px"><div class="mh"><h3>🗑 Ask admin to delete</h3></div><div class="mb">
+        <p class="small muted" style="margin-top:0">Someone else has already signed this document, so only an admin can delete it. Say why it should go.</p>
+        <div class="fld"><label>Reason <em>*</em></label><input id="delWhy" placeholder="e.g. Made by mistake / duplicate of …"></div></div>
+        <div class="mf"><button class="btn danger" data-act="delreqsend" data-id="${esc(id)}">Send request</button></div></div>`); break;
+    case 'delreqsend': { const why = $('#delWhy').value.trim(); if(why.length < 3){ toast('Write a short reason.', true); break; }
+      try { const v = {by: S.me || null, name: S.names[S.me] || '', at: new Date().toISOString(), reason: why}; await S.db.doc('docs/' + id).update({delReq: v}); const g = docById(id); if(g) g.delReq = v; closeModal(); toast('Request sent to the admin'); render(); }
+      catch(err){ if(err && err.code === 'permission-denied') toast('Not allowed yet — the admin needs to publish the latest Firebase rules.', true); else dbErr(err); } break; }
+    case 'delkeep': try { await S.db.doc('docs/' + id).update({delReq: null}); const g = docById(id); if(g) g.delReq = null; toast('Kept'); render(); } catch(err){ dbErr(err); } break;
     case 'del': confirmBox('Delete this document?', 'This permanently removes the document and its signatures from the project record.', 'Delete', async () => {
-      const gone = docById(id), pid = gone?.projectId; try { await S.db.doc('docs/'+id).delete(); if(gone) await releaseSeq(gone.projectId, gone.type); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); } catch(err){ dbErr(err); } }, true); break;
+      const gone = docById(id), pid = gone?.projectId; try { await S.db.doc('docs/'+id).delete(); if(gone) await releaseSeq(gone.projectId, gone.type).catch(() => {}); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); }
+      catch(err){ if(err && err.code === 'permission-denied' && !S.canEdit) toast('Not allowed yet — the admin needs to publish the latest Firebase rules, or use "Ask admin to delete".', true); else dbErr(err); } }, true); break;
     case 'savesettings': { const vals = {}; document.querySelectorAll('[data-set]').forEach(i => vals[i.dataset.set] = i.value.trim()); if(!vals.name) vals.name = COMPANY_DEFAULT.name;
       try { await S.db.doc('settings/company').set({...company(), ...vals}); toast('Saved'); } catch(err){ dbErr(err); } break; }
     case 'rmlh': try { await S.db.doc('settings/company').set({...company(), letterheadId:''}); } catch(err){ dbErr(err); } break;
