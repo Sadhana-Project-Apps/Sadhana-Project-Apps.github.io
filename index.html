@@ -1823,7 +1823,7 @@ function homeView(){
   <div class="pagehead"><div><div class="eyebrow">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><h1>Projects</h1></div><div class="sp"></div>
     ${S.canWrite && !intern() ? `<button class="btn pri" data-act="newproj">+ New project</button>` : ''}</div>
   ${installBanner()}
-  ${(() => { if(!S.canEdit) return ''; const dr = S.docs.filter(x => x.delReq); return dr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--bad)"><div class="sechead"><h3>🗑 Deletion requests</h3><div class="sp"></div><span class="pill" style="background:#fde8e8;color:#b42318">${dr.length}</span></div><div class="list">${dr.map(x => `<div class="it" data-act="open" data-id="${esc(x.id)}" style="cursor:pointer;flex-wrap:wrap"><span class="pill type">${esc(TT(x).code)}</span><div class="t" style="white-space:normal"><b style="font-weight:500">${esc(x.number)} · ${esc(docTitle(x))}</b><span>${esc(x.delReq.name || nameOf(x.delReq.by))}: “${esc(x.delReq.reason || '')}”</span></div><span class="small">Review ›</span></div>`).join('')}</div></div>` : ''; })()}
+  ${(() => { if(!S.canAdmin) return ''; const dr = S.docs.filter(x => x.delReq); return dr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--bad)"><div class="sechead"><h3>🗑 Deletion requests</h3><div class="sp"></div><span class="pill" style="background:#fde8e8;color:#b42318">${dr.length}</span></div><div class="list">${dr.map(x => `<div class="it" data-act="open" data-id="${esc(x.id)}" style="cursor:pointer;flex-wrap:wrap"><span class="pill type">${esc(TT(x).code)}</span><div class="t" style="white-space:normal"><b style="font-weight:500">${esc(x.number)} · ${esc(docTitle(x))}</b><span>${esc(x.delReq.name || nameOf(x.delReq.by))}: “${esc(x.delReq.reason || '')}”</span></div><span class="small">Review ›</span></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { const mm = myMentions(); return mm.length ? `<div class="card" style="margin-bottom:16px;border-color:#1d4ed8"><div class="sechead"><h3>📌 Assigned to you</h3><div class="sp"></div><span class="pill" style="background:#e7f0ff;color:#1d4ed8">${mm.length}</span></div><div class="list">${mm.map(({p, a, v}) => `<div class="it" style="align-items:flex-start;flex-wrap:wrap"><span class="pill type">${esc(p.code)}</span><div class="t" style="white-space:normal"><b class="full" style="font-weight:500">${a.icon} ${a.text}</b><span>from ${esc(v.fromName || nameOf(v.from))} · ${esc(fmtDate(v.at))}${v.note ? ' — “' + esc(v.note) + '”' : ''}</span></div><span class="row" style="gap:6px">${S.canWrite ? alertBtn(a.act) : ''}<button class="btn sm" data-act="mndone" data-p="${esc(p.id)}" data-k="${esc(a.key)}">✓ Done</button></span></div>`).join('')}</div></div>` : ''; } catch(e){ return ''; } })()}
   ${(() => { const mr = myRequests(); return mr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--warn)"><div class="sechead"><h3>✍ Waiting for your signature</h3><div class="sp"></div><span class="pill pending"><span class="dot"></span>${mr.length}</span></div><div class="list">${mr.map(({d, r, p}) => `<div class="it" data-act="open" data-id="${esc(d.id)}"><span class="pill type">${esc(d.type)}</span><div class="t"><b>${esc(d.number)} — ${esc(docTitle(d))}</b><span>${esc(p.code)} · ${esc(r.role)} · asked by ${esc(r.fromName || '')}${r.note ? ' — “' + esc(r.note) + '”' : ''}</span></div><button class="btn sm pri" data-act="open" data-id="${esc(d.id)}">Sign</button></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { return alertsHome(); } catch(e){ console.error(e); return ''; } })()}
@@ -2246,7 +2246,7 @@ const sigReqOf = d => ((projById(d.projectId) || {}).sigReq || {})[d.id] || null
 const appLink = d => location.origin + location.pathname + '#doc=' + d.id + '&p=' + d.projectId;
 function askSignForm(id){
   const d = docById(id); if(!d) return; const T = TT(d), st = statusOf(d), slot = T.sigs[st.next];
-  const people = (S.users || []).filter(u => (u.role === 'staff' || u.role === 'admin') && u.id !== S.me).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const people = (S.users || []).filter(u => ['staff', 'admin', 'dev'].includes(u.role) && u.id !== S.me).sort((a, b) => String(a.name).localeCompare(String(b.name)));
   showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Ask someone to sign</h3></div><div class="mb"><div class="fgrid">
     <div class="fld"><label>Signature needed</label><div class="autobox"><span>${esc(slot.role)} — ${esc(slot.hint)}</span></div></div>
     <div class="fld"><label>Who should sign? <em>*</em></label><select id="askWho"><option value=""></option>${people.map(u => `<option value="${esc(u.id)}">${esc(u.name || u.email)}${u.role === 'admin' ? ' (admin)' : ''}</option>`).join('')}</select></div>
@@ -2336,7 +2336,7 @@ function chatView(){
       ${re ? `<div class="cquote">↪ ${esc(re.name || '')}: ${esc(String(re.text || '').slice(0, 90))}</div>` : ''}
       <div class="ctext">${esc(m.text || '')}</div>${m.where ? `<div class="small muted">Page: ${esc(m.where)}</div>` : ''}
       ${(m.photos || []).length ? `<div class="dphotos" style="margin-top:6px">${m.photos.map(ph => `<figure><img ${photoAttr(ph)} data-act="zoom" data-zid="${esc(ph)}" alt=""></figure>`).join('')}</div>` : ''}
-      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${S.canEdit ? `<button class="btn sm ghost" data-act="chatcopy1" data-id="${esc(m.id)}">📋 Copy</button>` : ''}${(S.canEdit || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
+      <div class="cact"><button class="btn sm ghost" data-act="chatreply" data-id="${esc(m.id)}">Reply</button>${S.canEdit ? `<button class="btn sm ghost" data-act="chatcopy1" data-id="${esc(m.id)}">📋 Copy</button>` : ''}${(S.canAdmin || mine) ? `<button class="btn sm ghost danger" data-act="chathide" data-id="${esc(m.id)}">Remove</button>` : ''}</div></div>`; }).join('') : '<div class="empty">No messages yet. Found a problem or have an idea? Write it below.</div>'}</div>
   <div class="ccompose">${S.chatReply && byId(S.chatReply) ? `<div class="cquote">Replying to ${esc(byId(S.chatReply).name)} <button class="btn sm ghost" data-act="chatreply" data-id="">✕</button></div>` : ''}
     <div class="small muted" style="margin-bottom:6px">What is it about?</div>
     <div class="ckinds">${Object.entries(CHAT_KINDS).map(([k, K]) => `<button class="btn sm ${(S.chatKind || 'err') === k ? 'pri' : ''}" data-act="chatkind" data-k="${k}">${K.i} ${K.l}</button>`).join('')}</div>
@@ -2884,8 +2884,8 @@ function settingsView(){
     </div>
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
-  ${S.canEdit ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Signed on paper: upload the signed copy</div>
+  ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Programmer role (no deleting)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3309,14 +3309,14 @@ function docView(id){
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
         ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
         ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
-        ${S.canEdit || canSelfDelete(d) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
+        ${S.canAdmin || canSelfDelete(d) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
           : S.canWrite && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}
         </div></details>
       </div></div>
       ${d.paper ? `<div class="card pad" style="border-color:var(--good,#2f7d32);margin-bottom:12px"><b>📄 Signed on paper</b> · ${esc(fmtDate(d.paper.date))}<div class="small muted" style="margin:2px 0 8px">Signed copy uploaded by ${esc(d.paper.name || nameOf(d.paper.by))} · ${fmtDT(d.paper.at)}${d.paper.note ? ' — ' + esc(d.paper.note) : ''}</div>
         <div class="row" style="gap:8px;flex-wrap:wrap">${(d.paper.fileIds || []).map((fid, i) => `<button class="btn sm" data-act="fileopen" data-id="${esc(fid)}">View${(d.paper.fileIds || []).length > 1 ? ' page ' + (i + 1) : ' signed copy'}</button>`).join('')}${S.canEdit ? `<button class="btn sm ghost danger" data-act="paperundo" data-id="${esc(d.id)}">Undo</button>` : ''}</div></div>` : ''}
       ${d.delReq ? `<div class="card pad" style="border-color:var(--bad);margin-bottom:12px"><b>🗑 Deletion requested</b> by ${esc(d.delReq.name || nameOf(d.delReq.by))} · ${fmtDT(d.delReq.at)}<div class="small" style="margin:4px 0 8px">${esc(d.delReq.reason || '')}</div>
-        ${S.canEdit ? `<div class="row" style="gap:8px"><button class="btn sm danger" data-act="del" data-id="${esc(d.id)}">Delete it</button><button class="btn sm" data-act="delkeep" data-id="${esc(d.id)}">Keep it</button></div>` : '<div class="small muted">Waiting for the admin.</div>'}</div>` : ''}
+        ${S.canAdmin ? `<div class="row" style="gap:8px"><button class="btn sm danger" data-act="del" data-id="${esc(d.id)}">Delete it</button><button class="btn sm" data-act="delkeep" data-id="${esc(d.id)}">Keep it</button></div>` : '<div class="small muted">Waiting for the admin.</div>'}</div>` : ''}
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Record trail</div><div class="trail">${trail}</div></div>
     </aside>
   </div>`;
@@ -3802,7 +3802,7 @@ async function paperSave(id){
   } catch(e){ if(btn) btn.disabled = false; if(e && e.code === 'permission-denied') toast('Not allowed yet — the admin needs to publish the latest Firebase rules.', true); else dbErr(e); }
 }
 function canSelfDelete(d){
-  if(!d || !S.canWrite || intern() || d.createdBy !== S.me) return false;
+  if(!d || !S.canWrite || intern() || S.isDev || d.createdBy !== S.me) return false;
   const sg = (d.signatures || []).filter(Boolean);
   return sg.length === 0 || (sg.length === 1 && (d.signatures || [])[0] && d.signatures[0].uid === S.me && (d.signatures || []).length === 1);
 }
@@ -3986,7 +3986,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z48';
+const APP_VER = 'Z49';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5127,7 +5127,7 @@ document.addEventListener('click', async e => {
     case 'delkeep': try { await S.db.doc('docs/' + id).update({delReq: null}); const g = docById(id); if(g) g.delReq = null; toast('Kept'); render(); } catch(err){ dbErr(err); } break;
     case 'del': confirmBox('Delete this document?', 'This permanently removes the document and its signatures from the project record.', 'Delete', async () => {
       const gone = docById(id), pid = gone?.projectId; try { await S.db.doc('docs/'+id).delete(); if(gone) await releaseSeq(gone.projectId, gone.type).catch(() => {}); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); }
-      catch(err){ if(err && err.code === 'permission-denied' && !S.canEdit) toast('Not allowed yet — the admin needs to publish the latest Firebase rules, or use "Ask admin to delete".', true); else dbErr(err); } }, true); break;
+      catch(err){ if(err && err.code === 'permission-denied' && !S.canAdmin) toast('Not allowed yet — the admin needs to publish the latest Firebase rules, or use "Ask admin to delete".', true); else dbErr(err); } }, true); break;
     case 'savesettings': { const vals = {}; document.querySelectorAll('[data-set]').forEach(i => vals[i.dataset.set] = i.value.trim()); if(!vals.name) vals.name = COMPANY_DEFAULT.name;
       try { await S.db.doc('settings/company').set({...company(), ...vals}); toast('Saved'); } catch(err){ dbErr(err); } break; }
     case 'rmlh': try { await S.db.doc('settings/company').set({...company(), letterheadId:''}); } catch(err){ dbErr(err); } break;
@@ -5209,7 +5209,7 @@ window.addEventListener('beforeunload', e => { if(S.dirty || (S.modalOpen && S.m
 const FB_VER = '13.1.0';
 const FB_BASE = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
 const FB = {};          // loaded Firebase modules + instances
-const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', intern:'Intern (update only)', admin:'Admin', removed:'Removed'};
+const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', intern:'Intern (update only)', dev:'Programmer (no deleting)', admin:'Admin', removed:'Removed'};
 // Interns sign in as staff; the admin-only company settings record lists them, so they cannot change it themselves
 // approved people are remembered by email (settings/company.approved), so signing in again — even as a new account — needs no new approval
 const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
@@ -5537,7 +5537,7 @@ function alertKey(icon, act){ return (icon + '_' + (act ? [act.act, act.t, act.c
 const mentionOf = a => { const p = projById(a.p); return p && p.mentions && p.mentions[a.key] || null; };
 function mentionForm(pid, key){
   const p = projById(pid), a = projAlerts(p).find(x => x.key === key); if(!a) return;
-  const people = (S.users || []).filter(u => ['staff', 'admin'].includes(u.role)).sort((x, y) => String(x.name).localeCompare(String(y.name))), cur = mentionOf(a);
+  const people = (S.users || []).filter(u => ['staff', 'admin', 'dev'].includes(u.role)).sort((x, y) => String(x.name).localeCompare(String(y.name))), cur = mentionOf(a);
   showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>@ Assign to the person in charge</h3></div><div class="mb"><div class="fgrid">
     <div class="fld"><label>Pending item</label><div class="autobox" style="white-space:normal"><span>${esc(p.code)} · ${a.text}</span></div></div>
     <div class="fld"><label>Who is in charge? <em>*</em></label><select id="mnWho"><option value=""></option>${people.map(u => `<option value="${esc(u.id)}" ${cur && cur.to === u.id ? 'selected' : ''}>${esc(u.name || u.email)}${u.id === S.me ? ' (me)' : ''}</option>`).join('')}</select></div>
@@ -5614,7 +5614,7 @@ function rankView(tabs){
   const top3 = L.filter(u => u.pts > 0).slice(0, 3), mine = L.find(u => u.id === S.me);
   const perLbl = {month: 'This month', last: 'Last month', year: 'This year (' + today().slice(0, 4) + ')', all: 'All time'};
   const daysLeft = Math.ceil((new Date(today().slice(0, 4) + '-12-31T23:59:59') - new Date()) / 86400000);
-  return `<div class="pagehead"><div><div class="eyebrow">Use the app, help make it better</div><h1>Team</h1></div>${S.canEdit ? `<div class="sp"></div><button class="btn" data-act="addstaff">+ Add staff</button>` : ''}</div>${tabs || ''}
+  return `<div class="pagehead"><div><div class="eyebrow">Use the app, help make it better</div><h1>Team</h1></div>${S.canAdmin ? `<div class="sp"></div><button class="btn" data-act="addstaff">+ Add staff</button>` : ''}</div>${tabs || ''}
   ${per === 'year' ? `<div class="vhint" style="background:#fff6d6;color:#7a5b00"><b>🎁</b><span><b>Year-end award race</b> — ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go. Top of the table on 31 December wins a special gift from the management.</span></div>` : ''}
   <div class="tabs">${Object.entries(perLbl).map(([k, l]) => `<button class="${per === k ? 'on' : ''}" data-act="rankper" data-p="${k}">${l}</button>`).join('')}</div>
   ${S.rankLoading ? `<div class="small muted" style="margin:6px 0">Counting all records…</div>` : ''}
@@ -5648,8 +5648,8 @@ function rankHomeCard(){
   return `<div class="card pad rhome" data-act="nav" data-v="team"><b>🏆 This month</b><span>🥇 ${esc(nameOf(L[0].id))} · ${L[0].pts} pts</span>${mine ? `<span class="small">You: ${mine.pts ? (mine.pos <= 3 ? ['🥇', '🥈', '🥉'][mine.pos - 1] : '#' + mine.pos) + ' · ' + mine.pts + ' pts' : 'no points yet'}</span>` : ''}<span class="small muted" style="margin-left:auto">See ranking →</span></div>`;
 }
 function teamView(){
-  const tab = S.canEdit ? (S.teamTab || 'rank') : 'rank';
-  const tabs = `<div class="tabs" style="margin-bottom:6px"><button class="${tab === 'rank' ? 'on' : ''}" data-act="teamtab" data-t="rank">🏆 Ranking</button>${S.canEdit ? `<button class="${tab === 'members' ? 'on' : ''}" data-act="teamtab" data-t="members">👥 Members &amp; access</button>` : ''}</div>`;
+  const tab = S.canAdmin ? (S.teamTab || 'rank') : 'rank';
+  const tabs = `<div class="tabs" style="margin-bottom:6px"><button class="${tab === 'rank' ? 'on' : ''}" data-act="teamtab" data-t="rank">🏆 Ranking</button>${S.canAdmin ? `<button class="${tab === 'members' ? 'on' : ''}" data-act="teamtab" data-t="members">👥 Members &amp; access</button>` : ''}</div>`;
   if(tab === 'rank') return rankView(tabs);
   return membersView(tabs);
 }
@@ -5663,9 +5663,9 @@ function membersView(tabs){
   ${list.map(u => { const owner = isOwnerEmail(u); const me = u.id === S.me;
     return `<tr><td><b>${esc(u.name || '—')}</b>${me ? ' <span class="pill draft">You</span>' : ''}${owner ? ' <span class="pill type">OWNER</span>' : ''}<div class="small muted" style="display:none">${esc(u.email || '')}</div></td>
     <td class="hm small">${esc(u.email || '')}</td>
-    <td>${owner || me ? `<span class="pill done">${esc(ROLE_LABEL[roleOf(u)] || u.role)}</span>` : `<select class="inp" style="padding:6px 8px;font-size:13.5px;width:auto" data-role="${esc(u.id)}">${['pending', 'staff', 'intern', 'admin', 'removed'].map(r => `<option value="${r}" ${roleOf(u) === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td></tr>`; }).join('')}
+    <td>${owner || me ? `<span class="pill done">${esc(ROLE_LABEL[roleOf(u)] || u.role)}</span>` : `<select class="inp" style="padding:6px 8px;font-size:13.5px;width:auto" data-role="${esc(u.id)}">${['pending', 'staff', 'intern', 'dev', 'admin', 'removed'].map(r => `<option value="${r}" ${roleOf(u) === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td></tr>`; }).join('')}
   </tbody></table></div>
-  <p class="small muted">Staff can create, edit drafts and sign reports. <b>Interns</b> can fill in and update reports only — no new projects, no deleting, no ranking. Admins can also manage the team, company details, and return signed reports to draft or delete them. "Removed" blocks access but keeps their records and signatures.</p>`;
+  <p class="small muted">Staff can create, edit drafts and sign reports. <b>Interns</b> can fill in and update reports only — no new projects, no deleting, no ranking. Admins can also manage the team, company details, and return signed reports to draft or delete them. A <b>Programmer</b> can see and change everything an admin can (report formats, company details, return to draft) but cannot delete anything or change anyone's access. "Removed" blocks access but keeps their records and signatures.</p>`;
 }
 function addStaffForm(){
   showModal(`<div class="box"><div class="mh"><h3>Add staff with email & password</h3></div><div class="mb">
@@ -5908,7 +5908,7 @@ function fileForm(pid, f){
     <div class="fld" id="fLinkBox" style="display:none"><label>Link <em>*</em></label><input id="fUrl" placeholder="https://drive.google.com/…"><div class="hint">Make sure the link is shared with your staff.</div></div>`
     : `<div class="fld"><label>File</label><div class="small muted">${f.kind === 'link' ? '🔗 ' + esc(f.url) : '📄 ' + esc(f.name) + ' · ' + fmtSize(f.size || 0)}</div></div>`}
   </div><div id="fProg" class="small muted" style="margin-top:8px"></div></div>
-  <div class="mf">${!isNew ? `<button class="btn ghost danger" data-act="filedel" data-id="${esc(f.id)}" style="margin-right:auto">Delete</button>` : ''}<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="filesave" data-p="${esc(pid)}" data-id="${esc(f.id || '')}">${isNew ? 'Add document' : 'Save'}</button></div></div>`);
+  <div class="mf">${!isNew && (S.canAdmin || (f.uploadedBy === S.me && !S.isDev)) ? `<button class="btn ghost danger" data-act="filedel" data-id="${esc(f.id)}" style="margin-right:auto">Delete</button>` : ''}<button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="filesave" data-p="${esc(pid)}" data-id="${esc(f.id || '')}">${isNew ? 'Add document' : 'Save'}</button></div></div>`);
   S.fileKind = 'upload';
 }
 function readAsBase64(file){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(file); }); }
@@ -6243,14 +6243,17 @@ async function onSignedIn(u){
     const prev = S.myRole; S.myRole = d.role || 'pending';
     if(d.name) S.names[u.uid] = d.name;
     if('sigImg' in d || 'sigList' in d){ S.mySigs = Array.isArray(d.sigList) ? d.sigList.filter(x => x && x.img) : (d.sigImg ? [{img: d.sigImg}] : []); S.mySig = S.mySigs[0]?.img || ''; } if('stamps' in d) S.myStamps = (d.stamps || []).filter(x => x && x.img); if('designation' in d) S.myDes = d.designation || '';
-    S.canEdit = S.myRole === 'admin'; S.canWrite = S.myRole === 'admin' || S.myRole === 'staff';
+    // admin: everything · dev (programmer): like admin but cannot delete or manage the team · staff
+    S.canAdmin = S.myRole === 'admin'; S.isDev = S.myRole === 'dev';
+    S.canEdit = S.canAdmin || S.isDev; S.canWrite = S.canEdit || S.myRole === 'staff';
+    const ACTIVE = ['admin', 'staff', 'dev'];
     try { if(S.canWrite) localStorage.setItem(ROLE_CACHE + u.uid, S.myRole); else if(S.myRole === 'removed') localStorage.removeItem(ROLE_CACHE + u.uid); } catch(e){}
-    if(S.canWrite && !(prev === 'admin' || prev === 'staff')) startData();
-    if(!S.canWrite && (prev === 'admin' || prev === 'staff')) stopData();
+    if(S.canWrite && !ACTIVE.includes(prev)) startData();
+    if(!S.canWrite && ACTIVE.includes(prev)) stopData();
     S.authState = S.canWrite ? 'in' : 'pending';
     render();
   };
-  if(cached === 'staff' || cached === 'admin') apply({role: cached});
+  if(cached === 'staff' || cached === 'admin' || cached === 'dev') apply({role: cached});
   // Read the record from the server; a failed read (weak signal) is never taken as "new account"
   let snap = null;
   for(let i = 0; i < 4 && !snap; i++){ try { snap = await ref.get(); } catch(e){ await new Promise(r => setTimeout(r, 1500 * (i + 1))); } }
@@ -6260,7 +6263,8 @@ async function onSignedIn(u){
     // owner → admin; someone approved before (remembered by email) → staff straight away; everyone else → pending
     try { await FB.fs.setDoc(uref, {...base, role: 'admin'}); }
     catch(e){ try { await FB.fs.setDoc(uref, {...base, role: 'staff', roleBy: 'returning'}); }
-      catch(e1){ try { await FB.fs.setDoc(uref, {...base, role: 'pending'}); } catch(e2){ console.error(e2); } } }
+      catch(e1){ try { await FB.fs.setDoc(uref, {...base, role: 'dev', roleBy: 'returning'}); }
+        catch(e3){ try { await FB.fs.setDoc(uref, {...base, role: 'pending'}); } catch(e2){ console.error(e2); } } } }
   }
   if(S.unsubMe) S.unsubMe();
   let triedBack = false;
@@ -6268,7 +6272,7 @@ async function onSignedIn(u){
     const d = s.exists ? s.data() : {role: 'pending'};
     if(isOwnerEmail(u) && s.exists && d.role !== 'admin'){ ref.update({role: 'admin'}).catch(console.error); d.role = 'admin'; }
     // approved before but the record says "pending" → try to restore (works once the updated rules are published)
-    if(s.exists && d.role === 'pending' && !triedBack){ triedBack = true; ref.update({role: 'staff', roleBy: 'returning'}).catch(() => {}); }
+    if(s.exists && d.role === 'pending' && !triedBack){ triedBack = true; ref.update({role: 'staff', roleBy: 'returning'}).catch(() => ref.update({role: 'dev', roleBy: 'returning'}).catch(() => {})); }
     apply(d);
   }, e => { console.warn('user record', e); // connection / token hiccup: keep the current access and listen again
     if(!S.myRole){ S.authState = cached ? 'in' : 'pending'; render(); }
@@ -6294,7 +6298,7 @@ async function onSignedIn(u){
   if(!window.APP_CONFIG.aiEndpoint) S.sample = null;
   authM_getRedirect();
   FB.authM.onAuthStateChanged(FB.auth, u => {
-    stopData(); if(S.unsubMe){ S.unsubMe(); S.unsubMe = null; } S.myRole = null; S.canWrite = false; S.canEdit = false;
+    stopData(); if(S.unsubMe){ S.unsubMe(); S.unsubMe = null; } S.myRole = null; S.canWrite = false; S.canEdit = false; S.canAdmin = false; S.isDev = false;
     if(!u){ S.me = null; S.authState = 'out'; S.view = {name: 'home'}; render(); return; }
     S.authState = 'loading'; render();
     onSignedIn(u);
