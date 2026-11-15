@@ -1766,6 +1766,7 @@ function render(){
   $('#coName').textContent = c.name;
   $('#logoMark').innerHTML = c.logoId ? `<img ${photoAttr(c.logoId)} alt="">` : `<img src="${LOGO_PNG}" alt="Sadhana">`;
   document.querySelectorAll('.adminonly').forEach(b => b.style.display = S.canEdit ? '' : 'none');
+  document.querySelectorAll('[data-act=nav]').forEach(b => { if(['register', 'chat', 'team'].includes(b.dataset.v)) b.style.display = S.isSub ? 'none' : ''; });
   const signedIn = S.authState === 'in';
   $('#nav').style.visibility = signedIn ? '' : 'hidden'; $('#bnav').style.display = signedIn ? '' : 'none';
   if(S.authState === 'nosetup'){ m.innerHTML = setupNeededView(); return; }
@@ -1775,7 +1776,8 @@ function render(){
   if(!S.loaded.p || !S.loaded.d){ m.innerHTML = '<div class="loading"><div><div class="spin"></div>Loading site records…</div></div>'; return; }
   let html = '';
   try {
-    switch(v.name){
+    if(S.isSub) html = subView(v);
+    else switch(v.name){
       case 'project': html = projectView(v.id, v.tab); break;
       case 'doc': html = docView(v.id); break;
       case 'edit': html = editView(); break;
@@ -1798,6 +1800,29 @@ function noDbView(){
 }
 
 /* ---------- HOME ---------- */
+/* ---------- sub-contractor screens: site diary only ---------- */
+function subView(v){
+  if(v.name === 'doc'){ const d = docById(v.id); return d && d.type === 'DSR' ? docView(v.id) : subHome(); }
+  if(v.name === 'edit') return S.draft && S.draft.type === 'DSR' ? editView() : subHome();
+  if(v.name === 'settings') return `<div class="pagehead"><div><div class="eyebrow">${esc(S.subCompany || 'Sub-contractor')}</div><h1>Settings</h1></div></div>${esigCard()}`;
+  if(v.name === 'project' && projById(v.id)) return subProject(v.id);
+  return subHome();
+}
+function subHome(){
+  const P = S.projects;
+  return `<div class="pagehead"><div><div class="eyebrow">${esc(S.subCompany || 'Sub-contractor')} · site diary</div><h1>Projects</h1></div></div>
+  ${P.length ? `<div class="list card">${P.map(p => { const n = S.docs.filter(d => d.projectId === p.id).length, last = S.docs.filter(d => d.projectId === p.id).sort((a, b) => String(docDate(b)).localeCompare(String(docDate(a))))[0];
+    return `<div class="it" data-act="proj" data-id="${esc(p.id)}" style="cursor:pointer"><span class="pill type">${esc(p.code)}</span><div class="t" style="white-space:normal"><b class="clamp2">${esc(p.nick || p.name)}</b><span>${n} daily report${n === 1 ? '' : 's'}${last ? ' · last ' + esc(fmtDate(docDate(last))) : ''}</span></div><span class="small">Open ›</span></div>`; }).join('')}</div>`
+    : `<div class="card empty"><h3 style="color:var(--ink);margin-bottom:6px">No project yet</h3><p>Sadhana will give you access to the project you work on. Please let them know.</p></div>`}`;
+}
+function subProject(id){
+  const p = projById(id), mine = S.docs.filter(d => d.projectId === id).sort((a, b) => String(docDate(b)).localeCompare(String(docDate(a))));
+  return `<button class="crumb" data-act="nav" data-v="home">← Projects</button>
+  <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">${esc(p.nick || p.name)}</h1></div></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><button class="btn pri" data-act="new" data-p="${esc(id)}" data-t="DSR">+ Daily report</button><button class="btn" data-act="dcal" data-p="${esc(id)}">🗓 Daily reports</button></div>
+  <div class="card"><div class="sechead"><h3>My daily reports</h3></div>${mine.length ? `<div class="list">${mine.map(d => { const st = statusOf(d);
+    return `<div class="it" data-act="open" data-id="${esc(d.id)}" style="cursor:pointer"><div class="t"><b>${esc(fmtDate(docDate(d)))}</b><span>${esc(d.number || 'Draft')}</span></div><span class="pill ${st.cls}">${esc(st.label)}</span></div>`; }).join('')}</div>` : '<p class="muted pad">None yet. Tap <b>+ Daily report</b> to start today\'s.</p>'}</div>`;
+}
 function homeView(){
   const t = today();
   const active = S.projects.filter(p => (p.status||'Active') === 'Active').sort((a,b)=>a.name.localeCompare(b.name));
@@ -2885,7 +2910,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Programmer role (no deleting)</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Sub-contractor access (site diary only)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3289,7 +3314,7 @@ function docView(id){
         <tr><td class="k">Location</td><td>${esc(p.location||'—')}</td><td class="k">Contract no.</td><td>${esc(p.contractNo||'—')}</td></tr></table>
       ${docBodyHTML(d)}
       <div class="sigs" style="grid-template-columns:repeat(${cols},1fr)">${sigHTML}</div>
-      ${S.canWrite && st.next !== -1 && (!sigs.some(Boolean) || S.canEdit) ? `<div style="text-align:right;margin-top:6px"><button class="btn sm ghost" data-act="sigsetup" data-id="${esc(d.id)}">✍ Add / remove signatures</button></div>` : ''}
+      ${S.canWrite && !S.isSub && st.next !== -1 && (!sigs.some(Boolean) || S.canEdit) ? `<div style="text-align:right;margin-top:6px"><button class="btn sm ghost" data-act="sigsetup" data-id="${esc(d.id)}">✍ Add / remove signatures</button></div>` : ''}
     </div>
     <aside class="side">
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
@@ -3298,7 +3323,7 @@ function docView(id){
         ${st.next>0 && S.canWrite && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         ${d.paper && (d.paper.fileIds || []).length ? `<button class="btn pri" data-act="papershow" data-id="${esc(d.id)}">📄 Signed copy (hardcopy)</button>` : ''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF${d.paper ? ' (unsigned)' : ''}</button>
-        ${!d.paper && st.next !== -1 && S.canWrite ? `<button class="btn" data-act="paperup" data-id="${esc(d.id)}">📄 Signed on paper? Upload the signed copy</button>` : ''}
+        ${!d.paper && st.next !== -1 && S.canWrite && !S.isSub ? `<button class="btn" data-act="paperup" data-id="${esc(d.id)}">📄 Signed on paper? Upload the signed copy</button>` : ''}
         <button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
         ${d.type === 'DSR' && S.canWrite && (d.signatures || []).filter(Boolean).length <= 1 ? (d.data?.clientSign === 'Yes'
@@ -3310,7 +3335,7 @@ function docView(id){
         ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
         ${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
         ${S.canAdmin || canSelfDelete(d) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
-          : S.canWrite && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}
+          : S.canWrite && !S.isSub && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}
         </div></details>
       </div></div>
       ${d.paper ? `<div class="card pad" style="border-color:var(--good,#2f7d32);margin-bottom:12px"><b>📄 Signed on paper</b> · ${esc(fmtDate(d.paper.date))}<div class="small muted" style="margin:2px 0 8px">Signed copy uploaded by ${esc(d.paper.name || nameOf(d.paper.by))} · ${fmtDT(d.paper.at)}${d.paper.note ? ' — ' + esc(d.paper.note) : ''}</div>
@@ -3803,8 +3828,18 @@ async function paperSave(id){
 }
 function canSelfDelete(d){
   if(!d || !S.canWrite || intern() || S.isDev || d.createdBy !== S.me) return false;
+  if(S.isSub) return !(d.signatures || []).some(Boolean);   // sub-contractors: only their unsigned drafts
   const sg = (d.signatures || []).filter(Boolean);
   return sg.length === 0 || (sg.length === 1 && (d.signatures || [])[0] && d.signatures[0].uid === S.me && (d.signatures || []).length === 1);
+}
+function subAccessForm(uid){
+  const u = (S.users || []).find(x => x.id === uid) || {id: uid}, have = new Set(u.subProjects || []);
+  const P = S.projects.slice().sort((a, b) => ((a.status || 'Active') === 'Completed') - ((b.status || 'Active') === 'Completed') || String(a.code).localeCompare(String(b.code)));
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>🏗 Sub-contractor access</h3></div><div class="mb">
+    <p class="small muted" style="margin-top:0"><b>${esc(u.name || u.email || '')}</b> can fill in and sign the <b>daily site report</b> of the projects you tick — they see only their own reports, nothing else.</p>
+    <div class="fld"><label>Company <em>*</em></label><input id="subCo" value="${esc(u.subCompany || '')}" placeholder="e.g. ABC Scaffolding Sdn Bhd"></div>
+    <div class="fld" style="margin-top:10px"><label>Projects</label>${P.map(p => `<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--line);text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:inherit"><input type="checkbox" data-subp="${esc(p.id)}" ${have.has(p.id) ? 'checked' : ''} style="width:20px;height:20px;flex:none;margin-top:1px"><span><b>${esc(p.code)}</b> ${esc(p.nick || p.name)}${(p.status || 'Active') === 'Completed' ? ' <span class="muted small">(completed)</span>' : ''}</span></label>`).join('')}</div>
+    </div><div class="mf"><button class="btn pri" data-act="subaccsave" data-id="${esc(uid)}">Save</button></div></div>`);
 }
 function sigSetup(docId){
   const d = docId ? S.docs.find(x => x.id === docId) : S.draft; if(!d) return;
@@ -3986,7 +4021,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z49';
+const APP_VER = 'Z50';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5095,6 +5130,10 @@ document.addEventListener('click', async e => {
     case 'sgdo': doSign(id, +el.dataset.i); break;
     case 'sigedit': sigEditForm(id, +el.dataset.i); break;
     case 'sigsetup': sigSetup(el.dataset.id || null); break;
+    case 'subacc': subAccessForm(id); break;
+    case 'subaccsave': { const ids = [...document.querySelectorAll('#modal [data-subp]:checked')].map(c => c.dataset.subp), co = $('#subCo').value.trim();
+      if(!co){ toast('Enter the sub-contractor company name.', true); break; }
+      try { await S.db.doc('users/' + id).update({subProjects: ids, subCompany: co, roleBy: S.me, roleAt: new Date().toISOString()}); closeModal(); toast('Saved — ' + ids.length + ' project' + (ids.length === 1 ? '' : 's')); render(); } catch(err){ dbErr(err); } break; }
     case 'sgsadd': sigSetupCollect(); S.sgs.list.push({role: '', hint: ''}); sigSetupRender(); setTimeout(() => { const ins = document.querySelectorAll('[data-sgsr]'); ins[ins.length - 1]?.focus(); }, 30); break;
     case 'sgsdel': sigSetupCollect(); S.sgs.list.splice(+el.dataset.i, 1); sigSetupRender(); break;
     case 'sgsup': { sigSetupCollect(); const i = +el.dataset.i, L = S.sgs.list; if(i > S.sgs.locked){ [L[i - 1], L[i]] = [L[i], L[i - 1]]; } sigSetupRender(); break; }
@@ -5183,7 +5222,8 @@ document.addEventListener('change', async e => {
   if(t.dataset.role){ const uid = t.dataset.role, role = t.value;
     rememberAccess(uid, role);
     if(role === 'intern' || isIntern(uid)){ try { const was = S.users.find(u => u.id === uid)?.role; if(role === 'intern' && was !== 'staff') await S.db.doc('users/' + uid).update({role: 'staff', roleBy: S.me, roleAt: new Date().toISOString()});
-      await setIntern(uid, role === 'intern'); if(role !== 'intern') await S.db.doc('users/' + uid).update({role, roleBy: S.me, roleAt: new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; } try { await S.db.doc('users/'+uid).update({role, roleBy:S.me, roleAt:new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; }
+      await setIntern(uid, role === 'intern'); if(role !== 'intern') await S.db.doc('users/' + uid).update({role, roleBy: S.me, roleAt: new Date().toISOString()}); toast('Access updated'); if(role === 'sub') subAccessForm(uid); } catch(err){ dbErr(err); } return; }
+    if(role === 'sub'){ try { await S.db.doc('users/' + uid).update({role, roleBy: S.me, roleAt: new Date().toISOString()}); subAccessForm(uid); } catch(err){ dbErr(err); } return; } try { await S.db.doc('users/'+uid).update({role, roleBy:S.me, roleAt:new Date().toISOString()}); toast('Access updated'); } catch(err){ dbErr(err); } return; }
   if(t.dataset.chk && S.draft){ const k = t.dataset.chk; S.draft.data[k] = [...document.querySelectorAll(`[data-chk="${k}"]:checked`)].map(x => x.value); S.dirty = true; }
   if(t.dataset.bulk && t.files?.length){ const fs = [...t.files]; const isFolder = t.dataset.bulk === 'folder'; prepareBulk(t.dataset.p, fs.map(f => ({file: f, path: isFolder ? (f.webkitRelativePath || f.name).split('/').slice(1).join('/') : f.name}))); t.value = ''; }
   if(t.dataset.photos && t.files?.length){ uploadPhotos(t.dataset.photos, t.files); t.value = ''; }
@@ -5209,7 +5249,7 @@ window.addEventListener('beforeunload', e => { if(S.dirty || (S.modalOpen && S.m
 const FB_VER = '13.1.0';
 const FB_BASE = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
 const FB = {};          // loaded Firebase modules + instances
-const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', intern:'Intern (update only)', dev:'Programmer (no deleting)', admin:'Admin', removed:'Removed'};
+const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', intern:'Intern (update only)', sub:'Sub-contractor (site diary only)', dev:'Programmer (no deleting)', admin:'Admin', removed:'Removed'};
 // Interns sign in as staff; the admin-only company settings record lists them, so they cannot change it themselves
 // approved people are remembered by email (settings/company.approved), so signing in again — even as a new account — needs no new approval
 const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
@@ -5308,12 +5348,13 @@ async function allocateSeq(pid, type){
     const s = await tx.get(ref);
     const c = s.exists() ? s.data() : {};
     const recent = c.updatedAt && (Date.now() - Date.parse(c.updatedAt)) < 120000;
-    const n = (recent ? Math.max(c.last || 0, floor) : floor) + 1;
+    const n = (recent || S.isSub ? Math.max(c.last || 0, floor) : floor) + 1;   // sub-contractors can't see every report, so they always trust the counter
     tx.set(ref, {last: n, updatedAt: new Date().toISOString()});
     return n;
   });
 }
 async function releaseSeq(pid, type){
+  if(S.isSub) return;
   // after a delete: let the next report reuse the freed number
   try { const top = await highestSeq(pid, type); await FB.fs.setDoc(FB.fs.doc(FB.db, 'counters/' + pid + '_' + type), {last: top, updatedAt: '2000-01-01T00:00:00.000Z'}); } catch(e){}
 }
@@ -5597,9 +5638,9 @@ function computeRanks(per){
     if(m.kind === 'msg'){ u.chat++; return; }
     if(!long) return;
     u[m.kind] = (u[m.kind] || 0) + 1; u.pts += RANK_PTS.fb[m.kind] || 0; });
-  const people = (S.users.length ? S.users.filter(u => u.role !== 'removed' && u.role !== 'pending').map(u => u.id) : Object.keys(S.names));
+  const people = (S.users.length ? S.users.filter(u => u.role !== 'removed' && u.role !== 'pending' && u.role !== 'sub').map(u => u.id) : Object.keys(S.names));
   people.forEach(id => me(id));
-  const list = Object.values(P).filter(u => (people.includes(u.id) || u.pts > 0) && !isIntern(u.id)).map(u => { const days = u.days.size; return {...u, days, pts: u.pts + days * RANK_PTS.day}; });
+  const list = Object.values(P).filter(u => (people.includes(u.id) || u.pts > 0) && !isIntern(u.id) && !(S.users || []).some(x => x.id === u.id && x.role === 'sub')).map(u => { const days = u.days.size; return {...u, days, pts: u.pts + days * RANK_PTS.day}; });
   list.sort((x, y) => y.pts - x.pts || y.rec - x.rec || nameOf(x.id).localeCompare(nameOf(y.id)));
   let pos = 0, prev = null; list.forEach((u, i) => { if(u.pts !== prev){ pos = i + 1; prev = u.pts; } u.pos = pos; });
   const badges = {}; RANK_BADGES.forEach(([k]) => { const top = Math.max(0, ...list.map(u => u[k] || 0)); if(top > 0) badges[k] = list.filter(u => (u[k] || 0) === top).map(u => u.id); });
@@ -5663,9 +5704,9 @@ function membersView(tabs){
   ${list.map(u => { const owner = isOwnerEmail(u); const me = u.id === S.me;
     return `<tr><td><b>${esc(u.name || '—')}</b>${me ? ' <span class="pill draft">You</span>' : ''}${owner ? ' <span class="pill type">OWNER</span>' : ''}<div class="small muted" style="display:none">${esc(u.email || '')}</div></td>
     <td class="hm small">${esc(u.email || '')}</td>
-    <td>${owner || me ? `<span class="pill done">${esc(ROLE_LABEL[roleOf(u)] || u.role)}</span>` : `<select class="inp" style="padding:6px 8px;font-size:13.5px;width:auto" data-role="${esc(u.id)}">${['pending', 'staff', 'intern', 'dev', 'admin', 'removed'].map(r => `<option value="${r}" ${roleOf(u) === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`}</td></tr>`; }).join('')}
+    <td>${owner || me ? `<span class="pill done">${esc(ROLE_LABEL[roleOf(u)] || u.role)}</span>` : `<select class="inp" style="padding:6px 8px;font-size:13.5px;width:auto" data-role="${esc(u.id)}">${['pending', 'staff', 'intern', 'sub', 'dev', 'admin', 'removed'].map(r => `<option value="${r}" ${roleOf(u) === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>${u.role === 'sub' ? `<div style="margin-top:6px"><button class="btn sm" data-act="subacc" data-id="${esc(u.id)}">🏗 ${esc(u.subCompany || 'Company')} · ${(u.subProjects || []).length} project${(u.subProjects || []).length === 1 ? '' : 's'}</button></div>` : ''}`}</td></tr>`; }).join('')}
   </tbody></table></div>
-  <p class="small muted">Staff can create, edit drafts and sign reports. <b>Interns</b> can fill in and update reports only — no new projects, no deleting, no ranking. Admins can also manage the team, company details, and return signed reports to draft or delete them. A <b>Programmer</b> can see and change everything an admin can (report formats, company details, return to draft) but cannot delete anything or change anyone's access. "Removed" blocks access but keeps their records and signatures.</p>`;
+  <p class="small muted">Staff can create, edit drafts and sign reports. <b>Interns</b> can fill in and update reports only — no new projects, no deleting, no ranking. Admins can also manage the team, company details, and return signed reports to draft or delete them. A <b>Sub-contractor</b> sees only the projects you tick for them and only the daily reports they make themselves — nothing else in the app. A <b>Programmer</b> can see and change everything an admin can (report formats, company details, return to draft) but cannot delete anything or change anyone's access. "Removed" blocks access but keeps their records and signatures.</p>`;
 }
 function addStaffForm(){
   showModal(`<div class="box"><div class="mh"><h3>Add staff with email & password</h3></div><div class="mb">
@@ -6186,12 +6227,14 @@ function recomputeDocs(){
   S.docs.forEach(d => { if(d.type === 'HRC' && d.data) hrcMigrate(d.data); });
 }
 async function loadProjectDocs(pid){
+  if(S.isSub) return;
   if(!pid || S.loadedProj[pid] || S.allLoaded || !S.recentFull) return;
   S.loadedProj[pid] = 1;
   try { const s = await S.db.collection('docs').where('projectId', '==', pid).get(); s.docs.forEach(x => S.extra[x.id] = {id: x.id, ...x.data()}); recomputeDocs(); softRender(); }
   catch(e){ S.loadedProj[pid] = 0; console.error(e); }
 }
 async function loadAllDocs(btn){
+  if(S.isSub) return;
   if(btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
   try { const s = await S.db.collection('docs').get(); s.docs.forEach(x => S.extra[x.id] = {id: x.id, ...x.data()}); S.allLoaded = true; recomputeDocs(); render(); }
   catch(e){ dbErr(e); if(btn){ btn.disabled = false; btn.textContent = 'Load older documents'; } }
@@ -6215,7 +6258,26 @@ function installBanner(){
 /* --- boot --- */
 let unsubs = [];
 function stopData(){ unsubs.forEach(u => { try { u(); } catch(e){} }); unsubs = []; S.loaded = {p: 0, d: 0}; S.projects = []; S.docs = []; S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false; S.files = []; }
+function startSubData(){
+  const db = S.db, ids = (S.subProjects || []).slice(0, 30), got = {};
+  const onErr = e => { console.warn(e); };
+  S.projects = []; S.users = []; S.files = []; S.chat = [];
+  if(!ids.length){ S.loaded.p = 1; }
+  ids.forEach(id => unsubs.push(db.doc('projects/' + id).onSnapshot(s => { got[id] = s.exists ? {id, ...s.data()} : null; S.projects = ids.map(i => got[i]).filter(Boolean);
+    if(Object.keys(got).length >= ids.length) S.loaded.p = 1; softRender(); }, e => { got[id] = null; if(Object.keys(got).length >= ids.length) S.loaded.p = 1; onErr(e); softRender(); })));
+  unsubs.push(db.collection('docs').where('createdBy', '==', S.me).onSnapshot(s => {
+    S.recent = s.docs.map(x => ({id: x.id, ...x.data()})).filter(x => x.type === 'DSR'); S.recentFull = false; recomputeDocs(); S.loaded.d = 1; softRender(); }, e => { onErr(e); S.loaded.d = 1; softRender(); }));
+  unsubs.push(db.doc('settings/brand').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); softRender(); }, () => {}));
+}
+// a copy of the company details without the access lists, for sub-contractors' PDFs
+let brandSent = '';
+function syncBrand(){
+  if(!S.canEdit || !S.company) return; const b = {...S.company}; delete b.approved; delete b.interns;
+  const j = JSON.stringify(b); if(j === brandSent) return; brandSent = j;
+  S.db.doc('settings/brand').set(b).catch(() => { brandSent = ''; });
+}
 function startData(){
+  if(S.isSub) return startSubData();
   const db = S.db;
   const onErr = e => { console.error(e); if(e && e.code === 'permission-denied') return; toast('Lost connection to records — reload the page.', true); };
   unsubs.push(db.collection('projects').onSnapshot(s => { S.projects = s.docs.map(x => ({id: x.id, ...x.data()})); S.loaded.p = 1; softRender(); }, onErr));
@@ -6231,7 +6293,7 @@ function startData(){
     syncApprovals(); softRender();
   }, () => {}));
   unsubs.push(startChat(db));
-  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); syncApprovals(); softRender(); }, () => {}));
+  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); syncApprovals(); syncBrand(); softRender(); }, () => {}));
 }
 const ROLE_CACHE = 'sde-role-';
 async function onSignedIn(u){
@@ -6245,15 +6307,19 @@ async function onSignedIn(u){
     if('sigImg' in d || 'sigList' in d){ S.mySigs = Array.isArray(d.sigList) ? d.sigList.filter(x => x && x.img) : (d.sigImg ? [{img: d.sigImg}] : []); S.mySig = S.mySigs[0]?.img || ''; } if('stamps' in d) S.myStamps = (d.stamps || []).filter(x => x && x.img); if('designation' in d) S.myDes = d.designation || '';
     // admin: everything · dev (programmer): like admin but cannot delete or manage the team · staff
     S.canAdmin = S.myRole === 'admin'; S.isDev = S.myRole === 'dev';
-    S.canEdit = S.canAdmin || S.isDev; S.canWrite = S.canEdit || S.myRole === 'staff';
-    const ACTIVE = ['admin', 'staff', 'dev'];
+    // sub-contractor: only the site diary of the projects ticked for them, only their own reports
+    const wasSub = S.isSub, oldSP = JSON.stringify(S.subProjects || []);
+    S.isSub = S.myRole === 'sub'; if('subProjects' in d || S.isSub) S.subProjects = Array.isArray(d.subProjects) ? d.subProjects : (S.subProjects || []); if(d.subCompany) S.subCompany = d.subCompany;
+    S.canEdit = S.canAdmin || S.isDev; S.canWrite = S.canEdit || S.myRole === 'staff' || S.isSub;
+    const ACTIVE = ['admin', 'staff', 'dev', 'sub'];
+    if(S.isSub && wasSub && oldSP !== JSON.stringify(S.subProjects)){ stopData(); startData(); }
     try { if(S.canWrite) localStorage.setItem(ROLE_CACHE + u.uid, S.myRole); else if(S.myRole === 'removed') localStorage.removeItem(ROLE_CACHE + u.uid); } catch(e){}
     if(S.canWrite && !ACTIVE.includes(prev)) startData();
     if(!S.canWrite && ACTIVE.includes(prev)) stopData();
     S.authState = S.canWrite ? 'in' : 'pending';
     render();
   };
-  if(cached === 'staff' || cached === 'admin' || cached === 'dev') apply({role: cached});
+  if(cached === 'staff' || cached === 'admin' || cached === 'dev') apply({role: cached});   // sub-contractors wait for the server record (their project list)
   // Read the record from the server; a failed read (weak signal) is never taken as "new account"
   let snap = null;
   for(let i = 0; i < 4 && !snap; i++){ try { snap = await ref.get(); } catch(e){ await new Promise(r => setTimeout(r, 1500 * (i + 1))); } }
@@ -6298,7 +6364,7 @@ async function onSignedIn(u){
   if(!window.APP_CONFIG.aiEndpoint) S.sample = null;
   authM_getRedirect();
   FB.authM.onAuthStateChanged(FB.auth, u => {
-    stopData(); if(S.unsubMe){ S.unsubMe(); S.unsubMe = null; } S.myRole = null; S.canWrite = false; S.canEdit = false; S.canAdmin = false; S.isDev = false;
+    stopData(); if(S.unsubMe){ S.unsubMe(); S.unsubMe = null; } S.myRole = null; S.canWrite = false; S.canEdit = false; S.canAdmin = false; S.isDev = false; S.isSub = false; S.subProjects = [];
     if(!u){ S.me = null; S.authState = 'out'; S.view = {name: 'home'}; render(); return; }
     S.authState = 'loading'; render();
     onSignedIn(u);
