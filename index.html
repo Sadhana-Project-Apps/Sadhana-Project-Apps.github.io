@@ -2910,7 +2910,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · Sub-contractor access (site diary only)</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 7 Nov 2026 (${APP_VER}) · WhatsApp update: include manpower / machinery when needed</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3079,8 +3079,8 @@ async function makeScrapReport(btn){
 }
 /* ---------- daily WhatsApp update from the Site Daily Report ---------- */
 const dmy = v => { if(!v) return ''; const [y, m, d] = String(v).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
-function waText(d){
-  const p = projById(d.projectId) || {}, x = d.data || {}, L = [];
+function waText(d, opt){
+  const p = projById(d.projectId) || {}, x = d.data || {}, L = []; opt = opt || waOpts(d.projectId);
   const bullets = t => String(t || '').split(/\n+/).map(l => l.replace(/^\s*([-*•·]|\d+[.)])\s*/, '').trim()).filter(Boolean).map(l => '• ' + l);
   const nick = String(p.nick || p.code || '').trim();
   L.push(`*Progress Update${nick ? ' ' + nick : ''}*`);
@@ -3099,16 +3099,23 @@ function waText(d){
   L.push('');
   (x.works || []).filter(r => r && r.work).forEach(r => { const pc = numv(r.pct); L.push(`• ${r.work}` + (!isEmpty(r.pct) ? ` — *${pc}%*` : '')); });
   L.push(...bullets(x.activities));
+  if(opt.mp){ const mp = (x.manpower || []).filter(r => r && numv(r.qty) > 0), tot = mp.reduce((a, r) => a + numv(r.qty), 0);
+    if(tot){ L.push('', `*Manpower: ${tot} pax*`); mp.forEach(r => L.push(`   ${r.trade} – ${numv(r.qty)}`)); } }
+  if(opt.mc){ const mc = (x.machinery || []).filter(r => r && numv(r.qty) > 0);
+    if(mc.length){ L.push('', `*Machinery:*`); mc.forEach(r => L.push(`   ${r.item} – ${numv(r.qty)}`)); } }
   if(bullets(x.tomorrow).length) L.push('', `*Tomorrow's Plan*`, ...bullets(x.tomorrow));
   if(bullets(x.issues).length) L.push('', `*Issues / Delays*`, ...bullets(x.issues));
-  return L.join('\n');
+  return L.join('\n').replace(/\n{3,}/g, '\n\n');
 }
+// manpower / machinery in the WhatsApp update — chosen per project (some clients want them, some want it short)
+function waOpts(pid){ const p = projById(pid) || {}; let o = p.waOpts; if(!o){ try { o = JSON.parse(localStorage.getItem('sde-wa-' + pid) || 'null'); } catch(e){} } return {mp: !!(o && o.mp), mc: !!(o && o.mc)}; }
 function waForm(id, draft){
   const d = draft || docById(id); if(!d) return;
-  const p = projById(d.projectId) || {};
+  const p = projById(d.projectId) || {}, o = waOpts(d.projectId); S.waDoc = d;
   const miss = !(p.start && p.end) ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-bottom:10px"><b>!</b><span>Add the project's start and completion dates (Edit project) to show Day No. and contract period.</span></div>` : '';
   showModal(`<div class="box"><div class="mh"><h3>💬 WhatsApp update</h3></div><div class="mb">${miss}
     <p class="small muted" style="margin-top:0">Made from this daily report. You can still edit it below. Add your site photos in WhatsApp as usual.</p>
+    <div class="row" style="gap:18px;flex-wrap:wrap;margin:0 0 10px">${[['waMp', 'mp', 'Include manpower'], ['waMc', 'mc', 'Include machinery']].map(([i, k, l]) => `<label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-weight:600;font-size:14px;color:inherit;margin:0"><input type="checkbox" id="${i}" ${o[k] ? 'checked' : ''} style="width:20px;height:20px">${l}</label>`).join('')}</div>
     <textarea id="waText" style="width:100%;min-height:320px;font:14px/1.45 system-ui,sans-serif;padding:10px;border:1px solid var(--line);border-radius:8px">${esc(waText(d))}</textarea>
   </div><div class="mf"><button class="btn ghost" data-act="closemodal">Close</button><button class="btn" data-act="wacopy">📋 Copy</button><button class="btn pri" data-act="wasend" style="background:#25D366;border-color:#25D366">Send to WhatsApp</button></div></div>`);
 }
@@ -4021,7 +4028,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z50';
+const APP_VER = 'Z51';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4710,7 +4717,13 @@ document.addEventListener('input', e => { if(e.target.id === 'eaEnd' || e.target
     document.querySelectorAll('#modal .npg').forEach(g => { let n = 0; g.querySelectorAll('.npi').forEach(b => { const ok = w.every(x => b.dataset.s.includes(x)); b.style.display = ok ? '' : 'none'; if(ok) n++; }); g.style.display = n ? '' : 'none'; any += n; });
     const no = document.querySelector('#modal .npnone'); if(no) no.style.display = any ? 'none' : ''; return; }
   if(e.target.closest && e.target.closest('#modal')) mSnap(); });
-document.addEventListener('change', e => { if(e.target.id === 'dcalGo' && e.target.value){ dsrCal(S.dcal.pid, e.target.value.slice(0, 7), e.target.value); return; }
+document.addEventListener('change', e => { if(e.target.id === 'waMp' || e.target.id === 'waMc'){ const d = S.waDoc; if(!d) return;
+    const o = {mp: !!$('#waMp')?.checked, mc: !!$('#waMc')?.checked}, ta = $('#waText'); if(ta) ta.value = waText(d, o);
+    try { localStorage.setItem('sde-wa-' + d.projectId, JSON.stringify(o)); } catch(err){}
+    const p = projById(d.projectId); if(p) p.waOpts = o;
+    if(!S.isSub) S.db.doc('projects/' + d.projectId).update({waOpts: o}).catch(() => {});   // remembered for the whole team on this project
+    return; }
+  if(e.target.id === 'dcalGo' && e.target.value){ dsrCal(S.dcal.pid, e.target.value.slice(0, 7), e.target.value); return; }
   if(e.target.dataset && e.target.dataset.sguse !== undefined){ const dr = e.target.value === 'draw';
     $('#sgDraw').style.display = dr ? '' : 'none'; if(dr && !PAD) initPad(); if(!dr){ $('#sgName').value = S.names[S.me] || ''; $('#sgDes').value = S.myDes || ''; } return; }
   if(e.target.dataset && e.target.dataset.tabsel){ S.view.tab = e.target.value; render(); return; } if(e.target.closest && e.target.closest('#modal')) mSnap(); });
