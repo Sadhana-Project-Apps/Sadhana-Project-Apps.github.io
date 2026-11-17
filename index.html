@@ -1019,6 +1019,55 @@ const TYPES = {
       {k:'note', l:'Note', t:'textarea', def:'The above minutes are taken as a true record of the meeting. Any amendment should be informed in writing within 7 days from the date of issue; otherwise the minutes are deemed confirmed.'}
     ]
   },
+  SSE: {
+    name: 'New Supplier / Subcontractor Evaluation', code: 'SSE', blurb: 'SDESB-PUR-F01 — evaluate a new supplier or subcontractor before appointing them',
+    paperForm: 'f01', formRef: 'SDESB-PUR-F01',
+    sigs: [
+      {role:'Evaluated by', hint:'Project Manager / Purchasing'},
+      {role:'Approved by', hint:'Director'}
+    ],
+    done: 'Approved',
+    title: d => 'Supplier / Subcontractor Evaluation — ' + (d.company || ''),
+    dateField: 'date',
+    fields: [
+      {sec:'Supplier / Subcontractor'},
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'company', l:'Company name', t:'text', req:1, w:'half'},
+      {k:'contact', l:'Contact person', t:'text', w:'half', ph:'Name & phone no.'},
+      {k:'kind', l:'Type', t:'select', o:['Subcontractor', 'Supplier'], w:'half', def:'Subcontractor'},
+      {k:'supplies', l:'Description of product / service supplied', t:'textarea', req:1},
+      {sec:'Evaluation'},
+      {k:'q1', l:'1. Able to meet Sadhana\'s quality and delivery requirement?', t:'select', o:['', 'Yes', 'No'], req:1, w:'half'},
+      {k:'r1', l:'Remarks', t:'text', w:'half'},
+      {k:'q2', l:'2. Acceptable pricing and payment term?', t:'select', o:['', 'Yes', 'No'], req:1, w:'half'},
+      {k:'r2', l:'Remarks', t:'text', w:'half'},
+      {k:'q3', l:'3. Acknowledged Sadhana\'s EHS guideline for subcontractor? (subcontractors only)', t:'select', o:['', 'Yes', 'No'], w:'half', hint:'Ticked Yes by itself when this company has signed the EHS Guideline acknowledgement (SDESB-PUR-F04) in this project.'},
+      {k:'r3', l:'Remarks', t:'text', w:'half'},
+      {k:'o4', l:'4. Other requirement (to specify)', t:'text'},
+      {k:'q4', l:'Result', t:'select', o:['', 'Yes', 'No'], w:'half'},
+      {k:'r4', l:'Remarks', t:'text', w:'half'},
+      {k:'o5', l:'5. Other requirement (to specify)', t:'text'},
+      {k:'q5', l:'Result', t:'select', o:['', 'Yes', 'No'], w:'half'},
+      {k:'r5', l:'Remarks', t:'text', w:'half'}
+    ]
+  },
+  SEA: {
+    name: 'EHS Guidelines for Subcontractor', code: 'SEA', blurb: 'SDESB-PUR-F04 — the guideline plus the subcontractor\'s signed acknowledgement, before work starts',
+    paperForm: 'f04', formRef: 'SDESB-PUR-F04',
+    sigs: [
+      {role:'Acknowledged by', hint:'Subcontractor representative — position'}
+    ],
+    done: 'Acknowledged',
+    title: d => 'EHS Guideline acknowledgement — ' + (d.subCompany || ''),
+    dateField: 'date',
+    fields: [
+      {sec:'Acknowledgement of Sadhana EHS Guideline'},
+      {k:'date', l:'Date given to the subcontractor', t:'date', req:1, def: () => today()},
+      {k:'repName', l:'I/We (name of the subcontractor\'s representative)', t:'text', req:1, w:'half'},
+      {k:'subCompany', l:'of (subcontractor company)', t:'text', req:1, w:'half'},
+      {k:'note', l:'How to use', t:'auto', pdf:false, calc: () => 'Give the subcontractor the full guideline (⤓ Download PDF — 6 pages). Their representative signs the acknowledgement on this phone (✍ Sign) before work starts; the signature, position and date print on the last page.'}
+    ]
+  },
   SSO: {
     name: 'Scrap & Salvage Out Slip', code: 'SSO', blurb: 'Slip for each load leaving site — client verifies type & weight',
     sigs: [
@@ -2141,6 +2190,48 @@ async function audioPlayer(f){
   } catch(e){ toast('Could not open the recording.', true); }
 }
 
+/* ---------- company paper forms printed on their original pages (SDESB-PUR-F01, SDESB-PUR-F04) ---------- */
+const PAPER_FORMS = {f01: ['forms/sdesb-pur-f01-1.jpg'], f04: [1, 2, 3, 4, 5, 6].map(i => 'forms/sdesb-pur-f04-' + i + '.jpg')};
+const pfCache = {};
+async function pfImg(url){
+  if(pfCache[url]) return pfCache[url];
+  const r = await fetch(url); if(!r.ok) throw new Error('form page missing: ' + url);
+  const b = await r.blob(); return pfCache[url] = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+}
+// has this company signed the EHS guideline acknowledgement in this project?
+const seaSigned = (pid, company) => { const n = s => String(s || '').toLowerCase().replace(/sdn\.?\s*bhd\.?|\bbhd\b|enterprise|[^a-z0-9]/g, ''); const c = n(company);
+  return !!c && S.docs.some(o => o.type === 'SEA' && o.projectId === pid && (o.signatures || []).some(Boolean) && n(o.data?.subCompany) === c); };
+async function paperFormPDF(d){
+  const T = TT(d), x = d.data || {}, pages = PAPER_FORMS[T.paperForm];
+  const {jsPDF} = window.jspdf, doc = new jsPDF({unit: 'pt', format: 'letter'});
+  for(let i = 0; i < pages.length; i++){ if(i) doc.addPage('letter', 'portrait'); doc.addImage(await pfImg(pages[i]), 'JPEG', 0, 0, 612, 792); }
+  doc.setTextColor(0, 32, 96); doc.setFont('helvetica', 'normal');
+  // text that shrinks to fit its space
+  const fit = (t, x0, y, w, size = 10, opt = {}) => { t = pt(String(t || '')); if(!t) return; let s = size; doc.setFontSize(s); while(s > 6 && doc.getTextWidth(t) > w){ s -= 0.5; doc.setFontSize(s); } doc.text(t, x0, y, opt); doc.setFontSize(size); };
+  const wrap = (t, x0, y, w, h, size = 10) => { t = pt(String(t || '')); if(!t) return; let s = size, ls; do { doc.setFontSize(s); ls = doc.splitTextToSize(t, w); s -= 0.5; } while(s > 6 && ls.length * s * 1.15 > h); doc.text(ls.slice(0, Math.floor(h / (s * 1.15)) + 1), x0, y); };
+  const sigImg = async (sg, x0, y0, w, h) => { if(!sg || !sg.img) return; try { const I = await imgData(sg.img, 600, 'png'), r = Math.min(w / I.w, h / I.h); doc.addImage(I.url, 'PNG', x0, y0 + (h - I.h * r), I.w * r, I.h * r); } catch(e){} };
+  const sgs = d.signatures || [], dmy = iso => { if(!iso) return ''; const t = new Date(iso); return pad2(t.getDate()) + '/' + pad2(t.getMonth() + 1) + '/' + t.getFullYear(); };
+  if(T.paperForm === 'f01'){
+    wrap(x.company, 246, 138, 296, 30, 10.5); wrap(x.contact, 246, 187, 296, 30, 10.5); wrap(x.supplies, 246, 235, 296, 30, 10);
+    const q3 = x.q3 || (x.kind !== 'Supplier' && seaSigned(d.projectId, x.company) ? 'Yes' : '');
+    const rows = [[x.q1, x.r1, 347.5, 390.5], [x.q2, x.r2, 390.5, 433.5], [q3, x.r3, 433.5, 492], [x.q4, x.r4, 492, 535], [x.q5, x.r5, 535, 578]];
+    // a drawn tick in the Yes or No box
+    const tick = (cx, cy) => { doc.setDrawColor(0, 32, 96); doc.setLineWidth(1.6); doc.setLineCap('round'); doc.setLineJoin('round'); doc.lines([[3.5, 4.5], [8, -10]], cx - 5.5, cy + 0.5); };
+    rows.forEach(([q, r, y0, y1]) => { const cy = (y0 + y1) / 2; if(q === 'Yes') tick(326.5, cy); if(q === 'No') tick(372.8, cy); });
+    rows.forEach(([q, r, y0, y1]) => wrap(r, 400, y0 + 13, 142, y1 - y0 - 6, 9));
+    // the specified "other requirements" replace the dash
+    [[x.o4, 514], [x.o5, 557]].forEach(([t, y]) => { if(!t) return; doc.setFillColor(255, 255, 255); doc.rect(118, y + 0.5, 6, 11, 'F'); fit(t, 119, y + 9.5, 182, 9); });
+    for(const [i, x0, nx, dx] of [[0, 92, 125, 120], [1, 320, 353, 348]]){ const sg = sgs[i]; if(!sg) continue;
+      await sigImg(sg, x0, 618, 150, 58); fit(sg.name, nx, 691, 175, 10); fit(dmy(sg.at), dx, 709, 100, 10); }
+  } else if(T.paperForm === 'f04'){
+    doc.setPage(6);
+    fit(x.repName, 108, 305, 163, 10.5); fit(x.subCompany, 291, 305, 194, 10.5);
+    const sg = sgs[0];
+    if(sg){ await sigImg(sg, 232, 470, 150, 34); fit(sg.designation, 232, 540, 250, 10.5); fit(dmy(sg.at), 232, 566, 150, 10.5); }
+  }
+  return doc;
+}
+
 /* ---------- claims: progress / final claim and delivery order (admin + staff only; kept in their own collection) ---------- */
 const CLAIM_TYPES = ['PC', 'DO'];
 const isClaimType = t => CLAIM_TYPES.includes(t);
@@ -2209,6 +2300,7 @@ const DOC_CATS = [
   {k:'ENV', name:'Environmental', icon:'🌿', types:['SW','NMC','POG','SWI','SLW','SPK','BMP','EAIA','ERO','EMR','ENM']},
   {k:'EQP', name:'Equipment & Tools', icon:'🔧', types:['EXD','EXI','CRD','MCI','FLD','FLI','SKD','SKI','BPD','BPI','CPD','CPI','GEN','ACI','AWM','OAC','PGR','HBR','DRL','LAD','BHI','ETI']},
   {k:'SCR', name:'Scrap & Salvage', icon:'♻', types:['SSO']},
+  {k:'PUR', name:'Purchasing & Subcontractors', icon:'🤝', types:['SEA','SSE']},
   {k:'CLM', name:'Claims', icon:'💰', types:['PC','DO']}
 ];
 // the Claims folder is only for admins and staff (not interns, programmers or sub-contractors)
@@ -2222,7 +2314,7 @@ const RETIRED = new Set(['PTW','POG','RNG']);
 const catTypes = (c, withRetired) => TYPE_KEYS.filter(k => typeCat(k) === c.k && (withRetired || !RETIRED.has(k)) && (!isClaimType(k) || canClaims()));
 const catOfType = t => docCats().find(c => c.k === typeCat(t)) || DOC_CATS[0];
 // quick-start buttons: the forms this project uses most in the open folder (or the usual ones)
-const QUICK_DEF = {OPS:['DSR','PR','LTR'], SHE:['TBT','PTM','WLK'], ENV:['SWI','NMC','BMP'], EQP:['EXD','CRD','ETI'], SCR:['SSO'], CLM:['PC','DO']};
+const QUICK_DEF = {OPS:['DSR','PR','LTR'], SHE:['TBT','PTM','WLK'], ENV:['SWI','NMC','BMP'], EQP:['EXD','CRD','ETI'], SCR:['SSO'], PUR:['SEA','SSE'], CLM:['PC','DO']};
 function quickTypes(pid, cat, docs){ const ok = catTypes(cat), cnt = {}; docs.forEach(d => { if(ok.includes(d.type)) cnt[d.type] = (cnt[d.type] || 0) + 1; });
   const used = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]), out = [];
   [...used, ...(QUICK_DEF[cat.k] || []), ...ok].forEach(k => { if(out.length < 3 && ok.includes(k) && !out.includes(k)) out.push(k); }); return out; }
@@ -3228,7 +3320,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Meeting recorder: Bahasa Malaysia + English</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Subcontractor EHS guideline & evaluation forms</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3656,7 +3748,8 @@ function docView(id){
         ${d.paper && (d.paper.fileIds || []).length ? `<button class="btn pri" data-act="papershow" data-id="${esc(d.id)}">📄 Signed copy (hardcopy)</button>` : ''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF${d.paper ? ' (unsigned)' : ''}</button>
         ${!d.paper && st.next !== -1 && S.canWrite && !S.isSub ? `<button class="btn" data-act="paperup" data-id="${esc(d.id)}">📄 Signed on paper? Upload the signed copy</button>` : ''}
-        <button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>
+        ${T.paperForm ? '' : `<button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>`}
+        ${d.type === 'SEA' && S.canWrite && !S.isSub ? `<button class="btn" data-act="mksse" data-id="${esc(d.id)}">⭐ Evaluate this subcontractor (F01)</button>` : ''}
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
         ${d.type === 'PC' && S.canWrite ? (S.docs.find(o => o.type === 'DO' && o.data?.claimId === d.id) ? `<button class="btn" data-act="mkdo" data-id="${esc(d.id)}">📦 Open the delivery order (DO)</button>` : `<button class="btn pri" data-act="mkdo" data-id="${esc(d.id)}">📦 Make the delivery order (DO)</button>`) : ''}
         ${d.type === 'DO' && d.data?.claimId && docById(d.data.claimId) ? `<button class="btn" data-act="open" data-id="${esc(d.data.claimId)}">💰 Open the claim</button>` : ''}
@@ -4400,7 +4493,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z57';
+const APP_VER = 'Z58';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4693,6 +4786,7 @@ async function makePDF(id, opt){
   const btn = opt.blob ? null : document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
     if(TT(d).letter){ const r = await letterPdf(d); if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
+    if(TT(d).paperForm){ const pd = await paperFormPDF(d), r = {blob: pd.output('blob'), name: `${d.number} ${TT(d).formRef} ${docName(TT(d), d.data || {})}.pdf`.replace(/[\\/:*?"<>|]/g,'-')}; if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
     if(TT(d).coverStyle === 'axis'){ const ad = await axisPR(d), r = {blob: ad.output('blob'), name: `${d.number} ${docName(TT(d), d.data || {})}.pdf`.replace(/[\\/:*?"<>|]/g,'-')}; if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
     const T = TT(d), p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
     // one-page forms (daily report): build, and if it runs over, build again a little smaller
@@ -5845,6 +5939,9 @@ document.addEventListener('click', async e => {
     case 'voicetipok': try { localStorage.setItem('sde-voicetip', '1'); } catch(e){} el.closest('.vhint')?.remove(); break;
     case 'newpick': newPicker(el.dataset.p, el.dataset.c); break;
     case 'mkdo': makeDOFromClaim(el.dataset.id); break;
+    case 'mksse': { const a = docById(el.dataset.id); if(!a) break; const ex = S.docs.find(o => o.type === 'SSE' && o.projectId === a.projectId && String(o.data?.company || '').toLowerCase() === String(a.data?.subCompany || '').toLowerCase());
+      if(ex){ go('doc', {id: ex.id}); toast('This subcontractor already has an evaluation'); break; }
+      const n = newDraft(a.projectId, 'SSE'); n.data.company = a.data?.subCompany || ''; n.data.contact = a.data?.repName || ''; n.data.kind = 'Subcontractor'; if((a.signatures || []).some(Boolean)) n.data.q3 = 'Yes'; S.draft = n; S.respMode = false; go('edit'); break; }
     case 'recstart': recStart(); break;
     case 'recstop': recStop(); break;
     case 'recupload': recUpload(); break;
