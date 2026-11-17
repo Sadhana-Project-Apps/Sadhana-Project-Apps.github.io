@@ -847,6 +847,11 @@ const TYPES = {
       {sec:'Safety Statistics & Manhours'},
       {k:'hse', l:'HSE statistics', t:'table', sub:false, keepRows:1, hint:'Previous total comes from the last progress report; total to date is added up automatically.', cols:[{k:'item',l:'HSE statistic'},{k:'prev',l:'Previous total',n:1,w:90,pw:26},{k:'week',l:'This period',n:1,w:90,pw:26},{k:'todate',l:'Total to date',n:1,w:100,pw:26,calc: r => (isEmpty(r.prev) && isEmpty(r.week)) ? '' : String(+(numv(r.prev) + numv(r.week)).toFixed(2))}],
         def: () => ['Lost Time Injury (LTI)','Recordable incidents','Near misses','Total manhours','Safe workdays'].map(item => ({item}))},
+      {k:'hseW', l:'HSE statistic by week of the month', t:'table', sub:false, keepRows:1, optIn:1, hint:'Week 1 starts on the 1st of the month; weeks run Monday–Sunday. Manhours (pax × 8 hours) and safe workdays fill in from the daily reports.',
+        cols:[{k:'item',l:'HSE statistic',pw:50},{k:'w1',l:'1st week',n:1,w:70},{k:'w2',l:'2nd week',n:1,w:70},{k:'w3',l:'3rd week',n:1,w:70},{k:'w4',l:'4th week',n:1,w:70},{k:'w5',l:'5th week',n:1,w:70},{k:'w6',l:'6th week',n:1,w:70}],
+        def: () => HSEW_ROWS.map(item => ({item}))},
+      {k:'bfMh', l:'B/F from previous manhours', t:'number', w:'half', optIn:1, hint:'From the last progress report'},
+      {k:'bfSafe', l:'B/F from previous total safe workdays', t:'number', w:'half', optIn:1, hint:'From the last progress report'},
       {sec:'Progress Photos'},
       {k:'photosBefore', l:'Before', t:'photos', hint:'Condition at the start of this period'},
       {k:'photosAfter', l:'After', t:'photos', hint:'Condition at the end of this period'},
@@ -1595,7 +1600,9 @@ function buildType(type, fmt){
 // daily reports signed before Z20 had three signers — keep showing them
 const DSR_OLD_SIGS = [{role:'Prepared by', hint:'Site Supervisor'}, {role:'Checked by', hint:'Project Manager'}, {role:'Acknowledged by', hint:'Client / Consultant'}];
 const DSR_CLIENT_SIG = {role:'Acknowledged by', hint:'Client / Consultant', wait:'Waiting for client'};
-const TT = d => { const T = buildType(d.type, d.fmt); const n = (d.signatures || []).filter(Boolean).length;
+// the Axis (client) progress report format applies to every report of that project not already signed under another format
+const fmtOf = d => { if(d.type === 'PR' && typeof projPreset === 'function'){ const pre = projPreset(d.projectId); if(pre && pre.PR && (!d.fmt || d.fmt.coverStyle === 'axis') && (d.signatures || []).filter(Boolean).length <= 1) return pre.PR; } return d.fmt; };
+const TT = d => { const T = buildType(d.type, fmtOf(d)); const n = (d.signatures || []).filter(Boolean).length;
   if(d.type !== 'DSR') return T;
   const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
   if(n > sigs.length) return {...T, sigs: [...sigs, ...DSR_OLD_SIGS.slice(sigs.length, n)]};
@@ -1609,12 +1616,12 @@ const PROJECT_PRESETS = [{
   mp: AXIS_MP, mc: AXIS_MC,
   PR: {coverStyle: 'axis', endLine: '--- END OF WEEKLY PROGRESS REPORT ---', gridMonth: 1,
     sigs: [{role: 'Prepared by', hint: 'Site Engineer'}],
-    show: ['sec:Design & Analysis – Progress by Level', 'byLevel', 'byLevelPlan'],
-    hide: ['sec:Weather Report', 'photosBefore', 'remarks', 'sec:Work Programme'],
+    show: ['sec:Design & Analysis – Progress by Level', 'byLevel', 'byLevelPlan', 'hseW', 'bfMh', 'bfSafe'],
+    hide: ['sec:Weather Report', 'photosBefore', 'remarks', 'sec:Work Programme', 'hse'],
     pdfHide: ['wp', 'cutoff', 'timeElapsed'],
     labels: {'sec:Progress Summary – Main Works': 'Progress Summary', 'sec:Progress Summary – Other Works': 'Progress Summary (Others)', 'sec:Look-Ahead (Next Period)': '1 Week Forecast',
       'sec:Major Issues Affecting Progress': 'Schedule of Major Issues that Might Affect the Progress of Work', 'sec:Plant & Machinery at Site': 'Machinery at Site', 'sec:Safety Statistics & Manhours': 'Manhours',
-      'sec:Progress Photos': 'Progress Photo', photosAfter: 'Progress photos', lookahead: '1 week forecast'},
+      'sec:Progress Photos': 'Progress Photo', photosAfter: 'Progress photos (type the heading as the caption of the first photo of each group, e.g. "INSTALL SAFETY BARRICADE"; photos with no caption join the group above — 3 photos per row)', lookahead: '1 week forecast'},
     order: ['Reporting period', 'S-Curve', 'Progress Summary – Main Works', 'Progress Summary – Other Works', 'Look-Ahead (Next Period)', 'Design & Analysis – Progress by Level', 'Major Issues Affecting Progress', 'Manpower at Site', 'Plant & Machinery at Site', 'Safety Statistics & Manhours', 'Progress Photos']}
 }];
 const projPreset = pid => { const p = projById(pid); return p ? PROJECT_PRESETS.find(x => x.test(p)) || null : null; };
@@ -2698,6 +2705,7 @@ async function makeDocx(id){
   const d = docById(id); if(!d) return;
   const btn = document.querySelector('[data-act=docx]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing Word…'; }
   try {
+    if(TT(d).coverStyle === 'axis'){ const blob = await axisDocx(d); await S.dl.save({filename: `${d.number} ${docName(TT(d), d.data || {})}.docx`.replace(/[\\/:*?"<>|]/g, '-'), data: blob}); return; }
     const D = await docxLib();
     const {Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun, Header, Footer, AlignmentType, WidthType, BorderStyle, ShadingType, PageNumber, VerticalAlign, PageBreak, TabStopType, PageOrientation} = D;
     const T = TT(d), p = projById(d.projectId) || {}, data = withAutos(d), st = statusOf(d), c = company();
@@ -2959,7 +2967,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Axis Wisma Kemajuan progress report format</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Axis weekly progress report — exact client format</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3413,6 +3421,8 @@ function newDraft(pid, type){
   if(type === 'PR'){ const last = prevOf('PR')[0];
     if(last && last.data?.hse) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
+    if(last && last.data?.hseW && data.hseW){ const lw = axWeek(last.data.to || last.data.from || today()), row = i => numv((last.data.hseW[i] || {})['w' + (lw + 1)]);
+      data.bfMh = String(numv(last.data.bfMh) + row(2)); data.bfSafe = String(numv(last.data.bfSafe) + row(3)); }
     // the work programme carries over; actual % is refreshed when the S-curve is generated
     const lwp = (last?.data?.wp || []).filter(r => r && String(r.act || '').trim());
     if(lwp.length) data.wp = lwp.map(r => ({act: r.act, start: r.start, finish: r.finish, weight: r.weight, 'actp': r['actp'] || '', _auto: r._auto || ''})); }
@@ -3432,6 +3442,7 @@ function newDraft(pid, type){
     const carry = last ? last.data.works.filter(r => r && r.work && numv(r.pct) < 100).map(r => ({work: r.work, pct: r.pct || ''})) : [];
     if(carry.length) data.works = carry;
   }
+  if(type === 'PR' && T.gridMonth) data.gridFrom = '1';
   if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); } data.to = addDays(data.from, 6); data.cutoff = data.to; data.subDate = today(); }
   T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
   if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); if(u <= n) u.setTime(n.getTime() + 8 * 3600000); data.until = iso(u); }
@@ -3630,10 +3641,10 @@ function fieldInput(f, v){
       const rows = v && v.length ? v : [{}];
       const fcols = f.cols.filter(c => c.day == null || c.day < periodDays(S.draft?.data || {}, f.maxDays || 7));
       const sk = sumKeysOf(f, fcols), dayC = fcols.filter(c => c.day != null);
-      const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
+      const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
       if(f.marks){ const di = S.draft?.data?.from ? dDiff(today(), S.draft.data.from) : -1; if(di >= 0 && di < fcols.filter(c => c.day != null).length) S._dayok = di; else S._dayok = null; }
-      return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''}${f.actList && c.k === f.cols[0].k ? ` list="act_${f.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
+        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''}${f.actList && c.k === f.cols[0].k ? ` list="act_${f.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
       </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.actList ? actDatalist(f.k) : ''}${f.people ? `<button class="addrow" data-act="pplpick" data-k="${f.k}" style="margin-left:6px">👥 Choose people</button>${pplDatalists(f.k)}` : ''}${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
     }
     case 'photos': {
@@ -3787,10 +3798,20 @@ function fillFromDailyReports(){
     const seen = {}; allDsr.forEach(x => (x.data.works || []).forEach(w => { const k = norm(w?.work); if(!k) return; const pc = parseFloat(w.pct);
       const o = seen[k] = seen[k] || {first: x.data.date}; o.last = x.data.date; if(!isNaN(pc)){ o.pct = pc; if(pc >= 100 && !o.done) o.done = x.data.date; } }));
     data.mainWorks = data.mainWorks.map(r => { const o = r && seen[norm(r.desc)]; if(!o) return r; nW++;
-      return {...r, start: r.start || fmtDate(o.first), finish: o.pct >= 100 ? (r.finish || fmtDate(o.done || o.last)) : r.finish || '', status: o.pct >= 100 ? 'Completed' : 'In progress (' + (o.pct || 0) + '%)'}; });
+      const fd = v => T0.coverStyle === 'axis' ? v.slice(8, 10) + '/' + v.slice(5, 7) + '/' + v.slice(2, 4) : fmtDate(v);
+      return {...r, start: r.start || fd(o.first), finish: o.pct >= 100 ? (r.finish || fd(o.done || o.last)) : r.finish || '', status: o.pct >= 100 ? 'Completed' : 'In progress (' + (o.pct || 0) + '%)'}; });
   }
+  // client format: HSE by week of the month — manhours = pax × 8 h, safe workdays = days worked
+  if(d.type === 'PR' && Array.isArray(data.hseW)){
+    const mh = Array(6).fill(0), sf = Array(6).fill(0), cur = axWeek(data.to);
+    gridDsr.forEach(x => { const w = axWeek(x.data.date); if(w > 5) return; mh[w] += (x.data.manpower || []).reduce((a, r) => a + numv(r?.qty), 0) * 8; sf[w] += 1; });
+    HSEW_ROWS.forEach((item, i) => { if(!data.hseW[i]) data.hseW[i] = {item}; });
+    for(let w = 0; w <= Math.min(5, cur); w++){ data.hseW[2]['w' + (w + 1)] = String(mh[w]); data.hseW[3]['w' + (w + 1)] = String(sf[w]);
+      ['w' + (w + 1)].forEach(k => { if(isEmpty(data.hseW[0][k])) data.hseW[0][k] = '0'; if(isEmpty(data.hseW[1][k])) data.hseW[1][k] = '0'; }); } }
   // progress photos: kept with the daily reports (not printed there) — first days → Before, last days → After
   let nPh = 0;
+  if(d.type === 'PR' && T0.coverStyle === 'axis' && !(data.photosAfter || []).length){
+    dsr.forEach(x => (x.data.photos || []).forEach(ph => { if((data.photosAfter = data.photosAfter || []).length < 12){ data.photosAfter.push({...ph}); nPh++; } })); }
   if(d.type === 'PR'){ const withPh = dsr.filter(x => (x.data.photos || []).length), take = (list, n) => { const out = []; list.forEach(x => (x.data.photos || []).forEach(ph => { if(out.length < n) out.push({...ph, caption: ph.caption || 'Daily report ' + fmtDate(x.data.date)}); })); return out; };
     if(withPh.length){ const half = Math.max(1, Math.floor(withPh.length / 2));
       if(!(data.photosBefore || []).length){ data.photosBefore = take(withPh.slice(0, half), 6); nPh += data.photosBefore.length; }
@@ -4102,7 +4123,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z53';
+const APP_VER = 'Z54';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4378,8 +4399,10 @@ const GREEN_HEAD = [197,224,180], GREEN_LINE = [46,125,50], LABEL_FILL = [242,24
 const docName = (T, data) => T.nameFn ? swapTypeName(T.code || TYPE_KEYS.find(k => TYPES[k] === T), T.nameFn(data || {})) : T.name;
 function dayLabel(from, i){ if(!from) return 'Day '+(i+1); const d = new Date(from+'T00:00:00'); d.setDate(d.getDate()+i); return pad2(d.getDate())+'/'+pad2(d.getMonth()+1); }
 // the day grid normally starts at "Period from"; a whole-month grid (client format) is kept in gridFrom / gridTo
-const gridStart = data => data.gridFrom || data.from;
-function periodDays(data, max = 7){ const a = data.gridFrom || data.from, b = data.gridTo || data.to; if(!a || !b) return max; const n = Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
+// (always the month of "Period to", so changing the period moves the grid with it)
+const gridStart = data => data.gridFrom ? String(data.to || data.gridFrom).slice(0, 7) + '-01' : data.from;
+const gridEnd = data => { if(!data.gridFrom) return data.to; const m = String(data.to || data.gridFrom).slice(0, 7); return m + '-' + pad2(new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate()); };
+function periodDays(data, max = 7){ const a = gridStart(data), b = gridEnd(data); if(!a || !b) return max; const n = Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
 async function letterheadData(){
   const c = company();
   if(c.letterheadId){ try { return await imgData(await photoData(c.letterheadId), 1600, 'jpeg'); } catch(e){} }
@@ -4393,6 +4416,7 @@ async function makePDF(id, opt){
   const btn = opt.blob ? null : document.querySelector('[data-act=pdf]'); if(btn){ btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
     if(TT(d).letter){ const r = await letterPdf(d); if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
+    if(TT(d).coverStyle === 'axis'){ const ad = await axisPR(d), r = {blob: ad.output('blob'), name: `${d.number} ${docName(TT(d), d.data || {})}.pdf`.replace(/[\\/:*?"<>|]/g,'-')}; if(opt.blob) return r; await S.dl.save({filename: r.name, data: r.blob}); return; }
     const T = TT(d), p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
     // one-page forms (daily report): build, and if it runs over, build again a little smaller
     const build = async sc => {
@@ -4627,7 +4651,7 @@ async function makePDF(id, opt){
         const preH = (showSub ? 6.5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
         const drawPre = () => {
           if(showSub){ y += 1.5; doc.setFont('helvetica','bold'); doc.setFontSize(8.8 * hs); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), halfX, y + 3.5 * hs); y += 5 * hs; }
-          if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(gridStart(data) + 'T00:00:00'), m2 = new Date((data.gridTo || data.to || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(gridStart(data)) + ' – ' + fmtDate(data.gridTo || data.to) + ')'), L, y + 3); } y += 5; } };
+          if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(gridStart(data) + 'T00:00:00'), m2 = new Date((gridEnd(data) || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(gridStart(data)) + ' – ' + fmtDate(gridEnd(data)) + ')'), L, y + 3); } y += 5; } };
         const colStyles = {}; let ci = 0;
         if(f.num) colStyles[ci++] = {cellWidth:12, halign:'center'};
         cols.forEach(cc => { colStyles[ci] = {...(cc.n || cc.day != null || cc.center ? {halign:'center'} : {}), ...(cc.pw ? {cellWidth:cc.pw} : {})}; ci++; });
@@ -4738,6 +4762,442 @@ async function makePDF(id, opt){
     await S.dl.save({filename: fname, data: blob});
   } catch(e){ if(opt.blob) throw e; if(e?.code !== 'declined'){ console.error(e); toast('Could not create the PDF.', true); } }
   finally { if(btn){ btn.disabled = false; btn.textContent = '⤓ Download PDF'; } }
+}
+/* ---------- Axis REIT – Wisma Kemajuan: the client's own "Weekly Progress Report" layout, page for page ---------- */
+const AX = {G: [198, 224, 180], G2: [226, 239, 218], Y: [255, 242, 204], YT: [255, 217, 102], OR: [244, 176, 132], BLUE: [0, 112, 192], GRN: [0, 176, 80], RED: [255, 0, 0], ORT: [237, 125, 49], SB: [68, 114, 196]};
+const axOrd = n => n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th';
+const axIso = v => { v = String(v || '').trim(); if(/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10); const m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad2(m[2]) + '-' + pad2(m[1]) : ''; };
+const axDMY = v => { if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(v || '').trim())) return String(v).trim(); const s = axIso(v); return s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : String(v || ''); };
+const axDM = v => { const s = axIso(v); return s ? (+s.slice(8, 10)) + '/' + (+s.slice(5, 7)) + '/' + s.slice(0, 4) : String(v || ''); };
+// weeks of a month start on Monday (week 1 = 1st of the month up to the first Sunday)
+const axWeek = iso => { const d = new Date(iso.slice(0, 7) + '-01T00:00:00'), off = (d.getDay() + 6) % 7; return Math.floor((+iso.slice(8, 10) - 1 + off) / 7); };
+const axIsHead = (r, k, others) => { const t = String(r?.[k] || '').trim(); if(!t) return false; if(r._g) return true; if(others.some(o => !isEmpty(r[o]))) return false; return /^\d+[.)]\s/.test(t) || (t === t.toUpperCase() && /[A-Z]{3}/.test(t)); };
+const HSEW_ROWS = ['Lost Time Injury (LTI)', 'Incidents Record', 'Total Manhours Weekly', 'Safe Workdays'];
+
+async function axisPR(d){
+  const T = TT(d), p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
+  const {jsPDF} = window.jspdf; const doc = new jsPDF({unit: 'mm', format: 'letter'});
+  const M = 25.4, TOPY = 46.6, FS = 11;
+  const W = () => doc.internal.pageSize.getWidth(), H = () => doc.internal.pageSize.getHeight();
+  const LH = await letterheadData();
+  const year = String(data.to || data.from || today()).slice(0, 4), toIso = data.to || data.from || today();
+  const mon = new Date(toIso.slice(0, 7) + '-01T00:00:00'), monTxt = mon.toLocaleDateString('en-GB', {month: 'short'}).toUpperCase().slice(0, 3) + ' ' + toIso.slice(0, 4);
+  const lastDay = new Date(mon.getFullYear(), mon.getMonth() + 1, 0).getDate();
+  const ink = () => { doc.setTextColor(0); doc.setDrawColor(0); };
+  // text with superscript pieces: parts = [[text, sup]]
+  const supW = (parts, size) => parts.reduce((a, [s, up]) => { doc.setFontSize(up ? size * 0.62 : size); return a + doc.getTextWidth(s); }, 0);
+  const supTxt = (parts, x, y, size, align) => { let w = supW(parts, size), cx = align === 'center' ? x - w / 2 : x;
+    parts.forEach(([s, up]) => { doc.setFontSize(up ? size * 0.62 : size); doc.text(s, cx, up ? y - size * 0.13 : y); cx += doc.getTextWidth(s); }); doc.setFontSize(size); };
+  const ordParts = (iso, pad, upper) => { const s = axIso(iso); if(!s) return [['-', 0]]; const dt = new Date(s + 'T00:00:00'), n = dt.getDate();
+    const mn = dt.toLocaleDateString('en-GB', {month: 'long'}); return [[pad ? pad2(n) : String(n), 0], [upper ? axOrd(n).toUpperCase() : axOrd(n), 1], [' ' + (upper ? mn.toUpperCase() : mn), 0]]; };
+  const heading = (no, title, size = FS, y = 50) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(size); ink();
+    const pre = no + '.' + (String(no).length > 1 ? ' ' : '  '), x1 = M + doc.getTextWidth(pre); doc.text(pre, M, y); doc.text(title, x1, y);
+    doc.setLineWidth(size > 12 ? 0.35 : 0.25); doc.line(x1, y + 0.8, x1 + doc.getTextWidth(title), y + 0.8); };
+  const base = (extra = {}) => ({theme: 'grid', margin: {left: M, right: M, top: TOPY, bottom: 30},
+    styles: {font: 'helvetica', fontSize: FS, textColor: 0, lineColor: 0, lineWidth: 0.2, cellPadding: {top: 0.07, bottom: 0.07, left: 1.6, right: 1.6}, valign: 'middle', overflow: 'linebreak', minCellHeight: 4.6},
+    headStyles: {fillColor: AX.G, textColor: 0, fontStyle: 'bold', halign: 'center', valign: 'middle', lineWidth: 0.2, lineColor: 0}, ...extra});
+  const pages = {};
+  const mark = k => { const n = doc.getCurrentPageInfo().pageNumber; pages[k] = pages[k] || [n, n]; pages[k][1] = n; };
+  const newPage = (orient = 'portrait') => { doc.addPage('letter', orient); };
+  const title = String(data._title || p.name || '').trim(), name = s => pt(String(s || '')).toUpperCase();
+
+  /* 1 — cover */
+  { const w = W(), L2 = M, R2 = w - M; doc.setLineWidth(0.25); ink(); doc.line(L2, 57, R2, 57); doc.line(L2, 68.6, R2, 68.6);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(pt('WEEKLY PROGRESS REPORT NO.' + (data.reportNo || d.seq || '')), w / 2, 61.6, {align: 'center'});
+    supTxt([['DATE: ', 0], ...ordParts(data.from, 1), [' – ', 0], ...ordParts(data.to, 1), [' ' + year, 0]], w / 2, 66.6, 12, 'center');
+    const m = name(title).match(/^(.*?)\s*(\(AS TRUSTEE.*\))\s*$/), main = m ? m[1] : name(title), tail = m ? m[2] : '';
+    doc.setFontSize(16); const lines = doc.splitTextToSize(main, 156); let y = 86;
+    lines.forEach(l => { doc.text(l, w / 2, y, {align: 'center'}); y += 6.5; });
+    if(tail){ doc.setFontSize(13); doc.text(doc.splitTextToSize(tail, 160), w / 2, y - 0.6, {align: 'center'}); y += 5.5; }
+    const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0];
+    const top = Math.max(y + 2, 123.5), bottom = 223.5;
+    if(cov){ try { const I = await imgCover(await photoData(cov.id), 150 / (bottom - top), 1600); doc.addImage(I.url, 'JPEG', (w - 150) / 2, top, 150, bottom - top); } catch(e){} }
+    const sg = (d.signatures || [])[0];
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('PREPARED BY:', w / 2, 237.5, {align: 'center'});
+    doc.setFont('helvetica', 'normal'); doc.text(pt(sg?.name || nameOf(d.createdBy) || ''), w / 2, 242.2, {align: 'center'});
+    doc.text(pt(sg?.designation || T.sigs[0]?.hint || 'Site Engineer'), w / 2, 246.9, {align: 'center'}); }
+
+  /* 2 — contents (filled in at the end, once the page numbers are known) */
+  newPage(); const tocPage = doc.getCurrentPageInfo().pageNumber;
+
+  /* 3 — 1. project details */
+  newPage(); mark('details'); heading(1, 'PROJECT DETAILS');
+  { const ins = String(p.insurance || '').split(/\s*(?:\n|\s\/\s|;)\s*/).map(s => s.trim()).filter(Boolean);
+    const rows = [['PROJECT', name(title)], ['CLIENT / OWNER', name(data._client || p.client)], ['CONTRACTOR', name(c.name)], ['DATE OF START', ordParts(p.start, 0, 1)], ['DATE OF COMPLETION', ordParts(p.end, 0, 1)], ['INSURANCE POLICY', ins.map(name).join('\n')]];
+    let y = 59.6; const X2 = 89.6;
+    rows.forEach(([k, v]) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(FS); doc.text(k, 27.2, y);
+      doc.setFont('helvetica', 'normal');
+      if(Array.isArray(v)){ supTxt(v.map(([s, up]) => [s, up]).concat([[' ' + (axIso(k === 'DATE OF START' ? p.start : p.end) || '').slice(0, 4), 0]]).filter(x => x[0] !== ' '), X2, y, FS); y += 4.46; }
+      else { const ls = String(v || '-').split('\n').flatMap(s => doc.splitTextToSize(s, 96)); ls.forEach((l, i) => doc.text(l, X2, y + i * 4.46)); y += Math.max(1, ls.length) * 4.46; }
+      y += 4.46; }); }
+
+  /* 4 — 2. S-curve */
+  newPage(); mark('scurve'); heading(2, 'S-CURVE');
+  { const tot = p.start && p.end ? dayDiff(p.start, p.end) + 1 : 0, pl = data.planned, ac = data.actual;
+    let y = 59.4; doc.setFont('helvetica', 'bold'); doc.setFontSize(FS); ink();
+    if(tot) doc.text('(' + tot + ' DAYS BASED ON WORK PROGRAMME)', M, y); y += 4.6;
+    const kv = (k, v, col) => { doc.setFont('helvetica', 'bold'); doc.setTextColor(0); doc.text(k, M, y); const x = M + doc.getTextWidth(k) + 1.2; doc.setFont('helvetica', 'normal'); doc.setTextColor(...col); doc.text(v, x, y); y += 4.85; };
+    kv('Schedule:', isEmpty(pl) ? '-' : numv(pl) + '%', AX.BLUE); kv('Actual:', isEmpty(ac) ? '-' : numv(ac) + '%', AX.GRN);
+    { const v = isEmpty(pl) || isEmpty(ac) ? null : numv(ac) - numv(pl), days = v == null ? null : Math.round(Math.abs(v) / 100 * (tot || 0));
+      doc.setFont('helvetica', 'bold'); let x = M; const seg = (s, col) => { doc.setTextColor(...col); doc.text(s, x, y); x += doc.getTextWidth(s); };
+      seg('Ahead', AX.GRN); seg(' / ', [0, 0, 0]); seg('Delay', AX.RED); seg(':  ', [0, 0, 0]);
+      seg(v == null ? '-' : days + ' Day' + (days === 1 ? '' : 's'), v == null ? [0, 0, 0] : v >= 0 ? AX.GRN : AX.RED); ink(); }
+    const rows = (data.scurve || []).filter(r => r && !isEmpty(r.date));
+    const per = Math.max(1, Math.ceil(rows.length / 3)), body = [];
+    for(let i = 0; i < per; i++){ const line = []; for(let g = 0; g < 3; g++){ const r = rows[g * per + i];
+      line.push(r ? axDMY(r.date) : '', {content: r ? (isEmpty(r.sched) ? '' : String(numv(r.sched))) : '', styles: {textColor: AX.SB}}, r ? (isEmpty(r.actual) ? '' : String(numv(r.actual))) : ''); } body.push(line); }
+    const cw = [22.4, 20.1, 17.5, 22.4, 20.1, 17.3, 22.6, 20.1, 17.6];
+    doc.autoTable({...base({margin: {left: 18, right: 18, top: TOPY, bottom: 30}}), startY: 80.1, head: [['Date', 'Schedule\n%', 'Actual\n%', 'Date', 'Schedule\n%', 'Actual\n%', 'Date', 'Schedule\n%', 'Actual\n%']], body: body.length ? body : [Array(9).fill('')],
+      styles: {...base().styles, halign: 'center', cellPadding: {top: 0.05, bottom: 0.05, left: 0.8, right: 0.8}, minCellHeight: 4.55}, headStyles: {...base().headStyles, valign: 'top'},
+      columnStyles: Object.fromEntries(cw.map((w, i) => [i, {cellWidth: w}]))});
+    axCurve(doc, rows, Math.max(doc.lastAutoTable.finalY + 4.6, 152.9)); }
+
+  /* 5–7 — 3. progress summary (+ 4. others, 5. forecast on the next page) */
+  newPage(); mark('summary'); heading(3, 'PROGRESS SUMMARY');
+  { const rows = (data.mainWorks || []).filter(r => r && ['desc', 'start', 'finish', 'status'].some(k => !isEmpty(r[k])));
+    const body = []; let gN = 0;
+    for(let i = 0; i < rows.length; i++){ const r = rows[i];
+      if(axIsHead(r, 'desc', ['start', 'finish', 'status'])){ const t = String(r.desc).trim(), m = t.match(/^(\d+)[.)]\s*(.*)$/); gN = m ? +m[1] : gN + 1;
+        body.push([{content: gN + '.', styles: {halign: 'center', fillColor: AX.G2}}, {content: name(m ? m[2] : t), colSpan: 4, styles: {fontStyle: 'bold', fillColor: AX.G2}}]); continue; }
+      let n = 1; while(i + n < rows.length && !axIsHead(rows[i + n], 'desc', ['start', 'finish', 'status'])) n++;
+      for(let k = 0; k < n; k++){ const q = rows[i + k];
+        body.push([...(k === 0 ? [{content: '', rowSpan: n}] : []), pt(q.desc || ''), {content: pt(q.start || ''), styles: {halign: 'center'}}, {content: pt(q.finish || ''), styles: {halign: 'center'}}, pt(q.status || '')]); }
+      i += n - 1; }
+    const opt = {...base({margin: {left: 26.5, right: 26.6, top: TOPY, bottom: 30}}), head: [['NO', 'DESCRIPTION', 'START\nDATE', 'FINISH\nDATE', 'STATUS']], showHead: 'everyPage', rowPageBreak: 'avoid',
+      columnStyles: {0: {cellWidth: 10}, 1: {cellWidth: 72.3}, 2: {cellWidth: 20}, 3: {cellWidth: 22.4}, 4: {cellWidth: 38.1}}};
+    // the client's table runs to the bottom of its last page with empty rows
+    const t = new jsPDF({unit: 'mm', format: 'letter'}); t.autoTable({...opt, startY: 56, body: body.length ? body : [['', '', '', '', '']]});
+    const left = Math.floor((236 - t.lastAutoTable.finalY) / 4.6);
+    for(let k = 0; k < left; k++) body.push([{content: '', styles: {lineWidth: {left: 0.2, right: 0.2, top: k ? 0.2 : 0.2, bottom: 0.2}}}, '', '', '', '']);
+    doc.autoTable({...opt, startY: 56, body: body.length ? body : [['', '', '', '', '']]});
+    mark('summary'); }
+  newPage(); mark('summary'); heading(4, 'PROGRESS SUMMARY (OTHERS)');
+  { const rows = (data.otherWorks || []).filter(r => r && ['desc', 'start', 'finish', 'status'].some(k => !isEmpty(r[k])));
+    while(rows.length < 10) rows.push({});
+    doc.autoTable({...base(), startY: 56, head: [['ITEM', 'DESCRIPTION', 'START\nDATE', 'FINISH\nDATE', 'STATUS']], headStyles: {...base().headStyles, minCellHeight: 12.7, valign: 'middle'},
+      body: rows.map((r, i) => [String(i + 1), pt(r.desc || ''), pt(r.start || ''), pt(r.finish || ''), pt(r.status || '')]),
+      styles: {...base().styles, minCellHeight: 9.3}, columnStyles: {0: {cellWidth: 15, halign: 'center'}, 1: {cellWidth: 72.7}, 2: {cellWidth: 27.3, halign: 'center'}, 3: {cellWidth: 26.6, halign: 'center'}, 4: {cellWidth: 25.8, halign: 'center'}}});
+    let y = doc.lastAutoTable.finalY + 7.6; heading(5, '1 WEEK FORECAST', FS, y);
+    const fr = (data.lookahead || []).filter(r => r && (!isEmpty(r.desc) || !isEmpty(r.start))); while(fr.length < 7) fr.push({});
+    doc.autoTable({...base(), startY: y + 6.2, head: [['ITEM', 'DESCRIPTION', 'EST START']], headStyles: {...base().headStyles, minCellHeight: 7.9, valign: 'top'},
+      body: fr.map((r, i) => [String(i + 1), pt(r.desc || ''), r.start ? (axIso(r.start) ? axDMY(r.start) : pt(r.start)) : '']),
+      styles: {...base().styles, minCellHeight: 9.3}, columnStyles: {0: {cellWidth: 15, halign: 'center'}, 1: {cellWidth: 115}, 2: {cellWidth: 37.4, halign: 'center'}}});
+    mark('summary'); }
+
+  /* 8 — 6. design & analysis by level */
+  newPage(); mark('level'); heading(6, 'DESIGN & ANALYSIS – PROGRESS BY LEVEL');
+  { const rows = (data.byLevel || []).filter(r => r && ['act', 'l1', 'l2', 'l3', 'l4', 'l5', 'rem'].some(k => !isEmpty(r[k])));
+    const lv = ['l1', 'l2', 'l3', 'l4', 'l5'];
+    const cellOf = v => { v = String(v ?? '').trim(); const st = /^on-?\s?going|in progress/i.test(v) ? {fillColor: AX.Y} : /^\d{1,2}[\/.-]\d{1,2}|complete/i.test(v) ? {fillColor: AX.G2} : {}; return {content: pt(v), styles: {halign: 'center', ...st}}; };
+    const body = rows.map(r => axIsHead(r, 'act', [...lv, 'rem']) ? [{content: pt(String(r.act).trim()), colSpan: 7, styles: {fontStyle: 'bold', fillColor: AX.G2}}] : [pt(r.act || ''), ...lv.map(k => cellOf(r[k])), pt(r.rem || '')]);
+    doc.autoTable({...base({margin: {left: 25.4, right: 25.4, top: TOPY, bottom: 30}}), startY: 55.6, head: [['ACTIVITY', 'L1', 'L2', 'L3', 'L4', 'L5', 'REMARKS']], body: body.length ? body : [Array(7).fill('')],
+      headStyles: {...base().headStyles, cellPadding: {top: 0.15, bottom: 0.15, left: 0.5, right: 0.5}}, columnStyles: {0: {cellWidth: 39.9}, 1: {cellWidth: 20.1}, 2: {cellWidth: 20.1}, 3: {cellWidth: 20.1}, 4: {cellWidth: 20.1}, 5: {cellWidth: 20.1}, 6: {cellWidth: 24.7}}});
+    let y = doc.lastAutoTable.finalY + 7.3; doc.setFont('helvetica', 'normal'); doc.setFontSize(FS); ink();
+    doc.text('*Legend: Completed (green) | On-going (yellow) | N/A (not applicable)', M, y); y += 7;
+    for(const ph of (data.byLevelPlan || [])){ try { const I = await imgData(await photoData(ph.id), 1800); let w = 133.7, h = w * I.h / I.w;
+        if(y + h > H() - 30){ if(y > 90){ newPage(); mark('level'); y = TOPY + 6; } h = Math.min(h, H() - 30 - y); w = h * I.w / I.h; }
+        const x = (W() - w) / 2; doc.addImage(I.url, 'JPEG', x, y, w, h); doc.setLineWidth(0.25); ink(); doc.rect(x, y, w, h); y += h + 6; } catch(e){} } }
+
+  /* 9 — 7. major issues */
+  newPage(); mark('issues'); heading(7, 'SCHEDULE OF MAJOR ISSUES THAT MIGHT AFFECT THE PROGRESS OF WORK');
+  { const rows = (data.issues || []).filter(r => r && ['issue', 'desc', 'by', 'status'].some(k => !isEmpty(r[k]))); while(rows.length < 3) rows.push({});
+    doc.autoTable({...base(), startY: 55.6, head: [['NO', 'ISSUES', 'DESCRIPTION', 'ACTION BY', 'STATUS']], headStyles: {...base().headStyles, minCellHeight: 9.7, valign: 'top'},
+      body: rows.map((r, i) => [String(i + 1), pt(r.issue || ''), pt(r.desc || ''), pt(r.by || ''), pt(r.status || '')]),
+      styles: {...base().styles, minCellHeight: 9.7, valign: 'top'}, columnStyles: {0: {cellWidth: 10.4, halign: 'center'}, 1: {cellWidth: 47.3}, 2: {cellWidth: 39.3}, 3: {cellWidth: 25.4, halign: 'center'}, 4: {cellWidth: 45.2}}}); }
+
+  /* 10 — 8. manpower, 9. machinery (landscape, whole month) */
+  newPage('landscape'); mark('manpower'); mark('machinery');
+  { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', upTo = +toIso.slice(8, 10);
+    const val = (r, day, all) => { const iso = toIso.slice(0, 7) + '-' + pad2(day), i = dayDiff(g0, iso); const v = i >= 0 ? r['d' + i] : ''; return day > upTo && !all ? '' : String(numv(v)); };
+    const grid = (no, label, colLabel, key, y) => {
+      heading(no, label + ' AT SITE (' + monTxt + ')', 13, y);
+      const rows = (data[key] || []).filter(r => r && !isEmpty(r.name));
+      const all = key === 'machinery', tot = Array.from({length: 31}, (_, i) => rows.reduce((a, r) => a + numv(val(r, i + 1)), 0));
+      const sty = {font: 'helvetica', fontSize: 5.1, textColor: 0, lineColor: 0, lineWidth: 0.15, cellPadding: {top: 0.05, bottom: 0.05, left: 0.3, right: 0.3}, halign: 'center', valign: 'middle', minCellHeight: 2.5};
+      doc.autoTable({theme: 'grid', margin: {left: M, right: M}, startY: y + 8.1, styles: sty,
+        head: [[{content: monTxt.slice(0, 3) + ' (1/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ' - ' + lastDay + '/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ')', colSpan: 32, styles: {fillColor: AX.G, fontStyle: 'bold'}}],
+          [{content: colLabel, styles: {fontStyle: 'bolditalic'}}, ...Array.from({length: 31}, (_, i) => ({content: String(i + 1), styles: {fontStyle: 'bold'}}))]],
+        headStyles: {fillColor: [255, 255, 255], textColor: 0, lineWidth: 0.15, lineColor: 0},
+        body: [...rows.map(r => [name(r.name), ...Array.from({length: 31}, (_, i) => val(r, i + 1, all))]),
+          [{content: 'TOTAL', styles: {halign: 'right', fontStyle: 'bold', fillColor: AX.YT}}, ...tot.map(v => ({content: String(v), styles: {fontStyle: 'bold', fillColor: AX.YT}}))]],
+        columnStyles: {0: {cellWidth: 30.5}, ...Object.fromEntries(Array.from({length: 31}, (_, i) => [i + 1, {cellWidth: 6.39}]))}});
+      return doc.lastAutoTable.finalY; };
+    const e1 = grid(8, 'MANPOWER', 'PERSONNEL', 'manpower', 50);
+    grid(9, 'MACHINERY', 'MACHINERY', 'machinery', Math.max(84.6, e1 + 12)); }
+
+  /* 11 — 10. manhours (landscape) */
+  newPage('landscape'); mark('manhours'); heading(10, 'MANHOURS');
+  { doc.setLineHeightFactor(1.3); const hw = data.hseW || [], row = i => hw[i] || {}, cur = axWeek(toIso);
+    const wv = (i, w) => { const v = row(i)['w' + (w + 1)]; return isEmpty(v) ? '' : String(numv(v)); };
+    const lti = Array.from({length: 6}, (_, w) => numv(wv(0, w))).reduce((a, b) => a + b, 0), inc = Array.from({length: 6}, (_, w) => numv(wv(1, w))).reduce((a, b) => a + b, 0);
+    const mhCur = numv(wv(2, cur)), sfCur = numv(wv(3, cur)), bfMh = numv(data.bfMh), bfSf = numv(data.bfSafe);
+    const big = v => String(Math.round(v * 100) / 100);
+    const wk = Array.from({length: 6}, (_, w) => ({content: String(w + 1) + '\u0001' + axOrd(w + 1) + '\nweek', styles: {fillColor: AX.YT, fontStyle: 'bold', halign: 'center'}}));
+    const g = s => ({content: s, styles: {textColor: AX.GRN, halign: 'center'}}), o = s => ({content: s, styles: {textColor: AX.ORT, fontStyle: 'bold', halign: 'center'}}), b = s => ({content: s, styles: {fontStyle: 'bold'}});
+    const blank6 = {content: '', colSpan: 6};
+    const lt = 'Total Lost Time Incidents (Lost-time incident is defined as anytime a worker must miss work beyond the day of incident because of onsite injury)';
+    const rc = 'Total Recordable Incidents (Recordable incident is defined as required offsite medical attention by a doctor or hospital.)';
+    doc.autoTable({theme: 'grid', margin: {left: M, right: M}, startY: 56.1,
+      styles: {font: 'helvetica', fontSize: FS, textColor: 0, lineColor: 0, lineWidth: 0.2, cellPadding: {top: 0.05, bottom: 0.05, left: 1.6, right: 1.6}, valign: 'top', overflow: 'linebreak', minCellHeight: 5.1, cellWidth: 'wrap'},
+      head: [[{content: 'HSE STATISTIC MONTH: ' + monTxt, colSpan: 9, styles: {fillColor: AX.G, fontStyle: 'bold', halign: 'center', textColor: 0}}],
+        [{content: '', colSpan: 2, styles: {fillColor: [255, 255, 255]}}, ...wk, {content: 'TOTAL YTD\n' + year + '\n(Hours)', styles: {fillColor: AX.OR, fontStyle: 'bold', halign: 'center'}}]],
+      headStyles: {lineWidth: 0.2, lineColor: 0, textColor: 0},
+      body: [[lt, b('Lost Time Injury (LTI)'), ...Array.from({length: 6}, (_, w) => ({content: wv(0, w) || '0', styles: {halign: 'center'}})), g(big(lti))],
+        [rc, b('Incidents Record'), ...Array.from({length: 6}, (_, w) => ({content: wv(1, w) || '0', styles: {halign: 'center'}})), g(big(inc))],
+        [{content: '', rowSpan: 7}, {content: 'MANHOURS:', colSpan: 8, styles: {fontStyle: 'bold', halign: 'center'}}],
+        [b('Total Manhours Weekly'), ...Array.from({length: 6}, (_, w) => ({content: wv(2, w), styles: {halign: 'center'}})), g(big(mhCur))],
+        [{content: 'B/F from Previous\nManhours', styles: {fontStyle: 'bold', minCellHeight: 15.5}}, blank6, {content: big(bfMh), styles: {halign: 'center', valign: 'middle'}}],
+        [b('Total Manhours YTD ' + year), blank6, o(big(bfMh + mhCur))],
+        [b('Safe Workdays'), ...Array.from({length: 6}, (_, w) => ({content: wv(3, w), styles: {halign: 'center'}})), g(big(sfCur))],
+        [{content: 'B/F from Previous Total\nSafe Workdays', styles: {fontStyle: 'bold'}}, blank6, {content: big(bfSf), styles: {halign: 'center', valign: 'middle'}}],
+        [b('Total Safe Workdays'), blank6, o(big(bfSf + sfCur))]],
+      columnStyles: {0: {cellWidth: 52.6}, 1: {cellWidth: 52.6}, 2: {cellWidth: 14.3}, 3: {cellWidth: 14.2}, 4: {cellWidth: 14.6}, 5: {cellWidth: 15}, 6: {cellWidth: 15.3}, 7: {cellWidth: 14.3}, 8: {cellWidth: 36.3}},
+      // "1st week": superscript ordinal
+      willDrawCell: h => { const t = h.cell.text; if(h.section === 'head' && t && t[0] && t[0].includes('\u0001')){ h.cell._sup = t[0].split('\u0001'); h.cell.text = ['', t[1]]; } },
+      didDrawCell: h => { if(h.cell._sup){ doc.setFont('helvetica', 'bold'); doc.setTextColor(0); const [n, s] = h.cell._sup, cx = h.cell.x + h.cell.width / 2; doc.setFontSize(FS); const w1 = doc.getTextWidth(n); doc.setFontSize(FS * 0.62); const w2 = doc.getTextWidth(s);
+        doc.setFontSize(FS); doc.text(n, cx - (w1 + w2) / 2, h.cell.y + 4.6); doc.setFontSize(FS * 0.62); doc.text(s, cx - (w1 + w2) / 2 + w1, h.cell.y + 3.1); doc.setFontSize(FS); } }}); doc.setLineHeightFactor(1.15); }
+
+  /* 12+ — 11. progress photos (landscape, a heading row + 3 photos per row) */
+  newPage('landscape'); mark('photos'); heading(11, 'PROGRESS PHOTO');
+  { const groups = []; (data.photosAfter || []).forEach(ph => { const cap = String(ph.caption || '').trim(), g = groups[groups.length - 1];
+      if(g && (!cap || cap.toUpperCase() === g.cap.toUpperCase())) g.ph.push(ph); else groups.push({cap: cap, ph: [ph]}); });
+    const X0 = M, TW = W() - 2 * M, CWp = TW / 3, CH = 6.8, RH = 55.7; let y = 56.1;
+    for(const g of groups){ const rowsN = Math.ceil(g.ph.length / 3);
+      for(let r = 0; r < rowsN; r++){ const needH = (r === 0 ? CH : 0) + RH;
+        if(y + needH > H() - 31){ newPage('landscape'); mark('photos'); y = 46.4; }
+        ink(); doc.setLineWidth(0.2);
+        if(r === 0 || Math.abs(y - 46.4) < 0.1){ doc.setFillColor(...AX.G); doc.rect(X0, y, TW, CH, 'FD'); doc.setFont('helvetica', 'bold'); doc.setFontSize(FS); doc.text(name(g.cap), X0 + TW / 2, y + 4.6, {align: 'center'}); y += CH; }
+        for(let k = 0; k < 3; k++){ const ph = g.ph[r * 3 + k], x = X0 + k * CWp; doc.rect(x, y, CWp, RH);
+          if(ph){ try { const I = await imgCover(await photoData(ph.id), (CWp - 4) / (RH - 4), 1100); doc.addImage(I.url, 'JPEG', x + 2, y + 2, CWp - 4, RH - 4); } catch(e){} } }
+        y += RH; } }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); ink();
+    doc.text('--- END OF WEEKLY PROGRESS REPORT---', W() / 2, Math.min(H() - 26, Math.max(y + 14, 183.6)), {align: 'center'}); }
+
+  /* contents */
+  doc.setPage(tocPage);
+  { const rg = k => { const v = pages[k]; return v ? (v[0] === v[1] ? String(v[0]) : v[0] + '-' + v[1]) : ''; };
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(FS); ink(); doc.text('CONTENTS', M, 50); doc.setLineWidth(0.25); doc.line(M, 50.8, M + doc.getTextWidth('CONTENTS'), 50.8);
+    const items = [['PROJECT DETAILS', 'details'], ['S-CURVE', 'scurve'], ['PROGRESS SUMMARY / FORECAST / MAJOR ISSUE', 'summary'], ['DESIGN & ANALYSIS – PROGRESS BY LEVEL', 'level'],
+      ['SCHEDULE OF MAJOR ISSUES THAT MIGHT AFFECT THE PROGRESS OF WORK', 'issues'], ['CONTRACTOR MANPOWER AT SITE', 'manpower'], ['CONTRACTOR PLANT AT SITE', 'machinery'], ['MANHOUR', 'manhours'], ['PROGRESS PHOTO', 'photos']];
+    doc.setLineHeightFactor(1.5); doc.autoTable({...base(), startY: 55.6, head: [['NO', 'CONTENTS', 'PAGE']], body: items.map(([t, k], i) => [String(i + 1), t, rg(k)]),
+      styles: {...base().styles, minCellHeight: 6.9, valign: 'top', cellPadding: {top: 0.4, bottom: 0.4, left: 1.6, right: 1.6}}, headStyles: {...base().headStyles, minCellHeight: 6.9},
+      columnStyles: {0: {cellWidth: 9.7, halign: 'center'}, 1: {cellWidth: 125.4}, 2: {cellWidth: 30, halign: 'center'}}}); doc.setLineHeightFactor(1.15); }
+
+  /* letterhead + "Page | n" on every page */
+  const n = doc.getNumberOfPages();
+  for(let i = 1; i <= n; i++){ doc.setPage(i); const w = W(), h = H(), lw = Math.min(w > h ? 160 : 164, (w > h ? 32 : 33.5) * LH.w / LH.h), lx = (w > h ? (w - lw) / 2 : 25);
+    try { doc.addImage(LH.url, 'JPEG', lx, w > h ? 12.5 : 12.5, lw, lw * LH.h / LH.w); } catch(e){}
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(0); doc.text('Page | ' + i, w - M, h - 18.6, {align: 'right'}); }
+  doc.__pages = pages; return doc;
+}
+// Excel-style S-curve chart, as in the client's report
+function axCurve(doc, rows, y0){
+  const x0 = 31.9, bw = 151.9, bh = 83.8; if(y0 + bh > doc.internal.pageSize.getHeight() - 28){ doc.addPage('letter', 'portrait'); y0 = 56; }
+  doc.setDrawColor(217); doc.setLineWidth(0.25); doc.rect(x0, y0, bw, bh);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(14); doc.setTextColor(89); doc.text('S-CURVE', x0 + bw / 2, y0 + 7.6, {align: 'center'});
+  const px = x0 + 9.7, pw = bw - 16.5, top = y0 + 13, ph = 45, ys = v => top + ph - Math.max(0, Math.min(100, v)) / 100 * ph;
+  doc.setFontSize(8); doc.setDrawColor(217); doc.setLineWidth(0.2);
+  for(let v = 0; v <= 100; v += 10){ doc.line(px, ys(v), px + pw, ys(v)); doc.text(String(v), px - 1.6, ys(v) + 1, {align: 'right'}); }
+  const n = rows.length, xs = i => px + (n > 1 ? (i + 0.5) * pw / n : pw / 2);
+  const stepL = Math.max(1, Math.ceil(n / 24));
+  rows.forEach((r, i) => { if(i % stepL) return; const t = axDM(r.date), tw = doc.getTextWidth(t) * 0.7071; doc.text(t, xs(i) + 1.2 - tw, top + ph + 2.4 + tw, {angle: 45}); });
+  const line = (k, col) => { const pts = rows.map((r, i) => [i, isEmpty(r[k]) ? NaN : numv(r[k])]).filter(([, v]) => !isNaN(v));
+    doc.setDrawColor(...col); doc.setFillColor(...col); doc.setLineWidth(0.55);
+    for(let i = 1; i < pts.length; i++) doc.line(xs(pts[i - 1][0]), ys(pts[i - 1][1]), xs(pts[i][0]), ys(pts[i][1]));
+    pts.forEach(([i, v]) => doc.circle(xs(i), ys(v), 0.85, 'F')); };
+  line('sched', AX.SB); line('actual', AX.ORT);
+  const ly = y0 + bh - 5.6, lx = x0 + bw / 2 - 19;
+  [[AX.SB, 'Schedule', lx], [AX.ORT, 'Actual', lx + 23]].forEach(([col, t, x]) => { doc.setDrawColor(...col); doc.setFillColor(...col); doc.setLineWidth(0.55); doc.line(x, ly, x + 7, ly); doc.circle(x + 3.5, ly, 0.85, 'F'); doc.setTextColor(89); doc.setFontSize(8); doc.text(t, x + 8.5, ly + 1); });
+  doc.setTextColor(0); doc.setDrawColor(0);
+}
+// S-curve chart as a picture for the Word file (same look as the PDF chart)
+function axCurvePng(rows){
+  const k = 4, Wd = 152 * k * 2, Ht = 84 * k * 2, cv = document.createElement('canvas'); cv.width = Wd; cv.height = Ht; const g = cv.getContext('2d'), u = 2 * k;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, Wd, Ht); g.strokeStyle = '#d9d9d9'; g.lineWidth = 2; g.strokeRect(1, 1, Wd - 2, Ht - 2);
+  g.fillStyle = '#595959'; g.font = `${14 * 0.3528 * u}px Arial`; g.textAlign = 'center'; g.fillText('S-CURVE', Wd / 2, 7.6 * u);
+  const px = 9.7 * u, pw = (152 - 16.5) * u, top = 13 * u, ph = 45 * u, ys = v => top + ph - Math.max(0, Math.min(100, v)) / 100 * ph;
+  g.font = `${8 * 0.3528 * u}px Arial`; g.textAlign = 'right'; g.lineWidth = 1.5;
+  for(let v = 0; v <= 100; v += 10){ g.strokeStyle = '#d9d9d9'; g.beginPath(); g.moveTo(px, ys(v)); g.lineTo(px + pw, ys(v)); g.stroke(); g.fillText(String(v), px - 1.6 * u, ys(v) + u); }
+  const n = rows.length, xs = i => px + (n > 1 ? (i + 0.5) * pw / n : pw / 2), stepL = Math.max(1, Math.ceil(n / 24));
+  rows.forEach((r, i) => { if(i % stepL) return; g.save(); g.translate(xs(i) + 1.2 * u, top + ph + 2.4 * u); g.rotate(-Math.PI / 4); g.textAlign = 'right'; g.fillText(axDM(r.date), 0, 0); g.restore(); });
+  const line = (key, col) => { const pts = rows.map((r, i) => [i, isEmpty(r[key]) ? NaN : numv(r[key])]).filter(([, v]) => !isNaN(v)); g.strokeStyle = g.fillStyle = col; g.lineWidth = 0.55 * u;
+    g.beginPath(); pts.forEach(([i, v], j) => j ? g.lineTo(xs(i), ys(v)) : g.moveTo(xs(i), ys(v))); g.stroke(); pts.forEach(([i, v]) => { g.beginPath(); g.arc(xs(i), ys(v), 0.85 * u, 0, 7); g.fill(); }); };
+  line('sched', '#4472c4'); line('actual', '#ed7d31');
+  const ly = (84 - 5.6) * u, lx = Wd / 2 - 19 * u; g.textAlign = 'left';
+  [['#4472c4', 'Schedule', lx], ['#ed7d31', 'Actual', lx + 23 * u]].forEach(([col, tx, x]) => { g.strokeStyle = g.fillStyle = col; g.beginPath(); g.moveTo(x, ly); g.lineTo(x + 7 * u, ly); g.stroke(); g.beginPath(); g.arc(x + 3.5 * u, ly, 0.85 * u, 0, 7); g.fill(); g.fillStyle = '#595959'; g.fillText(tx, x + 8.5 * u, ly + u); });
+  return cv.toDataURL('image/png');
+}
+// Word version of the client's weekly progress report — same pages, tables and colours as the PDF
+async function axisDocx(d){
+  const D = await docxLib();
+  const {Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun, Header, Footer, AlignmentType, WidthType, BorderStyle, ShadingType, PageNumber, VerticalAlign, PageBreak, PageOrientation, HeightRule} = D;
+  const T = TT(d), p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
+  const pdf = await axisPR(d), pages = pdf.__pages || {};
+  const MM = 56.7, tw = mm => Math.round(mm * MM), pxW = mm => Math.round(mm / 25.4 * 96);
+  const FONT = 'Arial', G = 'C6E0B4', G2 = 'E2EFDA', Y = 'FFF2CC', YT = 'FFD966', OR = 'F4B084';
+  const year = String(data.to || data.from || today()).slice(0, 4), toIso = data.to || data.from || today();
+  const mon = new Date(toIso.slice(0, 7) + '-01T00:00:00'), monTxt = mon.toLocaleDateString('en-GB', {month: 'short'}).toUpperCase().slice(0, 3) + ' ' + toIso.slice(0, 4);
+  const lastDay = new Date(mon.getFullYear(), mon.getMonth() + 1, 0).getDate();
+  const name = s => String(s || '').toUpperCase(), title = String(data._title || p.name || '').trim();
+  const t = (s, o = {}) => new TextRun({text: String(s ?? ''), font: FONT, size: o.size || 22, bold: o.bold, italics: o.it, color: o.color, underline: o.u ? {} : undefined, superScript: o.sup});
+  const P = (s, o = {}) => new Paragraph({children: Array.isArray(s) ? s : [t(s, o)], alignment: o.align, spacing: {before: o.before || 0, after: o.after ?? 0, line: o.line}, keepNext: o.keepNext});
+  const bd = {style: BorderStyle.SINGLE, size: 4, color: '000000'}, nb = {style: BorderStyle.NONE, size: 0, color: 'FFFFFF'};
+  const C = (content, wmm, o = {}) => new TableCell({children: (Array.isArray(content) ? content : [content]).flatMap(x => x instanceof Paragraph ? [x] : String(x ?? '').split('\n').map(l => P(l, {bold: o.bold, it: o.it, size: o.size, align: o.align, color: o.color, line: o.line}))),
+    width: {size: tw(wmm), type: WidthType.DXA}, columnSpan: o.span, rowSpan: o.rs, verticalAlign: o.top ? VerticalAlign.TOP : VerticalAlign.CENTER,
+    borders: o.nob ? {top: nb, bottom: nb, left: nb, right: nb} : {top: o.noTop ? nb : bd, bottom: o.noBottom ? nb : bd, left: bd, right: bd},
+    shading: o.fill ? {fill: o.fill, type: ShadingType.CLEAR, color: 'auto'} : undefined, margins: {top: 0, bottom: 0, left: o.pad ?? 90, right: o.pad ?? 90}});
+  const R = (cells, o = {}) => new TableRow({children: cells, tableHeader: o.head, cantSplit: true, height: o.h ? {value: tw(o.h), rule: HeightRule.ATLEAST} : undefined});
+  const TB = (ws, rows, indentMm = 0) => new Table({width: {size: tw(ws.reduce((a, b) => a + b, 0)), type: WidthType.DXA}, columnWidths: ws.map(tw), rows, indent: indentMm ? {size: tw(indentMm), type: WidthType.DXA} : undefined});
+  const HD = (no, s, size = 22, nb) => new Paragraph({children: [t(no + '.' + (String(no).length > 1 ? ' ' : '  '), {bold: true, size}), t(s, {bold: true, size, u: true})], spacing: {after: 200}, keepNext: true, pageBreakBefore: !!nb});
+  const BR = () => new Paragraph({children: [new PageBreak()]});
+  const img = async (id, wmm, hmm, cover) => { try { const I = cover ? await imgCover(await photoData(id), wmm / hmm, 1600) : await imgData(await photoData(id), 1800); let w = wmm, h = cover ? hmm : wmm * I.h / I.w; if(!cover && h > hmm){ h = hmm; w = hmm * I.w / I.h; }
+    return new ImageRun({type: 'jpg', data: durl2u8(I.url), transformation: {width: pxW(w), height: pxW(h)}}); } catch(e){ return null; } };
+  const ordRuns = (iso, pad, upper, o = {}) => { const s = axIso(iso); if(!s) return [t('-', o)]; const dt = new Date(s + 'T00:00:00'), n = dt.getDate(), mn = dt.toLocaleDateString('en-GB', {month: 'long'});
+    return [t(pad ? pad2(n) : String(n), o), t(upper ? axOrd(n).toUpperCase() : axOrd(n), {...o, sup: true}), t(' ' + (upper ? mn.toUpperCase() : mn), o)]; };
+  const rg = k => { const v = pages[k]; return v ? (v[0] === v[1] ? String(v[0]) : v[0] + '-' + v[1]) : ''; };
+  const A = [], L = [];   // portrait and landscape parts
+
+  /* cover */
+  const line = {bottom: {style: BorderStyle.SINGLE, size: 6, color: '000000', space: 1}};
+  A.push(new Paragraph({children: [], border: line, spacing: {before: 120, after: 0}}));
+  A.push(P([t('WEEKLY PROGRESS REPORT NO.' + (data.reportNo || d.seq || ''), {bold: true, size: 24})], {align: AlignmentType.CENTER}));
+  A.push(new Paragraph({alignment: AlignmentType.CENTER, border: line, children: [t('DATE: ', {bold: true, size: 24}), ...ordRuns(data.from, 1, 0, {bold: true, size: 24}), t(' – ', {bold: true, size: 24}), ...ordRuns(data.to, 1, 0, {bold: true, size: 24}), t(' ' + year, {bold: true, size: 24})]}));
+  { const m = name(title).match(/^(.*?)\s*(\(AS TRUSTEE.*\))\s*$/);
+    A.push(P([t(m ? m[1] : name(title), {bold: true, size: 32})], {align: AlignmentType.CENTER, before: 560}));
+    if(m) A.push(P([t(m[2], {bold: true, size: 26})], {align: AlignmentType.CENTER}));
+    const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0]; const im = cov ? await img(cov.id, 150, 100, true) : null;
+    if(im) A.push(new Paragraph({alignment: AlignmentType.CENTER, spacing: {before: 120, after: 0}, children: [im]}));
+    const sg = (d.signatures || [])[0];
+    A.push(P([t('PREPARED BY:', {bold: true})], {align: AlignmentType.CENTER, before: 600}), P(sg?.name || nameOf(d.createdBy) || '', {align: AlignmentType.CENTER}), P(sg?.designation || T.sigs[0]?.hint || 'Site Engineer', {align: AlignmentType.CENTER})); }
+
+  /* contents */
+  A.push(new Paragraph({children: [t('CONTENTS', {bold: true, u: true})], spacing: {after: 200}, pageBreakBefore: true}));
+  { const items = [['PROJECT DETAILS', 'details'], ['S-CURVE', 'scurve'], ['PROGRESS SUMMARY / FORECAST / MAJOR ISSUE', 'summary'], ['DESIGN & ANALYSIS – PROGRESS BY LEVEL', 'level'],
+      ['SCHEDULE OF MAJOR ISSUES THAT MIGHT AFFECT THE PROGRESS OF WORK', 'issues'], ['CONTRACTOR MANPOWER AT SITE', 'manpower'], ['CONTRACTOR PLANT AT SITE', 'machinery'], ['MANHOUR', 'manhours'], ['PROGRESS PHOTO', 'photos']];
+    const w = [9.7, 125.4, 30];
+    A.push(TB(w, [R([C('NO', w[0], {bold: true, fill: G, align: AlignmentType.CENTER}), C('CONTENTS', w[1], {bold: true, fill: G, align: AlignmentType.CENTER}), C('PAGE', w[2], {bold: true, fill: G, align: AlignmentType.CENTER})], {h: 6.9}),
+      ...items.map(([s, k], i) => R([C(String(i + 1), w[0], {align: AlignmentType.CENTER, top: 1, line: 360}), C(s, w[1], {top: 1, line: 360}), C(rg(k), w[2], {align: AlignmentType.CENTER, top: 1, line: 360})], {h: 6.9}))])); }
+
+  /* 1. project details */
+  A.push(HD(1, 'PROJECT DETAILS', 22, 1));
+  { const ins = String(p.insurance || '').split(/\s*(?:\n|\s\/\s|;)\s*/).map(s => s.trim()).filter(Boolean).map(name);
+    const rows = [['PROJECT', [name(title)]], ['CLIENT / OWNER', [name(data._client || p.client)]], ['CONTRACTOR', [name(c.name)]], ['DATE OF START', 'start'], ['DATE OF COMPLETION', 'end'], ['INSURANCE POLICY', ins.length ? ins : ['-']]];
+    const w = [62.4, 103];
+    A.push(TB(w, rows.map(([k, v]) => R([C(new Paragraph({spacing: {after: 240}, children: [t(k, {bold: true})]}), w[0], {nob: 1, top: 1}),
+      C(typeof v === 'string' ? new Paragraph({spacing: {after: 240}, children: [...ordRuns(p[v], 0, 1), t(' ' + String(p[v] || '').slice(0, 4))]}) : v.map((s, i) => P(s, {after: i === v.length - 1 ? 240 : 0})), w[1], {nob: 1, top: 1})])), 1.8)); }
+
+  /* 2. S-curve */
+  A.push(HD(2, 'S-CURVE', 22, 1));
+  { const tot = p.start && p.end ? dayDiff(p.start, p.end) + 1 : 0, pl = data.planned, ac = data.actual, v = isEmpty(pl) || isEmpty(ac) ? null : numv(ac) - numv(pl), days = v == null ? null : Math.round(Math.abs(v) / 100 * (tot || 0));
+    if(tot) A.push(P([t('(' + tot + ' DAYS BASED ON WORK PROGRAMME)', {bold: true})]));
+    A.push(P([t('Schedule: ', {bold: true}), t(isEmpty(pl) ? '-' : numv(pl) + '%', {color: '0070C0'})]), P([t('Actual: ', {bold: true}), t(isEmpty(ac) ? '-' : numv(ac) + '%', {color: '00B050'})]),
+      P([t('Ahead', {bold: true, color: '00B050'}), t(' / ', {bold: true}), t('Delay', {bold: true, color: 'FF0000'}), t(':  ', {bold: true}), t(v == null ? '-' : days + ' Day' + (days === 1 ? '' : 's'), {bold: true, color: v == null ? '000000' : v >= 0 ? '00B050' : 'FF0000'})], {after: 200}));
+    const rows = (data.scurve || []).filter(r => r && !isEmpty(r.date)), per = Math.max(1, Math.ceil(rows.length / 3)), w = [22.4, 20.1, 17.5, 22.4, 20.1, 17.3, 22.6, 20.1, 17.6];
+    const hdr = ['Date', 'Schedule\n%', 'Actual\n%', 'Date', 'Schedule\n%', 'Actual\n%', 'Date', 'Schedule\n%', 'Actual\n%'];
+    const body = []; for(let i = 0; i < per; i++){ const cells = []; for(let g = 0; g < 3; g++){ const r = rows[g * per + i];
+      cells.push(C(r ? axDMY(r.date) : '', w[g * 3], {align: AlignmentType.CENTER, pad: 30}), C(r && !isEmpty(r.sched) ? String(numv(r.sched)) : '', w[g * 3 + 1], {align: AlignmentType.CENTER, color: '4472C4', pad: 30}), C(r && !isEmpty(r.actual) ? String(numv(r.actual)) : '', w[g * 3 + 2], {align: AlignmentType.CENTER, pad: 30})); } body.push(R(cells)); }
+    A.push(TB(w, [R(hdr.map((h, i) => C(h, w[i], {bold: true, fill: G, align: AlignmentType.CENTER, top: 1, pad: 30})), {head: true}), ...body], -7.4));
+    A.push(new Paragraph({alignment: AlignmentType.CENTER, spacing: {before: 240}, children: [new ImageRun({type: 'png', data: durl2u8(axCurvePng(rows)), transformation: {width: pxW(152), height: pxW(84)}})]})); }
+
+  /* 3. progress summary */
+  A.push(HD(3, 'PROGRESS SUMMARY', 22, 1));
+  { const rows = (data.mainWorks || []).filter(r => r && ['desc', 'start', 'finish', 'status'].some(k => !isEmpty(r[k]))), w = [10, 72.3, 20, 22.4, 38.1];
+    const out = [R([C('NO', w[0], {bold: true, fill: G, align: AlignmentType.CENTER}), C('DESCRIPTION', w[1], {bold: true, fill: G, align: AlignmentType.CENTER}), C('START\nDATE', w[2], {bold: true, fill: G, align: AlignmentType.CENTER}), C('FINISH\nDATE', w[3], {bold: true, fill: G, align: AlignmentType.CENTER}), C('STATUS', w[4], {bold: true, fill: G, align: AlignmentType.CENTER})], {head: true})];
+    let gN = 0;
+    for(let i = 0; i < rows.length; i++){ const r = rows[i];
+      if(axIsHead(r, 'desc', ['start', 'finish', 'status'])){ const s = String(r.desc).trim(), m = s.match(/^(\d+)[.)]\s*(.*)$/); gN = m ? +m[1] : gN + 1;
+        out.push(R([C(gN + '.', w[0], {fill: G2, align: AlignmentType.CENTER}), C(name(m ? m[2] : s), w[1] + w[2] + w[3] + w[4], {span: 4, bold: true, fill: G2})])); continue; }
+      let n = 1; while(i + n < rows.length && !axIsHead(rows[i + n], 'desc', ['start', 'finish', 'status'])) n++;
+      for(let k = 0; k < n; k++){ const q = rows[i + k];
+        out.push(R([C('', w[0], {noTop: k > 0, noBottom: k < n - 1}), C(q.desc || '', w[1]), C(q.start || '', w[2], {align: AlignmentType.CENTER}), C(q.finish || '', w[3], {align: AlignmentType.CENTER}), C(q.status || '', w[4])])); }
+      i += n - 1; }
+    for(let k = 0; k < 6; k++) out.push(R(w.map(x => C('', x))));
+    A.push(TB(w, out, 1.1)); }
+
+  /* 4. others, 5. forecast */
+  A.push(HD(4, 'PROGRESS SUMMARY (OTHERS)', 22, 1));
+  { const rows = (data.otherWorks || []).filter(r => r && ['desc', 'start', 'finish', 'status'].some(k => !isEmpty(r[k]))); while(rows.length < 10) rows.push({});
+    const w = [15, 72.7, 27.3, 26.6, 25.8], hd = ['ITEM', 'DESCRIPTION', 'START\nDATE', 'FINISH\nDATE', 'STATUS'];
+    A.push(TB(w, [R(hd.map((h, i) => C(h, w[i], {bold: true, fill: G, align: AlignmentType.CENTER})), {head: true, h: 12.7}),
+      ...rows.map((r, i) => R([C(String(i + 1), w[0], {align: AlignmentType.CENTER}), C(r.desc || '', w[1]), C(r.start || '', w[2], {align: AlignmentType.CENTER}), C(r.finish || '', w[3], {align: AlignmentType.CENTER}), C(r.status || '', w[4], {align: AlignmentType.CENTER})], {h: 9.3}))]));
+    A.push(P('', {after: 160}), HD(5, '1 WEEK FORECAST'));
+    const fr = (data.lookahead || []).filter(r => r && (!isEmpty(r.desc) || !isEmpty(r.start))); while(fr.length < 7) fr.push({});
+    const w2 = [15, 115, 37.4];
+    A.push(TB(w2, [R(['ITEM', 'DESCRIPTION', 'EST START'].map((h, i) => C(h, w2[i], {bold: true, fill: G, align: AlignmentType.CENTER, top: 1})), {head: true, h: 7.9}),
+      ...fr.map((r, i) => R([C(String(i + 1), w2[0], {align: AlignmentType.CENTER}), C(r.desc || '', w2[1]), C(r.start ? (axIso(r.start) ? axDMY(r.start) : r.start) : '', w2[2], {align: AlignmentType.CENTER})], {h: 9.3}))])); }
+
+  /* 6. by level */
+  A.push(HD(6, 'DESIGN & ANALYSIS – PROGRESS BY LEVEL', 22, 1));
+  { const lv = ['l1', 'l2', 'l3', 'l4', 'l5'], w = [39.9, 20.1, 20.1, 20.1, 20.1, 20.1, 24.7];
+    const rows = (data.byLevel || []).filter(r => r && ['act', ...lv, 'rem'].some(k => !isEmpty(r[k])));
+    const fillOf = v => { v = String(v ?? '').trim(); return /^on-?\s?going|in progress/i.test(v) ? Y : /^\d{1,2}[\/.-]\d{1,2}|complete/i.test(v) ? G2 : undefined; };
+    A.push(TB(w, [R(['ACTIVITY', 'L1', 'L2', 'L3', 'L4', 'L5', 'REMARKS'].map((h, i) => C(h, w[i], {bold: true, fill: G, align: AlignmentType.CENTER, pad: 30})), {head: true}),
+      ...rows.map(r => axIsHead(r, 'act', [...lv, 'rem']) ? R([C(String(r.act).trim(), 164.9, {span: 7, bold: true, fill: G2})])
+        : R([C(r.act || '', w[0]), ...lv.map((k, i) => C(r[k] || '', w[i + 1], {align: AlignmentType.CENTER, fill: fillOf(r[k])})), C(r.rem || '', w[6])]))]));
+    A.push(P('*Legend: Completed (green) | On-going (yellow) | N/A (not applicable)', {before: 200, after: 200}));
+    for(const ph of (data.byLevelPlan || [])){ const im = await img(ph.id, 133.7, 120); if(im) A.push(new Paragraph({alignment: AlignmentType.CENTER, border: {top: bd, bottom: bd, left: bd, right: bd}, children: [im]})); }
+    }
+
+  /* 7. issues */
+  A.push(HD(7, 'SCHEDULE OF MAJOR ISSUES THAT MIGHT AFFECT THE PROGRESS OF WORK', 22, 1));
+  { const rows = (data.issues || []).filter(r => r && ['issue', 'desc', 'by', 'status'].some(k => !isEmpty(r[k]))); while(rows.length < 3) rows.push({});
+    const w = [10.4, 47.3, 39.3, 25.4, 45.2];
+    A.push(TB(w, [R(['NO', 'ISSUES', 'DESCRIPTION', 'ACTION BY', 'STATUS'].map((h, i) => C(h, w[i], {bold: true, fill: G, align: AlignmentType.CENTER, top: 1})), {head: true, h: 9.7}),
+      ...rows.map((r, i) => R([C(String(i + 1), w[0], {align: AlignmentType.CENTER, top: 1}), C(r.issue || '', w[1], {top: 1}), C(r.desc || '', w[2], {top: 1}), C(r.by || '', w[3], {align: AlignmentType.CENTER, top: 1}), C(r.status || '', w[4], {top: 1})], {h: 9.7}))])); }
+
+  /* 8, 9 — landscape: manpower / machinery */
+  { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', upTo = +toIso.slice(8, 10);
+    const val = (r, day, all) => { const iso = toIso.slice(0, 7) + '-' + pad2(day), i = dayDiff(g0, iso); const v = i >= 0 ? r['d' + i] : ''; return day > upTo && !all ? '' : String(numv(v)); };
+    const grid = (key, colLabel) => { const all = key === 'machinery', rows = (data[key] || []).filter(r => r && !isEmpty(r.name)), w = [30.5, ...Array(31).fill(6.39)], o = {size: 10, align: AlignmentType.CENTER, pad: 10};
+      const tot = Array.from({length: 31}, (_, i) => rows.reduce((a, r) => a + numv(val(r, i + 1, all)), 0));
+      return TB(w, [R([C(monTxt.slice(0, 3) + ' (1/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ' - ' + lastDay + '/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ')', 228.6, {...o, span: 32, bold: true, fill: G})]),
+        R([C(colLabel, w[0], {...o, bold: true, it: true}), ...Array.from({length: 31}, (_, i) => C(String(i + 1), w[1], {...o, bold: true}))]),
+        ...rows.map(r => R([C(name(r.name), w[0], o), ...Array.from({length: 31}, (_, i) => C(val(r, i + 1, all), w[1], o))])),
+        R([C('TOTAL', w[0], {...o, bold: true, fill: YT, align: AlignmentType.RIGHT}), ...tot.map(v => C(String(v), w[1], {...o, bold: true, fill: YT}))])]); };
+    L.push(HD(8, 'MANPOWER AT SITE (' + monTxt + ')', 26), grid('manpower', 'PERSONNEL'), P('', {after: 300}), HD(9, 'MACHINERY AT SITE (' + monTxt + ')', 26), grid('machinery', 'MACHINERY')); }
+
+  /* 10 — manhours */
+  L.push(HD(10, 'MANHOURS', 22, 1));
+  { const hw = data.hseW || [], row = i => hw[i] || {}, cur = axWeek(toIso), wv = (i, w) => { const v = row(i)['w' + (w + 1)]; return isEmpty(v) ? '' : String(numv(v)); };
+    const sum = i => Array.from({length: 6}, (_, w) => numv(wv(i, w))).reduce((a, b) => a + b, 0), mhCur = numv(wv(2, cur)), sfCur = numv(wv(3, cur)), bfMh = numv(data.bfMh), bfSf = numv(data.bfSafe);
+    const w = [52.6, 52.6, 14.3, 14.2, 14.6, 15, 15.3, 14.3, 36.3], wk = w.slice(2, 8), ct = AlignmentType.CENTER, o = {line: 264, top: 1};
+    const gC = (s, wd) => C(s, wd, {...o, align: ct, color: '00B050'}), oC = (s, wd) => C(s, wd, {...o, align: ct, color: 'ED7D31', bold: true});
+    const weekHead = (n, wd) => C(new Paragraph({alignment: ct, spacing: {line: 300}, children: [t(String(n), {bold: true}), t(axOrd(n), {bold: true, sup: true}), new TextRun({break: 1, text: 'week', font: FONT, size: 22, bold: true})]}), wd, {fill: YT, top: 1});
+    const lt = 'Total Lost Time Incidents (Lost-time incident is defined as anytime a worker must miss work beyond the day of incident because of onsite injury)';
+    const rc = 'Total Recordable Incidents (Recordable incident is defined as required offsite medical attention by a doctor or hospital.)';
+    const blank = C('', wk.reduce((a, b) => a + b, 0), {span: 6});
+    L.push(TB(w, [R([C('HSE STATISTIC MONTH: ' + monTxt, 228.6, {span: 9, bold: true, fill: G, align: ct})]),
+      R([C('', w[0] + w[1], {span: 2}), ...wk.map((x, i) => weekHead(i + 1, x)), C('TOTAL YTD\n' + year + '\n(Hours)', w[8], {bold: true, fill: OR, align: ct, line: 300})]),
+      R([C(lt, w[0], o), C('Lost Time Injury (LTI)', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(0, i) || '0', x, {...o, align: ct})), gC(String(sum(0)), w[8])]),
+      R([C(rc, w[0], o), C('Incidents Record', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(1, i) || '0', x, {...o, align: ct})), gC(String(sum(1)), w[8])]),
+      R([C('', w[0], {rs: 7}), C('MANHOURS:', w[1] + wk.reduce((a, b) => a + b, 0) + w[8], {span: 8, bold: true, align: ct})]),
+      R([C('Total Manhours Weekly', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(2, i), x, {...o, align: ct})), gC(String(mhCur), w[8])]),
+      R([C('B/F from Previous\nManhours', w[1], {...o, bold: true}), blank, C(String(bfMh), w[8], {align: ct})], {h: 13}),
+      R([C('Total Manhours YTD ' + year, w[1], {...o, bold: true}), blank, oC(String(bfMh + mhCur), w[8])]),
+      R([C('Safe Workdays', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(3, i), x, {...o, align: ct})), gC(String(sfCur), w[8])]),
+      R([C('B/F from Previous Total\nSafe Workdays', w[1], {...o, bold: true}), blank, C(String(bfSf), w[8], {align: ct})]),
+      R([C('Total Safe Workdays', w[1], {...o, bold: true}), blank, oC(String(bfSf + sfCur), w[8])])])); }
+
+  /* 11 — photos */
+  L.push(HD(11, 'PROGRESS PHOTO', 22, 1));
+  { const groups = []; (data.photosAfter || []).forEach(ph => { const cap = String(ph.caption || '').trim(), g = groups[groups.length - 1];
+      if(g && (!cap || cap.toUpperCase() === g.cap.toUpperCase())) g.ph.push(ph); else groups.push({cap, ph: [ph]}); });
+    const cw = 228.6 / 3, rows = [];
+    for(const g of groups){ rows.push(R([C(name(g.cap), 228.6, {span: 3, bold: true, fill: G, align: AlignmentType.CENTER})], {h: 6.8}));
+      for(let r = 0; r < Math.ceil(g.ph.length / 3); r++){ const cells = [];
+        for(let k = 0; k < 3; k++){ const ph = g.ph[r * 3 + k], im = ph ? await img(ph.id, cw - 4, 51.7, true) : null; cells.push(C(new Paragraph({alignment: AlignmentType.CENTER, spacing: {before: 60, after: 60}, children: im ? [im] : [t('')]}), cw)); }
+        rows.push(R(cells, {h: 55.7})); } }
+    if(rows.length) L.push(TB([cw, cw, cw], rows));
+    L.push(P([t('--- END OF WEEKLY PROGRESS REPORT---', {bold: true, size: 21})], {align: AlignmentType.CENTER, before: 600})); }
+
+  const LHi = await letterheadData();
+  const mkHeader = wmm => new Header({children: [new Paragraph({alignment: AlignmentType.CENTER, children: [new ImageRun({type: 'jpg', data: durl2u8(LHi.url), transformation: {width: pxW(wmm), height: pxW(wmm * LHi.h / LHi.w)}})]})]});
+  const footer = new Footer({children: [new Paragraph({alignment: AlignmentType.RIGHT, children: [new TextRun({font: 'Calibri', size: 22, children: ['Page | ', PageNumber.CURRENT]})]})]});
+  const LW = 12240, LHt = 15840, mar = {top: tw(47), bottom: tw(30), left: 1440, right: 1440, header: tw(12.5), footer: tw(17)};
+  const doc = new Document({creator: c.name, title: 'Weekly Progress Report', styles: {default: {document: {run: {font: FONT, size: 22}}}},
+    sections: [{properties: {page: {size: {width: LW, height: LHt, orientation: PageOrientation.PORTRAIT}, margin: mar}}, headers: {default: mkHeader(Math.min(164, 33.5 * LHi.w / LHi.h))}, footers: {default: footer}, children: A},
+      {properties: {page: {size: {width: LW, height: LHt, orientation: PageOrientation.LANDSCAPE}, margin: mar}}, headers: {default: mkHeader(Math.min(160, 32 * LHi.w / LHi.h))}, footers: {default: footer}, children: L}]});
+  return Packer.toBlob(doc);
 }
 function drawSCurve(doc, rows){
   const {L, CW} = HS; let y0 = doc.lastAutoTable.finalY + 4;
