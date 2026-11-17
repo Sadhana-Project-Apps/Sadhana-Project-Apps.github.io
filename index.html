@@ -1002,7 +1002,7 @@ const TYPES = {
       {k:'venue', l:'Venue', t:'text', w:'half', ph:'e.g. Site office / Microsoft Teams'},
       {k:'chair', l:'Chaired by', t:'text', w:'half'},
       {sec:'Recording & Transcript', pdf:false},
-      {k:'recordings', l:'Meeting recording', t:'rec', pdf:false, hint:'Tap Record when the meeting starts. The phone writes what it hears into the transcript below, and the recording is kept in Project files › Meeting recordings. Keep the phone on the table, screen on.'},
+      {k:'recordings', l:'Meeting recording', t:'rec', pdf:false, hint:'Tap Record when the meeting starts — Bahasa Malaysia, English or both. The phone writes a rough transcript below as people speak, and the recording is kept in Project files › Meeting recordings. Keep the phone in the middle of the table, screen on. For the full minutes in English, send the recording to the office.'},
       {k:'transcript', l:'Transcript (not printed)', t:'textarea', pdf:false, ph:'The live transcript appears here while recording. Use it to write the discussion below.'},
       {sec:'Attendance'},
       {k:'present', l:'Present', t:'table', num:1, sub:false, people:1, req:1, cols:[{k:'name', l:'Name'}, {k:'company', l:'Company'}, {k:'desig', l:'Designation'}], def: () => [{}, {}, {}]},
@@ -2052,13 +2052,13 @@ window.addEventListener('beforeunload', e => { if(MREC.on){ e.preventDefault(); 
 const recDur = s => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + pad2(m) : m) + ':' + pad2(x); };
 function recFieldHTML(f, v){
   const list = Array.isArray(v) ? v : [];
-  let lang = 'en-MY'; try { lang = localStorage.getItem('sde-mom-lang') || 'en-MY'; } catch(e){}
+  let lang = 'ms-MY'; try { lang = localStorage.getItem('sde-mom-lang2') || 'ms-MY'; } catch(e){}
   return `<div class="recbox" style="border:1px solid var(--line,#ddd);border-radius:12px;padding:12px;background:#fafaf7">
     ${MREC.on ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="color:#c62828">● Recording</b><span class="mono" id="recTime">${recDur((Date.now() - MREC.t0) / 1000)}</span><span class="muted small" id="recNote">${MREC.srOk === false ? 'Live transcript is not available on this phone while recording — the recording is still being kept.' : 'Listening… the transcript fills in below.'}</span></div>
         <button type="button" class="btn pri" style="margin-top:10px;background:#c62828;border-color:#c62828" data-act="recstop">■ Stop & save the recording</button>`
       : `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="btn pri" data-act="recstart">🎙 Record the meeting</button>
         <button type="button" class="btn" data-act="recupload">⇪ Upload a recording</button>
-        <select id="recLang" style="width:auto">${[['en-MY', 'Transcript in English'], ['ms-MY', 'Transcript in Bahasa Melayu']].map(([k, l]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
+        <select id="recLang" style="width:auto">${[['ms-MY', 'Bahasa Malaysia + English (mixed)'], ['en-MY', 'English only']].map(([k, l]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
     ${MREC.busy ? `<div class="muted small" style="margin-top:8px" id="recBusy">${esc(MREC.busy)}</div>` : ''}
     ${list.length ? `<div style="display:grid;gap:6px;margin-top:10px">${list.map((r, i) => `<div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn sm" data-act="fileopen" data-id="${esc(r.fileId)}">🎧 ${esc(r.name || 'Recording ' + (i + 1))}</button><span class="muted small">${r.dur ? recDur(r.dur) : ''}</span><button type="button" class="xbtn" data-act="recdel" data-i="${i}" title="Remove from these minutes (the file stays in Project files)">×</button></div>`).join('')}</div>` : ''}
   </div>`;
@@ -2069,20 +2069,20 @@ async function recStart(){
   const d = S.draft; if(!d) return;
   let stream; try { stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}}); }
   catch(e){ toast('Microphone is blocked. Tap the 🔒 or ⓘ next to the web address → Permissions → allow Microphone, then try again.', true); return; }
-  const lang = $('#recLang')?.value || 'en-MY'; try { localStorage.setItem('sde-mom-lang', lang); } catch(e){}
+  const lang = $('#recLang')?.value || 'ms-MY'; try { localStorage.setItem('sde-mom-lang2', lang); } catch(e){}
   Object.assign(MREC, {on: true, draft: d, stream, t0: Date.now(), partT0: Date.now(), part: (d.data.recordings || []).length + 1, srOk: null, lang});
   recNewPart();
   // keep the screen awake while recording
   try { MREC.wake = await navigator.wakeLock?.request('screen'); } catch(e){}
   MREC.tick = setInterval(() => { const el = $('#recTime'); if(el) el.textContent = recDur((Date.now() - MREC.t0) / 1000);
-    // a new file every 60 minutes keeps each file small enough to store
-    if(Date.now() - MREC.partT0 > 60 * 60000){ MREC.partT0 = Date.now(); const old = MREC.mr; recNewPart(); try { old.stop(); } catch(e){} } }, 1000);
+    // a new file every 45 minutes keeps each file small enough to store
+    if(Date.now() - MREC.partT0 > 45 * 60000){ MREC.partT0 = Date.now(); const old = MREC.mr; recNewPart(); try { old.stop(); } catch(e){} } }, 1000);
   recListen();
   rerenderEditorField('recordings');
 }
 function recNewPart(){
   const mime = recMime(), chunks = [], t0 = Date.now(), n = MREC.part++;
-  const mr = new MediaRecorder(MREC.stream, {...(mime ? {mimeType: mime} : {}), audioBitsPerSecond: 16000});
+  const mr = new MediaRecorder(MREC.stream, {...(mime ? {mimeType: mime} : {}), audioBitsPerSecond: 24000});
   mr.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => { const blob = new Blob(chunks, {type: (mr.mimeType || mime || 'audio/webm').split(';')[0]}); recSave(blob, (Date.now() - t0) / 1000, n); };
   mr.start(5000); MREC.mr = mr;
@@ -3228,7 +3228,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Minutes of Meeting with meeting recorder</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Meeting recorder: Bahasa Malaysia + English</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4400,7 +4400,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z56';
+const APP_VER = 'Z57';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
