@@ -983,6 +983,42 @@ const TYPES = {
       {k:'note', l:'Acknowledgement', t:'textarea', def:'We acknowledge receipt of the above work done in good order and condition.'}
     ]
   },
+  MOM: {
+    name: 'Minutes of Meeting', code: 'MOM', blurb: 'Site / progress meeting — attendance, discussion, action by. Record the meeting with a live transcript',
+    sigs: [
+      {role:'Prepared by', hint:'Minutes taker'},
+      {role:'Approved by', hint:'Chairman'}
+    ],
+    done: 'Approved',
+    title: d => (d.mtype || 'Meeting') + (d.meetNo ? ' No. ' + d.meetNo : '') + ' — ' + fmtDate(d.date),
+    dateField: 'date',
+    carry: ['mtype', 'venue', 'chair', 'present'],
+    fields: [
+      {sec:'Meeting Details'},
+      {k:'mtype', l:'Meeting', t:'select', o:['Progress meeting', 'Site coordination meeting', 'Safety meeting', 'Technical meeting', 'Kick-off meeting', 'Handover meeting', 'Other'], w:'half', def:'Progress meeting'},
+      {k:'meetNo', l:'Meeting no.', t:'text', w:'half'},
+      {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'time', l:'Time', t:'text', w:'half', ph:'e.g. 10:00 am – 11:30 am'},
+      {k:'venue', l:'Venue', t:'text', w:'half', ph:'e.g. Site office / Microsoft Teams'},
+      {k:'chair', l:'Chaired by', t:'text', w:'half'},
+      {sec:'Recording & Transcript', pdf:false},
+      {k:'recordings', l:'Meeting recording', t:'rec', pdf:false, hint:'Tap Record when the meeting starts. The phone writes what it hears into the transcript below, and the recording is kept in Project files › Meeting recordings. Keep the phone on the table, screen on.'},
+      {k:'transcript', l:'Transcript (not printed)', t:'textarea', pdf:false, ph:'The live transcript appears here while recording. Use it to write the discussion below.'},
+      {sec:'Attendance'},
+      {k:'present', l:'Present', t:'table', num:1, sub:false, people:1, req:1, cols:[{k:'name', l:'Name'}, {k:'company', l:'Company'}, {k:'desig', l:'Designation'}], def: () => [{}, {}, {}]},
+      {k:'absent', l:'Absent with apologies', t:'text'},
+      {sec:'Discussion'},
+      {k:'items', l:'Discussion & actions', t:'table', num:1, subNum:1, sub:false, req:1,
+        hint:'Type each agenda heading in CAPITALS (e.g. "PROGRESS OF WORK") — the points under it are numbered 3.1, 3.2… Points not "Closed" carry forward to the next meeting under MATTERS ARISING.',
+        cols:[{k:'matter', l:'Matter discussed', pw:88}, {k:'by', l:'Action by', center:1, pw:30}, {k:'due', l:'Due date', center:1, pw:24, date:1}, {k:'status', l:'Status', center:1, pw:22, o:['', 'Open', 'In progress', 'Closed', 'Info']}],
+        def: () => [{matter:'CONFIRMATION OF PREVIOUS MINUTES'}, {matter:'The minutes of the previous meeting were confirmed without amendment.', status:'Info'}, {matter:'MATTERS ARISING'}, {},
+          {matter:'PROGRESS OF WORK'}, {}, {matter:'SAFETY, HEALTH & ENVIRONMENT'}, {}, {matter:'ANY OTHER MATTERS'}, {}]},
+      {sec:'Next Meeting'},
+      {k:'nextDate', l:'Date', t:'date', w:'half'},
+      {k:'nextTime', l:'Time & venue', t:'text', w:'half'},
+      {k:'note', l:'Note', t:'textarea', def:'The above minutes are taken as a true record of the meeting. Any amendment should be informed in writing within 7 days from the date of issue; otherwise the minutes are deemed confirmed.'}
+    ]
+  },
   SSO: {
     name: 'Scrap & Salvage Out Slip', code: 'SSO', blurb: 'Slip for each load leaving site — client verifies type & weight',
     sigs: [
@@ -2010,6 +2046,101 @@ function docRow(d, showProj){
     <div class="t"><b>${esc(docTitle(d))}</b><span><span class="mono">${esc(d.number)}</span>${showProj&&p?' · '+esc(p.name):''}</span></div>${pill(d)}</div>`;
 }
 
+/* ---------- meeting recorder (Minutes of Meeting): records the meeting and writes a live transcript with the phone's own speech-to-text ---------- */
+const MREC = {on: false};
+window.addEventListener('beforeunload', e => { if(MREC.on){ e.preventDefault(); e.returnValue = 'A meeting is still being recorded.'; } });
+const recDur = s => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + pad2(m) : m) + ':' + pad2(x); };
+function recFieldHTML(f, v){
+  const list = Array.isArray(v) ? v : [];
+  let lang = 'en-MY'; try { lang = localStorage.getItem('sde-mom-lang') || 'en-MY'; } catch(e){}
+  return `<div class="recbox" style="border:1px solid var(--line,#ddd);border-radius:12px;padding:12px;background:#fafaf7">
+    ${MREC.on ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="color:#c62828">● Recording</b><span class="mono" id="recTime">${recDur((Date.now() - MREC.t0) / 1000)}</span><span class="muted small" id="recNote">${MREC.srOk === false ? 'Live transcript is not available on this phone while recording — the recording is still being kept.' : 'Listening… the transcript fills in below.'}</span></div>
+        <button type="button" class="btn pri" style="margin-top:10px;background:#c62828;border-color:#c62828" data-act="recstop">■ Stop & save the recording</button>`
+      : `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="btn pri" data-act="recstart">🎙 Record the meeting</button>
+        <button type="button" class="btn" data-act="recupload">⇪ Upload a recording</button>
+        <select id="recLang" style="width:auto">${[['en-MY', 'Transcript in English'], ['ms-MY', 'Transcript in Bahasa Melayu']].map(([k, l]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
+    ${MREC.busy ? `<div class="muted small" style="margin-top:8px" id="recBusy">${esc(MREC.busy)}</div>` : ''}
+    ${list.length ? `<div style="display:grid;gap:6px;margin-top:10px">${list.map((r, i) => `<div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn sm" data-act="fileopen" data-id="${esc(r.fileId)}">🎧 ${esc(r.name || 'Recording ' + (i + 1))}</button><span class="muted small">${r.dur ? recDur(r.dur) : ''}</span><button type="button" class="xbtn" data-act="recdel" data-i="${i}" title="Remove from these minutes (the file stays in Project files)">×</button></div>`).join('')}</div>` : ''}
+  </div>`;
+}
+const recMime = () => ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || '';
+async function recStart(){
+  if(!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia){ toast('This phone or browser cannot record here. Record with the phone\'s voice recorder, then tap "Upload a recording".', true); return; }
+  const d = S.draft; if(!d) return;
+  let stream; try { stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}}); }
+  catch(e){ toast('Microphone is blocked. Tap the 🔒 or ⓘ next to the web address → Permissions → allow Microphone, then try again.', true); return; }
+  const lang = $('#recLang')?.value || 'en-MY'; try { localStorage.setItem('sde-mom-lang', lang); } catch(e){}
+  Object.assign(MREC, {on: true, draft: d, stream, t0: Date.now(), partT0: Date.now(), part: (d.data.recordings || []).length + 1, srOk: null, lang});
+  recNewPart();
+  // keep the screen awake while recording
+  try { MREC.wake = await navigator.wakeLock?.request('screen'); } catch(e){}
+  MREC.tick = setInterval(() => { const el = $('#recTime'); if(el) el.textContent = recDur((Date.now() - MREC.t0) / 1000);
+    // a new file every 60 minutes keeps each file small enough to store
+    if(Date.now() - MREC.partT0 > 60 * 60000){ MREC.partT0 = Date.now(); const old = MREC.mr; recNewPart(); try { old.stop(); } catch(e){} } }, 1000);
+  recListen();
+  rerenderEditorField('recordings');
+}
+function recNewPart(){
+  const mime = recMime(), chunks = [], t0 = Date.now(), n = MREC.part++;
+  const mr = new MediaRecorder(MREC.stream, {...(mime ? {mimeType: mime} : {}), audioBitsPerSecond: 16000});
+  mr.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+  mr.onstop = () => { const blob = new Blob(chunks, {type: (mr.mimeType || mime || 'audio/webm').split(';')[0]}); recSave(blob, (Date.now() - t0) / 1000, n); };
+  mr.start(5000); MREC.mr = mr;
+}
+function recListen(){
+  if(!SR){ MREC.srOk = false; return; }
+  let rec; try { rec = new SR(); } catch(e){ MREC.srOk = false; return; }
+  rec.lang = MREC.lang; rec.continuous = true; rec.interimResults = false;
+  rec.onresult = ev => { for(let i = ev.resultIndex; i < ev.results.length; i++){ const r = ev.results[i]; if(!r.isFinal) continue; const txt = r[0].transcript.trim(); if(!txt) continue;
+      MREC.srOk = true; const d = MREC.draft, line = '[' + recDur((Date.now() - MREC.t0) / 1000) + '] ' + txt;
+      d.data.transcript = (d.data.transcript ? d.data.transcript.replace(/\s+$/, '') + '\n' : '') + line; S.dirty = true;
+      const box = document.querySelector('[data-f="transcript"]'); if(box && S.draft === d){ box.value = d.data.transcript; box.scrollTop = box.scrollHeight; } } };
+  rec.onerror = ev => { if(['not-allowed', 'service-not-allowed', 'audio-capture'].includes(ev.error)){ MREC.srOk = false; const n = $('#recNote'); if(n) n.textContent = 'Live transcript is not available on this phone while recording — the recording is still being kept.'; } };
+  rec.onend = () => { if(MREC.on && MREC.srOk !== false){ try { rec.start(); } catch(e){} } };
+  try { rec.start(); MREC.sr = rec; } catch(e){ MREC.srOk = false; }
+}
+function recStop(){
+  if(!MREC.on) return; MREC.on = false; clearInterval(MREC.tick);
+  try { MREC.sr && MREC.sr.stop(); } catch(e){} MREC.sr = null;
+  try { MREC.mr && MREC.mr.stop(); } catch(e){}
+  setTimeout(() => { try { MREC.stream.getTracks().forEach(t => t.stop()); } catch(e){} }, 300);
+  try { MREC.wake && MREC.wake.release(); } catch(e){} MREC.wake = null;
+  rerenderEditorField('recordings');
+}
+async function recSave(blob, dur, n){
+  const d = MREC.draft || S.draft; if(!d || !blob.size) return;
+  const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+  const name = `Meeting ${d.data.meetNo ? 'No. ' + d.data.meetNo + ' ' : ''}${d.data.date || today()} recording${n > 1 ? ' part ' + n : ''}.${ext}`;
+  await recStore(d, new File([blob], name, {type: blob.type}), dur);
+}
+async function recStore(d, file, dur){
+  MREC.busy = 'Saving ' + file.name + ' (' + fmtSize(file.size) + ')…'; if(S.draft === d) rerenderEditorField('recordings');
+  try {
+    const fileId = await uploadOne(d.projectId, file, {category: 'Meeting recordings', folder: 'Meeting recordings', title: file.name.replace(/\.[^.]+$/, ''), refNo: d.number || '', date: d.data.date || today(), expiry: '', notes: 'Minutes of Meeting recording'},
+      (i, k) => { const el = $('#recBusy'); if(el) el.textContent = 'Saving the recording… ' + Math.round(i / k * 100) + '%'; });
+    d.data.recordings = [...(d.data.recordings || []), {fileId, name: file.name, dur: dur ? Math.round(dur) : 0}]; S.dirty = true;
+    toast('Recording saved in Project files › Meeting recordings');
+  } catch(e){
+    console.warn(e);
+    toast(e && e.code === 'too-big' ? 'This recording is bigger than 9.5 MB, so it can\'t be stored. Record in the app (it saves a new part every hour), or send the recording to the office.' : 'The recording could not be saved — check the internet and try again.', true);
+  }
+  MREC.busy = ''; if(S.draft === d) rerenderEditorField('recordings');
+}
+function recUpload(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*,.m4a,.mp3,.aac,.wav,.ogg,.webm,.amr';
+  inp.onchange = async () => { const f = inp.files && inp.files[0]; if(!f || !S.draft) return;
+    let dur = 0; try { const a = new Audio(); a.src = URL.createObjectURL(f); await new Promise(r => { a.onloadedmetadata = r; a.onerror = r; setTimeout(r, 4000); }); dur = isFinite(a.duration) ? a.duration : 0; } catch(e){}
+    recStore(S.draft, f, dur); };
+  inp.click();
+}
+// play a meeting recording inside the app
+async function audioPlayer(f){
+  try { const blob = await fileBlob(f), url = URL.createObjectURL(blob);
+    showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>🎧 ${esc(f.title || f.name)}</h3></div><div class="mb"><audio controls autoplay src="${url}" style="width:100%"></audio>
+      <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-act="filedl" data-id="${esc(f.id)}">⤓ Download</button></div></div></div>`);
+  } catch(e){ toast('Could not open the recording.', true); }
+}
+
 /* ---------- claims: progress / final claim and delivery order (admin + staff only; kept in their own collection) ---------- */
 const CLAIM_TYPES = ['PC', 'DO'];
 const isClaimType = t => CLAIM_TYPES.includes(t);
@@ -2073,7 +2204,7 @@ async function makeDOFromClaim(id){
 /* ---------- PROJECT ---------- */
 // three folders for the documents of each project
 const DOC_CATS = [
-  {k:'OPS', name:'Operation', icon:'🏗', types:['DSR','PR','MM','RFI','TR','LTR','PDH','IAH','EMD']},
+  {k:'OPS', name:'Operation', icon:'🏗', types:['DSR','PR','MOM','MM','RFI','TR','LTR','PDH','IAH','EMD']},
   {k:'SHE', name:'Safety & Health', icon:'🦺', types:['TBT','HIA','HRC','WLK','PTM','PWH','PLW','PCS','PEX','LPL','PTW','INR','IIR','HDA','PPE','FAB','FEX','LGR']},
   {k:'ENV', name:'Environmental', icon:'🌿', types:['SW','NMC','POG','SWI','SLW','SPK','BMP','EAIA','ERO','EMR','ENM']},
   {k:'EQP', name:'Equipment & Tools', icon:'🔧', types:['EXD','EXI','CRD','MCI','FLD','FLI','SKD','SKI','BPD','BPI','CPD','CPI','GEN','ACI','AWM','OAC','PGR','HBR','DRL','LAD','BHI','ETI']},
@@ -2950,12 +3081,12 @@ async function makeDocx(id){
               return [row(top, {head: true}), row(hgw.bot.map((l, j) => cell(l, w[bi[j]], {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small})), {head: true})]; })()
             : [row(head.map((h, i) => cell(h, w[i], {bold: true, fill: GREEN, align: AlignmentType.CENTER, size: small})), {head: true})];
           const smw = !grpOn && !dayCols.length ? spanMap(f, cols, rows) : null;
-          let gN = 0, iN = 0;
+          let gN = 0, iN = 0, sN = 0;
           rows.forEach((r, i) => { if(grpOn && isGrp(r) && f.numItems){ const lab = String(r[tc0.k]).trim(), main = lab === lab.toUpperCase();
               out.push(row([cell(P([t(lab, {bold: true, italics: !main, size: small})], {after: 0, keepNext: true}), CW, {fill: main ? GRPF : 'F2F2F2', span: head.length})])); return; }
-            if(grpOn && isGrp(r)){ gN++; const lab = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
+            if(grpOn && isGrp(r)){ gN++; sN = 0; const lab = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
               out.push(row([...(f.num ? [cell(P([t(gN + '.', {bold: true, size: small})], {align: AlignmentType.CENTER, after: 0, keepNext: true}), w[0], {fill: GRPF})] : []), cell(P([t(f.num ? lab : r[tc0.k], {bold: true, size: small})], {after: 0, keepNext: true}), CW - (f.num ? w[0] : 0), {fill: GRPF, span: head.length - (f.num ? 1 : 0)})])); return; }
-            const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? fmtDate(r[cc.k]) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : (r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
+            const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : f.subNum ? (gN ? gN + '.' : '') + (++sN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? fmtDate(r[cc.k]) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : (r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
             out.push(row(vals.map((v, k) => { const sc = smw && cols[k - (f.num ? 1 : 0)] ? smw[i][cols[k - (f.num ? 1 : 0)].k] : null; return sc === 0 ? null : cell(v, w[k], {rs: sc > 1 ? sc : undefined, size: small, align: (k === 0 && f.num) || (k - (f.num ? 1 : 0) >= 0 && cols[k - (f.num ? 1 : 0)] && (cols[k - (f.num ? 1 : 0)].n || cols[k - (f.num ? 1 : 0)].center || cols[k - (f.num ? 1 : 0)].day != null)) || (f.rowTotal && k === vals.length - 1) ? AlignmentType.CENTER : undefined}); }).filter(Boolean))); });
           const sk = f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? dayCols.map(cc => cc.k) : [];
           if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
@@ -3097,7 +3228,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Claims: progress / final claim and delivery order</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Minutes of Meeting with meeting recorder</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3342,6 +3473,8 @@ function docBodyHTML(d){
     } else if(f.t === 'calc' && f.calc === 'scrap'){
       const c = scrapCum(d);
       out += wrapStart + head + (c.rows.length ? `<table><thead><tr>${c.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}<tr style="font-weight:700;background:#fff6d6">${c.total.map(x => `<td>${esc(x)}</td>`).join('')}</tr></tbody></table><div class="small muted" style="padding:6px 10px">Includes ${c.records} record${c.records === 1 ? '' : 's'} up to and including this one.</div>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
+    } else if(f.t === 'rec'){
+      const rl = data[f.k] || []; if(rl.length) out += wrapStart + head + `<div class="body" style="display:flex;gap:8px;flex-wrap:wrap">${rl.map((r, i) => `<button class="btn sm" data-act="fileopen" data-id="${esc(r.fileId)}">🎧 ${esc(r.name || 'Recording ' + (i + 1))}${r.dur ? ' · ' + recDur(r.dur) : ''}</button>`).join('')}</div>` + wrapEnd;
     } else if(f.t === 'calc' && f.calc === 'claim'){
       const cs = claimSummary(d);
       out += wrapStart + head + `<table><tbody>${cs.rows.map((r, i) => `<tr${i === cs.rows.length - 1 ? ' style="font-weight:700"' : ''}><td>${esc(r[0])}</td><td style="text-align:right;white-space:nowrap">${esc(r[1])}</td></tr>`).join('')}<tr><td colspan="2"><i>${esc(cs.words)}</i></td></tr></tbody></table>` + wrapEnd;
@@ -3563,6 +3696,10 @@ function newDraft(pid, type){
     const lwp = (last?.data?.wp || []).filter(r => r && String(r.act || '').trim());
     if(lwp.length) data.wp = lwp.map(r => ({act: r.act, start: r.start, finish: r.finish, weight: r.weight, 'actp': r['actp'] || '', _auto: r._auto || ''})); }
   if(type === 'MM'){ data.to = monthEnd(data.from); }
+  if(type === 'MOM'){ const prev = prevOf('MOM'); data.meetNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.meetNo) || 0), 0) + 1);
+    const last = prev[0], isH = r => r && String(r.matter || '').trim() && String(r.matter).trim() === String(r.matter).trim().toUpperCase() && isEmpty(r.by) && isEmpty(r.status);
+    const open = ((last && last.data?.items) || []).filter(r => r && !isH(r) && String(r.matter || '').trim() && ['Open', 'In progress'].includes(r.status)).map(r => ({matter: r.matter, by: r.by || '', due: r.due || '', status: r.status}));
+    if(open.length){ const i = data.items.findIndex(r => r.matter === 'MATTERS ARISING'); if(i >= 0) data.items.splice(i + 1, 1, ...open); } }
   if(type === 'PC'){ data.claimNo = String(prevOf('PC').filter(x => x.data?.kind !== 'Final progress claim').length + 1); }
   { const p = projById(pid) || {}, lines2 = t => String(t || '').split(/\s*,\s*(?=\d{5}|[A-Z][a-z]+\s*$)/).join(',\n');
     if(type === 'TR'){ data.to = p.client || ''; data.toAddress = p.clientAddress || ''; data.attn = p.clientAttn || ''; data.projectRef = [p.name, p.contractNo || p.clientRef].filter(Boolean).join(' — '); }
@@ -3768,6 +3905,7 @@ function pplAdd(k){
 function fieldInput(f, v){
   const dk = `data-f="${f.k}"`;
   switch(f.t){
+    case 'rec': return recFieldHTML(f, v);
     case 'textarea': return `<div class="dict"><textarea ${dk} placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>${micBtn(f.k)}</div>${S.sample?`<div class="fixrow">${f.k in S.fixUndo?`<button class="undo" data-act="undofix" data-k="${f.k}">Undo</button>`:''}<button class="aibtn" data-act="fixen" data-k="${f.k}">✨ Fix English</button></div>`:''}`;
     case 'draftbtn': return `<button type="button" class="btn pri" data-act="${f.act || 'ltrdraft'}" style="width:100%">${esc(f.btn || '✨ Draft the letter from the details above')}</button>`;
     case 'auto': return `<div class="autobox"><span data-auto="${f.k}">${esc(S.draft ? autoValue(f, S.draft) : v) || '—'}</span><em>auto</em></div>`;
@@ -4262,7 +4400,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z55';
+const APP_VER = 'Z56';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4754,13 +4892,13 @@ async function makePDF(id, opt){
         const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => pt((cc.day != null ? (days > 14 ? dayLabel(gridStart(data), cc.day).slice(0, 2) : dayLabel(gridStart(data), cc.day)) : cc.l).toUpperCase()))];
         const dayCols = cols.filter(cc => cc.day != null);
         if(f.rowTotal) head.push('TOTAL');
-        let gN = 0, iN = 0;
+        let gN = 0, iN = 0, sN = 0;
         const body = rows.map((r, i) => {
           if(grpOn && isGrp(r) && f.numItems){ const label = String(r[tc0.k]).trim(), main = label === label.toUpperCase();
             return [{content: pt(label), colSpan: head.length, styles: {fillColor: main ? [226, 239, 218] : [242, 242, 242], fontStyle: main ? 'bold' : 'bolditalic'}}]; }
-          if(grpOn && isGrp(r)){ gN++; const label = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
+          if(grpOn && isGrp(r)){ gN++; sN = 0; const label = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
             return [...(f.num ? [{content: String(gN) + '.', styles: {fillColor: [226, 239, 218], fontStyle: 'bold', halign: 'center'}}] : []), {content: pt(f.num ? label : (/^\d/.test(r[tc0.k]) ? r[tc0.k] : label)), colSpan: cols.length + (f.rowTotal ? 1 : 0), styles: {fillColor: [226, 239, 218], fontStyle: 'bold'}}]; }
-          const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? pt(fmtDate(r[cc.k])) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
+          const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : f.subNum ? (gN ? gN + '.' : '') + (++sN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? pt(fmtDate(r[cc.k])) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
           if(f.levelColors) cols.forEach((cc, ci) => { if(cc === tc0 || cc.k === 'rem') return; const v = String(r[cc.k] ?? '').trim(), at = ci + (f.num ? 1 : 0);
             if(/^on-?\s?going|in progress/i.test(v)) out[at] = {content: pt(v), styles: {fillColor: [255, 235, 156]}};
             else if(/^\d{1,2}[\/.-]\d{1,2}|complete/i.test(v)) out[at] = {content: pt(v), styles: {fillColor: [198, 239, 206]}}; });
@@ -5707,6 +5845,10 @@ document.addEventListener('click', async e => {
     case 'voicetipok': try { localStorage.setItem('sde-voicetip', '1'); } catch(e){} el.closest('.vhint')?.remove(); break;
     case 'newpick': newPicker(el.dataset.p, el.dataset.c); break;
     case 'mkdo': makeDOFromClaim(el.dataset.id); break;
+    case 'recstart': recStart(); break;
+    case 'recstop': recStop(); break;
+    case 'recupload': recUpload(); break;
+    case 'recdel': if(S.draft){ S.draft.data.recordings = (S.draft.data.recordings || []).filter((_, i) => i !== +el.dataset.i); S.dirty = true; rerenderEditorField('recordings'); } break;
     case 'new': if(S.modalOpen) closeModal(); S.draft = newDraft(el.dataset.p, el.dataset.t); S.respMode = false; go('edit'); break;
     case 'edit': { const d = docById(id); if(!d) return; if(nextSigIndex(d)!==0){ toast('Signed documents are locked.', true); return; } S.draft = clone(d); S.respMode = false; go('edit'); break; }
     case 'respond': { const d = docById(id); if(!d) return; S.draft = clone(d); const T = TT(d); T.fields.forEach(f => { if(f.phase==='response' && f.k && isEmpty(S.draft.data[f.k]) && f.def) S.draft.data[f.k] = typeof f.def==='function'?f.def():f.def; }); if(d.type==='PTW' && !S.draft.data.closeTime){ const n=new Date(); S.draft.data.closeTime = n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate())+'T'+pad2(n.getHours())+':'+pad2(n.getMinutes()); } S.respMode = true; go('edit'); break; }
@@ -6740,6 +6882,7 @@ async function openFile(id, download){
   const f = S.files.find(x => x.id === id); if(!f) return;
   if(f.kind === 'link'){ window.open(f.url, '_blank', 'noopener'); return; }
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(!download && (/^audio\//.test(f.mime || '') || /\.(webm|m4a|mp3|ogg|aac|wav|amr)$/i.test(f.name || '')) && f.category === 'Meeting recordings'){ audioPlayer(f); return; }
   if(mobile && !download && /pdf|image/.test(f.mime || '')){ fileViewer(f); return; }
   // phones can't show a PDF inside a tab, so they download it and open it in the phone's PDF viewer
   const viewable = !download && (/image/.test(f.mime || '') || (/pdf/.test(f.mime || '') && !mobile));
