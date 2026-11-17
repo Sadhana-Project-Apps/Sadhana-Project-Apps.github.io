@@ -745,7 +745,7 @@ const TYPES = {
       {k:'machinery', l:'Machinery', t:'table', keepRows:1, printFilled:1, nil:1, half:'R', sumCols:['qty'], cols:[{k:'item',l:'Machinery'},{k:'qty',l:'No.',n:1,w:60,pw:20},{k:'hrs',l:'Hours',n:1,w:70,pw:20},{k:'remarks',l:'Remarks'}],
         def: () => MACHINERY_LIST.map(item => ({item}))},
       {sec:'Activities'},
-      {k:'works', l:'Works done today & progress', t:'table', num:1, sub:false, req:1, sumCols:[], hint:'Works from the last daily report are brought forward — just update the %. Works at 100% drop off the next day.',
+      {k:'works', l:'Works done today & progress', t:'table', num:1, sub:false, req:1, sumCols:[], actList:1, hint:'Works from the last daily report are brought forward — just update the %. Works at 100% drop off the next day.',
         cols:[{k:'work',l:'Work activity / location'},{k:'pct',l:'Progress (%)',n:1,w:110,pw:28,suffix:'%'}], def: () => [{}]},
       {k:'activities', l:'Other activities / notes', t:'textarea', ph:'e.g. Housekeeping, toolbox talk, site visit by client…'},
       {sec:'Forecast'},
@@ -790,6 +790,7 @@ const TYPES = {
   },
   PR: {
     name: 'Progress Report', code: 'PR', blurb: 'Weekly, fortnightly or monthly progress', cover: true,
+    carry: ['mainWorks', 'otherWorks', 'byLevel', 'byLevelPlan'],
     nameFn: d => (d.period || 'Weekly') + ' Progress Report',
     sigs: [
       {role:'Prepared by', hint:'Site Engineer'},
@@ -823,12 +824,16 @@ const TYPES = {
       {k:'timeElapsed', l:'Contract time at end of period', t:'auto', w:'half', calc:(x, d, p) => contractDay(p, x.to)},
       {k:'scurve', l:'S-curve data (cumulative %)', t:'table', cols:[{k:'date',l:'Date',center:1},{k:'sched',l:'Schedule %',n:1,w:90},{k:'actual',l:'Actual %',n:1,w:90}], def: () => [{},{},{},{}]},
       {sec:'Progress Summary – Main Works'},
-      {k:'mainWorks', l:'Main works', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description',pw:80},{k:'start',l:'Start date',w:100,center:1},{k:'finish',l:'Finish date',w:100,center:1},{k:'status',l:'Status',w:110,center:1}], def: () => [{},{},{}]},
+      {k:'mainWorks', l:'Main works', t:'table', num:1, sub:false, hint:'For a heading like "PRELIMINARIES & HSE", type it in CAPITALS and leave the dates and status empty. Status and dates fill in from the daily reports when the activity names match.', cols:[{k:'desc',l:'Description',pw:80},{k:'start',l:'Start date',w:100,center:1},{k:'finish',l:'Finish date',w:100,center:1},{k:'status',l:'Status',w:110,center:1}], def: () => [{},{},{}]},
       {sec:'Progress Summary – Other Works'},
       {k:'otherWorks', l:'Other works (permits, submissions, etc.)', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description',pw:80},{k:'start',l:'Start date',w:100,center:1},{k:'finish',l:'Finish date',w:100,center:1},{k:'status',l:'Status',w:110,center:1}],
         def: () => ['Demolition notification (local authority)','Dilapidation report','Temporary hoarding installation','CIDB registration','LHDN stamping'].map(desc => ({desc}))},
       {sec:'Look-Ahead (Next Period)'},
       {k:'lookahead', l:'Planned works for the next period', t:'table', num:1, sub:false, cols:[{k:'desc',l:'Description'},{k:'start',l:'Est. start',w:110,center:1,pw:40}], def: () => [{},{},{}]},
+      {sec:'Design & Analysis – Progress by Level', optIn:1},
+      {k:'byLevel', l:'Progress by level', t:'table', sub:false, optIn:1, levelColors:1, hint:'Type the date when done, "On-going", or "N/A". Headings in CAPITALS (e.g. "1. DEFECT MAPPING ON STRUCTURAL CONDITION").',
+        cols:[{k:'act',l:'Activity',pw:52},{k:'l1',l:'L1',center:1,w:70},{k:'l2',l:'L2',center:1,w:70},{k:'l3',l:'L3',center:1,w:70},{k:'l4',l:'L4',center:1,w:70},{k:'l5',l:'L5',center:1,w:70},{k:'rem',l:'Remarks'}], def: () => [{},{},{}]},
+      {k:'byLevelPlan', l:'Drawing / key plan', t:'photos', optIn:1, optional:1},
       {sec:'Major Issues Affecting Progress'},
       {k:'issues', l:'Issues', t:'table', num:1, sub:false, nil:1, cols:[{k:'issue',l:'Issue',pw:36},{k:'desc',l:'Description',pw:38},{k:'by',l:'Action by',w:90,center:1,pw:22},{k:'status',l:'Status'}], def: () => [{},{}]},
       {sec:'Weather Report'},
@@ -1554,7 +1559,13 @@ const TYPE_KEYS = Object.keys(TYPES);
    they were made with. */
 const _ttCache = new Map();
 function buildType(type, fmt){
-  const base = TYPES[type]; if(!base || !fmt) return base;
+  const base0 = TYPES[type]; if(!base0) return base0;
+  // fields marked optIn appear only when a project's format switches them on
+  const hasOpt = base0.fields.some(f => f.optIn);
+  if(!fmt && !hasOpt) return base0;
+  fmt = fmt || {};
+  const showSet = new Set(fmt.show || []);
+  const base = hasOpt ? {...base0, fields: base0.fields.filter(f => !f.optIn || showSet.has(f.sec ? 'sec:' + f.sec : f.k))} : base0;
   const key = type + JSON.stringify(fmt); if(_ttCache.has(key)) return _ttCache.get(key);
   const hide = new Set(fmt.hide || []), labels = fmt.labels || {};
   const secs = []; let cur = {sec: null, f: null, fields: []}; secs.push(cur);
@@ -1575,7 +1586,9 @@ function buildType(type, fmt){
     if(s.sec && !fs.length) return;
     if(s.f) fields.push(labels['sec:' + s.sec] ? {...s.f, sec: labels['sec:' + s.sec]} : s.f);
     fields.push(...fs); });
-  const T = {...base, fields, name: fmt.name || base.name, sigs: (fmt.sigs && fmt.sigs.length) ? fmt.sigs.map((s, i) => ({...(base.sigs[i] || {}), role: s.role, hint: s.hint || ''})) : base.sigs};
+  const pdfHide = new Set(fmt.pdfHide || []);
+  for(let i = 0; i < fields.length; i++) if(pdfHide.has(fields[i].k)) fields[i] = {...fields[i], pdf: false};
+  const T = {...base, fields, coverStyle: fmt.coverStyle, endLine: fmt.endLine, gridMonth: fmt.gridMonth, name: fmt.name || base.name, sigs: (fmt.sigs && fmt.sigs.length) ? fmt.sigs.map((s, i) => ({...(base.sigs[i] || {}), role: s.role, hint: s.hint || ''})) : base.sigs};
   if(fmt.name) T.nameFn = undefined;
   _ttCache.set(key, T); return T;
 }
@@ -1587,7 +1600,25 @@ const TT = d => { const T = buildType(d.type, d.fmt); const n = (d.signatures ||
   const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
   if(n > sigs.length) return {...T, sigs: [...sigs, ...DSR_OLD_SIGS.slice(sigs.length, n)]};
   return sigs === T.sigs ? T : {...T, sigs, done: 'Acknowledged'}; };
-const projFmt = (pid, type) => ((projById(pid) || {}).formCfg || {})[type] || null;
+/* ---------- project presets: a client's own report format, used until the project has its own saved format ---------- */
+const AXIS_MP = ['Project Manager', 'Site Manager', 'Site Supervisor', 'Machinery Operator', 'General Workers'];
+const AXIS_MC = ['Breaker', 'Drill', 'Concrete Mixer', 'Mobile Crane', 'Lorry', 'Backhoe', 'Forklift', 'Oxygen & Acetylene Set', 'Roro Bin', 'Genset'];
+const PROJECT_PRESETS = [{
+  name: 'Axis REIT – Wisma Kemajuan (Weekly Progress Report No.5 format)',
+  test: p => /^AXISWKP/i.test(p.code || '') || /WISMA KEMAJUAN/i.test(p.name || ''),
+  mp: AXIS_MP, mc: AXIS_MC,
+  PR: {coverStyle: 'axis', endLine: '--- END OF WEEKLY PROGRESS REPORT ---', gridMonth: 1,
+    sigs: [{role: 'Prepared by', hint: 'Site Engineer'}],
+    show: ['sec:Design & Analysis – Progress by Level', 'byLevel', 'byLevelPlan'],
+    hide: ['sec:Weather Report', 'photosBefore', 'remarks', 'sec:Work Programme'],
+    pdfHide: ['wp', 'cutoff', 'timeElapsed'],
+    labels: {'sec:Progress Summary – Main Works': 'Progress Summary', 'sec:Progress Summary – Other Works': 'Progress Summary (Others)', 'sec:Look-Ahead (Next Period)': '1 Week Forecast',
+      'sec:Major Issues Affecting Progress': 'Schedule of Major Issues that Might Affect the Progress of Work', 'sec:Plant & Machinery at Site': 'Machinery at Site', 'sec:Safety Statistics & Manhours': 'Manhours',
+      'sec:Progress Photos': 'Progress Photo', photosAfter: 'Progress photos', lookahead: '1 week forecast'},
+    order: ['Reporting period', 'S-Curve', 'Progress Summary – Main Works', 'Progress Summary – Other Works', 'Look-Ahead (Next Period)', 'Design & Analysis – Progress by Level', 'Major Issues Affecting Progress', 'Manpower at Site', 'Plant & Machinery at Site', 'Safety Statistics & Manhours', 'Progress Photos']}
+}];
+const projPreset = pid => { const p = projById(pid); return p ? PROJECT_PRESETS.find(x => x.test(p)) || null : null; };
+const projFmt = (pid, type) => ((projById(pid) || {}).formCfg || {})[type] || (projPreset(pid) || {})[type] || null;
 
 function fmtEditor(pid, type){
   const p = projById(pid); if(!p || !S.canEdit) return;
@@ -2716,7 +2747,20 @@ async function makeDocx(id){
       if(lines(x.enclosures).length){ body.push(P([t(L.enclL, {bold: true, size: 20})], {after: 0})); lines(x.enclosures).forEach((e, i) => body.push(P((i + 1) + '. ' + e, {size: 20, after: 0}))); }
       if(lines(x.cc).length){ body.push(P([t(L.ccL, {bold: true, size: 20})], {before: 160, after: 0})); lines(x.cc).forEach(e => body.push(P(e, {size: 20, after: 0}))); }
     } else {
-      if(T.cover){
+      if(T.cover && T.coverStyle === 'axis'){
+        const ord = ds => { if(!ds) return ''; const dt = new Date(ds + 'T00:00:00'), n = dt.getDate(), sfx = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'; return String(n).padStart(2, '0') + sfx + ' ' + dt.toLocaleDateString('en-GB', {month: 'long'}); };
+        const sg = (d.signatures || [])[0];
+        body.push(P([t((docTitleTxt + ' No.' + (data.reportNo || d.seq || '')).toUpperCase(), {bold: true, size: 24})], {align: AlignmentType.CENTER, before: 100, after: 40}));
+        body.push(P([t('DATE: ' + ord(data.from) + ' – ' + ord(data.to) + ' ' + String(data.to || data.from || '').slice(0, 4), {bold: true, size: 24})], {align: AlignmentType.CENTER, after: 400}));
+        body.push(P([t(String(data._title || p.name || '').toUpperCase(), {bold: true, size: 28})], {align: AlignmentType.CENTER, after: 300}));
+        const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0]; if(cov){ const im = await img(await photoData(cov.id), 130, 95); if(im) body.push(new Paragraph({alignment: AlignmentType.CENTER, children: [im], spacing: {after: 400}})); }
+        body.push(P([t('PREPARED BY:', {bold: true, size: 22})], {align: AlignmentType.CENTER, after: 60}));
+        body.push(P([t(sg?.name || nameOf(d.createdBy) || '', {size: 22})], {align: AlignmentType.CENTER, after: 20}));
+        body.push(P([t(sg?.designation || T.sigs[0]?.hint || '', {size: 22})], {align: AlignmentType.CENTER}), new Paragraph({children: [new PageBreak()]}));
+        body.push(H('Project Details'));
+        body.push(table(widths([45, 125]), [['PROJECT', data._title || p.name], ['CLIENT / OWNER', data._client || p.client], ['CONTRACTOR', c.name], ['DATE OF START', fmtDate(p.start)], ['DATE OF COMPLETION', fmtDate(p.end)], ['INSURANCE POLICY', p.insurance || '-']]
+          .filter(([a, b]) => b).map(([a, b]) => { const w = widths([45, 125]); return row([cell(a, w[0], {bold: true, fill: LIGHT}), cell(b, w[1])]); })));
+      } else if(T.cover){
         body.push(P([t(docTitleTxt.toUpperCase(), {bold: true, size: 36})], {align: AlignmentType.CENTER, before: 200, after: 80}));
         body.push(P([t(`Report No. ${data.reportNo || d.seq || ''}     |     Period: ${fmtDate(data.from)} – ${fmtDate(data.to)}${data.subDate ? '     |     Submitted: ' + fmtDate(data.subDate) : ''}`, {size: 22})], {align: AlignmentType.CENTER, after: 200}));
         body.push(P([t(String(data._title || p.name || '').toUpperCase(), {bold: true, size: 24})], {align: AlignmentType.CENTER, after: 240}));
@@ -2757,7 +2801,7 @@ async function makeDocx(id){
             try { const url = scurveCanvas(rows); body.push(new Paragraph({alignment: AlignmentType.CENTER, children: [new ImageRun({type: 'png', data: durl2u8(url), transformation: {width: 600, height: 300}})]})); } catch(e){}
             continue; }
           const dayCols = cols.filter(cc => cc.day != null);
-          const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => (cc.day != null ? dayLabel(data.from, cc.day).slice(0, days > 14 ? 2 : 5) : cc.l).toUpperCase()), ...(f.rowTotal ? ['TOTAL'] : [])];
+          const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => (cc.day != null ? dayLabel(gridStart(data), cc.day).slice(0, days > 14 ? 2 : 5) : cc.l).toUpperCase()), ...(f.rowTotal ? ['TOTAL'] : [])];
           const lenOf = cc => Math.max(String(cc.l).length * 0.8, ...rows.map(r => Math.min(70, String(r[cc.k] ?? '').length)));
           const wts = [...(f.num ? [15] : []), ...cols.map(cc => cc.day != null ? 6 : (cc.pw || Math.max(17, Math.min(55, lenOf(cc) * (cc.n ? 1.6 : 1.2))))), ...(f.rowTotal ? [13] : [])], w = widths(wts);
           const small = head.length > 12 ? 13 : head.length > 8 ? 15 : 17;
@@ -2798,6 +2842,7 @@ async function makeDocx(id){
       }
       flush();
       if(!T.cover){ body.push(H('Signatures'), await sigTable()); }
+      if(T.endLine) body.push(P([t(T.endLine, {bold: true, size: 18})], {align: AlignmentType.CENTER, before: 300}));
       else body.push(P([t('— END OF ' + docTitleTxt.toUpperCase() + ' —', {bold: true, size: 17, color: '666666'})], {align: AlignmentType.CENTER, before: 300}));
     }
     const LH = await imgData(company().letterheadId ? await photoData(company().letterheadId) : LETTERHEAD_JPG, 1800);
@@ -3184,14 +3229,14 @@ function viewTable(f, data){
   const cellv = (c, r) => c.date && !isEmpty(r[c.k]) ? esc(fmtDate(r[c.k])) : esc(c.suffix && !isEmpty(r[c.k]) ? String(r[c.k]).replace(/%$/, '') + c.suffix : (c.dp || c.fmt) && !isEmpty(r[c.k]) ? fmtN(r[c.k], c.dp) : r[c.k]);
   const hg = !grid && !f.num ? headGroupRows(f, cols.map(c => c.l)) : null, sm = !grid ? spanMap(f, cols, rows) : null;
   const th = hg ? hg.top.map(h => `<th ${h.rs ? 'rowspan="2"' : `colspan="${h.cs}" style="text-align:center"`}>${esc(h.l)}</th>`).join('') + '</tr><tr>' + hg.bot.map(l => `<th>${esc(l)}</th>`).join('')
-    : cols.map(c => `<th>${esc(c.day != null ? dayLabel(data.from, c.day).slice(0, dayCols.length > 14 ? 2 : 5) : c.l)}</th>`).join('') + (rt ? '<th>Total</th>' : '');
+    : cols.map(c => `<th>${esc(c.day != null ? dayLabel(gridStart(data), c.day).slice(0, dayCols.length > 14 ? 2 : 5) : c.l)}</th>`).join('') + (rt ? '<th>Total</th>' : '');
   const body = rows.map((r, ri) => r._g ? `<tr class="grp"><td colspan="${cols.length + (rt ? 1 : 0)}">${esc(r[cols[0].k] || '')}</td></tr>`
     : `<tr>${cols.map(c => sm && sm[ri][c.k] === 0 ? '' : `<td ${sm && sm[ri][c.k] > 1 ? `rowspan="${sm[ri][c.k]}" ` : ''}class="${(f.check && c.k === 'ans' && r.ans === (f.bad || 'No')) || (c.alert && c.alert.includes(String(r[c.k] ?? ''))) ? 'ansNo' : ''}">${cellv(c, r)}</td>`).join('')}${rt ? `<td><b>${dayCols.reduce((a, c) => a + numv(r[c.k]), 0)}</b></td>` : ''}</tr>`).join('');
   let foot = '';
   if(f.colTotal && dayCols.length){ const real = rows.filter(r => !r._g);
     foot = `<tr class="tot"><td>Total</td>${cols.slice(1).map(c => c.day != null ? `<td>${real.reduce((a, r) => a + numv(r[c.k]), 0) || ''}</td>` : '<td></td>').join('')}${rt ? `<td>${real.reduce((a, r) => a + dayCols.reduce((b, c) => b + numv(r[c.k]), 0), 0)}</td>` : ''}</tr>`; }
   else foot = tableTotals({...f, cols}, rows.filter(r => !r._g));
-  return `${f.check ? `<div class="small" style="padding:6px 2px">${chkCount(rows, f)}</div>` : ''}<div class="tscroll"><table class="${grid ? 'daygrid' : f.headGroups || cols.length > 9 ? 'wide' : ''}"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div>${dayCols.length > 7 ? `<div class="small muted" style="padding:4px 2px">${esc(dayLabel(data.from, 0))} – ${esc(dayLabel(data.from, days - 1))} · swipe sideways to see all days</div>` : ''}`;
+  return `${f.check ? `<div class="small" style="padding:6px 2px">${chkCount(rows, f)}</div>` : ''}<div class="tscroll"><table class="${grid ? 'daygrid' : f.headGroups || cols.length > 9 ? 'wide' : ''}"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div>${dayCols.length > 7 ? `<div class="small muted" style="padding:4px 2px">${esc(dayLabel(gridStart(data), 0))} – ${esc(dayLabel(gridStart(data), days - 1))} · swipe sideways to see all days</div>` : ''}`;
 }
 function tableTotals(f, rows){
   const numCols = f.sumCols ? f.cols.filter(c => f.sumCols.includes(c.k)) : f.cols.filter(c => c.n && !/%/.test(c.l));
@@ -3379,6 +3424,9 @@ function newDraft(pid, type){
   if(type === 'LTR'){ const p = projById(pid) || {}; data.reTitle = (p.name || '').toUpperCase() + (p.contractNo ? ' [LOA REF: ' + p.contractNo + ']' : ''); data.origEnd = p.end || '';
     let sg = {}; try { sg = JSON.parse(localStorage.getItem('sde-signer') || '{}'); } catch(e){}
     data.signName = sg.signName || S.names[S.me] || ''; data.signTitle = sg.signTitle || ''; data.signPhone = sg.signPhone || ''; data.signEmail = sg.signEmail || ''; }
+  { const pre = projPreset(pid);
+    if(pre && pre.mp && (type === 'DSR' || type === 'PR')){ const nk = type === 'DSR' ? 'trade' : 'name', mk = type === 'DSR' ? 'item' : 'name';
+      data.manpower = pre.mp.map(n => ({[nk]: n})); data.machinery = pre.mc.map(n => ({[mk]: n})); } }
   if(type === 'DSR'){
     const last = S.docs.filter(x => x.type === 'DSR' && x.projectId === pid && (x.data?.works || []).length).sort((a, b) => String(b.data?.date || '').localeCompare(String(a.data?.date || '')) || (b.seq || 0) - (a.seq || 0))[0];
     const carry = last ? last.data.works.filter(r => r && r.work && numv(r.pct) < 100).map(r => ({work: r.work, pct: r.pct || ''})) : [];
@@ -3529,6 +3577,14 @@ function pplDir(){
       m.set(k, {name: String(r.name).trim().replace(/\s+/g, ' '), company: String(r.company || '').trim() || o.company || '', id: String(r.id || '').trim() || o.id || '', n: o.n + 1, last: d.data?.date || '', here: o.here || d.projectId === pid}); }); });
   return [...m.values()].sort((a, b) => (b.here - a.here) || (b.n - a.n) || a.name.localeCompare(b.name));
 }
+// daily report work names come from the project's progress report, so the progress summary can be filled from them
+function actNames(pid){
+  const pr = S.docs.filter(x => x.projectId === pid && x.type === 'PR').sort((a, b) => (b.seq || 0) - (a.seq || 0))[0];
+  const isHead = t => /^\d+[.)]\s/.test(t) || (t === t.toUpperCase() && /[A-Z]{3}/.test(t));
+  const out = []; ((pr?.data?.mainWorks) || []).concat((pr?.data?.wp) || []).forEach(r => { const t = String(r?.desc || r?.act || '').trim(); if(t && !r._g && !isHead(t) && !out.includes(t)) out.push(t); });
+  return out;
+}
+function actDatalist(k){ const n = actNames(S.draft?.projectId); return n.length ? `<datalist id="act_${k}">${n.map(t => `<option value="${esc(t)}">`).join('')}</datalist>` : ''; }
 function pplDatalists(k){
   const dir = pplDir(), comp = [...new Set(dir.map(p => p.company).filter(Boolean))].sort();
   return `<datalist id="ppl_${k}_name">${dir.map(p => `<option value="${esc(p.name)}">${esc([p.company, p.id].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><datalist id="ppl_${k}_company">${comp.map(c => `<option value="${esc(c)}"></option>`).join('')}</datalist>`;
@@ -3577,8 +3633,8 @@ function fieldInput(f, v){
       const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
       if(f.marks){ const di = S.draft?.data?.from ? dDiff(today(), S.draft.data.from) : -1; if(di >= 0 && di < fcols.filter(c => c.day != null).length) S._dayok = di; else S._dayok = null; }
       return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
-      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.people ? `<button class="addrow" data-act="pplpick" data-k="${f.k}" style="margin-left:6px">👥 Choose people</button>${pplDatalists(f.k)}` : ''}${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
+        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(S.draft?.data?.from, c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''}${f.actList && c.k === f.cols[0].k ? ` list="act_${f.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.actList ? actDatalist(f.k) : ''}${f.people ? `<button class="addrow" data-act="pplpick" data-k="${f.k}" style="margin-left:6px">👥 Choose people</button>${pplDatalists(f.k)}` : ''}${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
     }
     case 'photos': {
       const ph = v || [];
@@ -3704,29 +3760,42 @@ function fillEnv(){
 function fillFromDailyReports(){
   const d = S.draft, data = d.data;
   if(!data.from || !data.to){ toast('Set "Period from" and "Period to" first.', true); return; }
-  const dsr = S.docs.filter(x => x.projectId === d.projectId && x.type === 'DSR' && x.data?.date >= data.from && x.data?.date <= data.to)
-    .sort((a, b) => a.data.date.localeCompare(b.data.date));
-  if(!dsr.length){ toast('No daily reports found for this period.', true); return; }
-  const idx = ds => Math.round((new Date(ds + 'T00:00:00') - new Date(data.from + 'T00:00:00')) / 86400000);
+  const T0 = TT(d);
+  // client format: manpower / machinery grid covers the whole calendar month of "Period to"
+  if(T0.gridMonth){ const m = data.to.slice(0, 7), last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate(); data.gridFrom = m + '-01'; data.gridTo = m + '-' + String(last).padStart(2, '0'); }
+  else { delete data.gridFrom; delete data.gridTo; }
+  const allDsr = S.docs.filter(x => x.projectId === d.projectId && x.type === 'DSR' && !x.deleted && x.data?.date && x.data.date <= data.to).sort((a, b) => a.data.date.localeCompare(b.data.date));
+  const dsr = allDsr.filter(x => x.data.date >= data.from);
+  const gridDsr = allDsr.filter(x => x.data.date >= gridStart(data));
+  if(!dsr.length && !gridDsr.length){ toast('No daily reports found for this period.', true); return; }
+  const idx = ds => Math.round((new Date(ds + 'T00:00:00') - new Date(gridStart(data) + 'T00:00:00')) / 86400000);
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if(d.type === 'PR') data.weather = dsr.map(x => ({date: fmtDate(x.data.date), am: x.data.weatherAM || '', pm: x.data.weatherPM || '', rain: x.data.rainHours || '', remarks: ''}));
   const maxD = (TT(d).fields.find(f => f.k === 'manpower')?.maxDays) || 7;
   const merge = (key, srcKey, nameKey) => {
     const rows = (data[key] || []).filter(r => r && !isEmpty(r.name)).map(r => { const o = {name: r.name}; for(let i = 0; i < maxD; i++) o['d' + i] = ''; return o; });
-    dsr.forEach(x => { const di = idx(x.data.date); if(di < 0 || di >= maxD) return;
+    gridDsr.forEach(x => { const di = idx(x.data.date); if(di < 0 || di >= maxD) return;
       (x.data[srcKey] || []).forEach(r => { const n = r?.[nameKey]; const q = parseFloat(r?.qty); if(!n || !q) return;
         let row = rows.find(z => norm(z.name) === norm(n)); if(!row){ row = {name: n}; for(let i = 0; i < maxD; i++) row['d' + i] = ''; rows.push(row); }
         row['d' + di] = String((parseFloat(row['d' + di]) || 0) + q); }); });
     data[key] = rows;
   };
   merge('manpower', 'manpower', 'trade'); merge('machinery', 'machinery', 'item');
+  // progress summary: start / finish / status of each activity from the daily reports' works %
+  let nW = 0;
+  if(d.type === 'PR' && Array.isArray(data.mainWorks)){
+    const seen = {}; allDsr.forEach(x => (x.data.works || []).forEach(w => { const k = norm(w?.work); if(!k) return; const pc = parseFloat(w.pct);
+      const o = seen[k] = seen[k] || {first: x.data.date}; o.last = x.data.date; if(!isNaN(pc)){ o.pct = pc; if(pc >= 100 && !o.done) o.done = x.data.date; } }));
+    data.mainWorks = data.mainWorks.map(r => { const o = r && seen[norm(r.desc)]; if(!o) return r; nW++;
+      return {...r, start: r.start || fmtDate(o.first), finish: o.pct >= 100 ? (r.finish || fmtDate(o.done || o.last)) : r.finish || '', status: o.pct >= 100 ? 'Completed' : 'In progress (' + (o.pct || 0) + '%)'}; });
+  }
   // progress photos: kept with the daily reports (not printed there) — first days → Before, last days → After
   let nPh = 0;
   if(d.type === 'PR'){ const withPh = dsr.filter(x => (x.data.photos || []).length), take = (list, n) => { const out = []; list.forEach(x => (x.data.photos || []).forEach(ph => { if(out.length < n) out.push({...ph, caption: ph.caption || 'Daily report ' + fmtDate(x.data.date)}); })); return out; };
     if(withPh.length){ const half = Math.max(1, Math.floor(withPh.length / 2));
       if(!(data.photosBefore || []).length){ data.photosBefore = take(withPh.slice(0, half), 6); nPh += data.photosBefore.length; }
       if(!(data.photosAfter || []).length){ data.photosAfter = take(withPh.slice(withPh.length > 1 ? half : 0).reverse(), 6); nPh += data.photosAfter.length; } } }
-  S.dirty = true; render(); toast(`Filled from ${dsr.length} daily report${dsr.length > 1 ? 's' : ''}${nPh ? ` incl. ${nPh} photo${nPh > 1 ? 's' : ''}` : ''} — please check`);
+  S.dirty = true; render(); toast(`Filled from ${Math.max(dsr.length, gridDsr.length)} daily report${Math.max(dsr.length, gridDsr.length) > 1 ? 's' : ''}${nPh ? ` incl. ${nPh} photo${nPh > 1 ? 's' : ''}` : ''}${nW ? `, ${nW} progress item${nW > 1 ? 's' : ''}` : ''} — please check`);
 }
 
 /* ---------- images ---------- */
@@ -4033,7 +4102,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z52';
+const APP_VER = 'Z53';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4308,7 +4377,9 @@ const HS = {W:210, H:297, L:20, R:20, TOP:50, BOTTOM:277, CW:170, LH_Y:10, LH_H:
 const GREEN_HEAD = [197,224,180], GREEN_LINE = [46,125,50], LABEL_FILL = [242,242,242], TOTAL_FILL = [255,230,153], GRID = [153,153,153], INK = [26,28,30];
 const docName = (T, data) => T.nameFn ? swapTypeName(T.code || TYPE_KEYS.find(k => TYPES[k] === T), T.nameFn(data || {})) : T.name;
 function dayLabel(from, i){ if(!from) return 'Day '+(i+1); const d = new Date(from+'T00:00:00'); d.setDate(d.getDate()+i); return pad2(d.getDate())+'/'+pad2(d.getMonth()+1); }
-function periodDays(data, max = 7){ if(!data.from || !data.to) return max; const n = Math.round((new Date(data.to+'T00:00:00') - new Date(data.from+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
+// the day grid normally starts at "Period from"; a whole-month grid (client format) is kept in gridFrom / gridTo
+const gridStart = data => data.gridFrom || data.from;
+function periodDays(data, max = 7){ const a = data.gridFrom || data.from, b = data.gridTo || data.to; if(!a || !b) return max; const n = Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
 async function letterheadData(){
   const c = company();
   if(c.letterheadId){ try { return await imgData(await photoData(c.letterheadId), 1600, 'jpeg'); } catch(e){} }
@@ -4383,7 +4454,36 @@ async function makePDF(id, opt){
     };
 
     // ---- first page: cover (progress report) or title block ----
-    if(T.cover){
+    if(T.cover && T.coverStyle === 'axis'){
+      // client format: "WEEKLY PROGRESS REPORT NO.5 / DATE: 09th November – 14th November 2026", title, photo, PREPARED BY
+      const ord = ds => { if(!ds) return ''; const dt = new Date(ds + 'T00:00:00'), n = dt.getDate(), sfx = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
+        return String(n).padStart(2, '0') + sfx + ' ' + dt.toLocaleDateString('en-GB', {month: 'long'}); };
+      const yr = String(data.to || data.from || '').slice(0, 4);
+      doc.setDrawColor(150); doc.setLineWidth(0.3); doc.line(L, y + 1, L + CW, y + 1);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...INK);
+      doc.text(pt((docName(T, data) + ' No.' + (data.reportNo || d.seq || '')).toUpperCase()), HS.W/2, y + 7, {align:'center'});
+      doc.text(pt('DATE: ' + ord(data.from) + ' – ' + ord(data.to) + ' ' + yr), HS.W/2, y + 12.5, {align:'center'});
+      doc.line(L, y + 15.5, L + CW, y + 15.5);
+      doc.setFontSize(13);
+      const pl = doc.splitTextToSize(pt(String(data._title || p.name || '').toUpperCase()), CW - 16);
+      doc.text(pl, HS.W/2, y + 27, {align:'center'}); y += 27 + pl.length * 5.6 + 4;
+      const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0] || (data.photosBefore || [])[0];
+      if(cov){ try { const I = await imgData(await photoData(cov.id), 1400); const bw = 130, bh = Math.max(40, Math.min(95, BOTTOM - 45 - y)), r = Math.min(bw/I.w, bh/I.h); doc.addImage(I.url, 'JPEG', (HS.W - I.w*r)/2, y, I.w*r, I.h*r); y += I.h*r + 8; } catch(e){} }
+      const sg = (d.signatures || [])[0];
+      y = Math.max(y + 6, BOTTOM - 34);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('PREPARED BY:', HS.W/2, y, {align:'center'});
+      if(sg && sg.img){ try { const I = await imgData(sg.img, 600, 'png'), r = Math.min(40 / I.w, 13 / I.h); doc.addImage(I.url, 'PNG', HS.W/2 - I.w*r/2, y + 1.5, I.w*r, I.h*r); } catch(e){} }
+      doc.setFont('helvetica','normal');
+      doc.text(pt(sg?.name || nameOf(d.createdBy) || ''), HS.W/2, y + 19, {align:'center'});
+      doc.text(pt(sg?.designation || T.sigs[0]?.hint || ''), HS.W/2, y + 24, {align:'center'});
+      doc.addPage(); var tocPage = doc.getCurrentPageInfo().pageNumber;
+      doc.addPage(); y = TOP;
+      heading('Project Details');
+      doc.autoTable({...base, startY:y, body:[
+        ['PROJECT', pt(data._title || p.name || '')], ['CLIENT / OWNER', pt(data._client || p.client || '-')], ['CONTRACTOR', pt(c.name)],
+        ['DATE OF START', pt(fmtDate(p.start))], ['DATE OF COMPLETION', pt(fmtDate(p.end))], ['INSURANCE POLICY', pt(p.insurance || '-')]
+      ].filter(r => r[1] && r[1] !== '-' || r[0] === 'INSURANCE POLICY'), theme:'plain', styles:{...base.styles, cellPadding:{top:2.2, bottom:2.2, left:1.5, right:1.5}}, columnStyles:{0:{cellWidth:50, fontStyle:'bold'}}}); after();
+    } else if(T.cover){
       doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...INK);
       doc.text(fitTxt(doc, pt(docName(T, data).toUpperCase()), CW), HS.W/2, y + 6, {align:'center'});
       doc.setFont('helvetica','normal'); doc.setFontSize(11);
@@ -4488,7 +4588,7 @@ async function makePDF(id, opt){
         const tc0 = cols.find(cc => !cc.n && cc.day == null);
         const isGrp = r => !f.keepRows && tc0 && (r._g || (cols.filter(cc => cc !== tc0 && !cc.calc && !cc.mul).every(cc => isEmpty(r[cc.k])) && /^(\d+[.)]\s|[A-Z0-9 &/(),.'–-]{4,}$)/.test(String(r[tc0.k] || '').trim()) && String(r[tc0.k] || '').trim() === String(r[tc0.k] || '').trim().toUpperCase()));
         const grpOn = cols.length > 1 && rows.some(isGrp) && rows.some(r => !isGrp(r));
-        const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => pt((cc.day != null ? (days > 14 ? dayLabel(data.from, cc.day).slice(0, 2) : dayLabel(data.from, cc.day)) : cc.l).toUpperCase()))];
+        const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => pt((cc.day != null ? (days > 14 ? dayLabel(gridStart(data), cc.day).slice(0, 2) : dayLabel(gridStart(data), cc.day)) : cc.l).toUpperCase()))];
         const dayCols = cols.filter(cc => cc.day != null);
         if(f.rowTotal) head.push('TOTAL');
         let gN = 0, iN = 0;
@@ -4498,6 +4598,9 @@ async function makePDF(id, opt){
           if(grpOn && isGrp(r)){ gN++; const label = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
             return [...(f.num ? [{content: String(gN) + '.', styles: {fillColor: [226, 239, 218], fontStyle: 'bold', halign: 'center'}}] : []), {content: pt(f.num ? label : (/^\d/.test(r[tc0.k]) ? r[tc0.k] : label)), colSpan: cols.length + (f.rowTotal ? 1 : 0), styles: {fillColor: [226, 239, 218], fontStyle: 'bold'}}]; }
           const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? pt(fmtDate(r[cc.k])) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
+          if(f.levelColors) cols.forEach((cc, ci) => { if(cc === tc0 || cc.k === 'rem') return; const v = String(r[cc.k] ?? '').trim(), at = ci + (f.num ? 1 : 0);
+            if(/^on-?\s?going|in progress/i.test(v)) out[at] = {content: pt(v), styles: {fillColor: [255, 235, 156]}};
+            else if(/^\d{1,2}[\/.-]\d{1,2}|complete/i.test(v)) out[at] = {content: pt(v), styles: {fillColor: [198, 239, 206]}}; });
           if(f.check && r.ans === (f.bad || 'No')){ const ai = cols.findIndex(cc => cc.k === 'ans') + (f.num ? 1 : 0); out[ai] = {content: pt(r.ans), styles: {textColor: [180, 35, 24], fontStyle: 'bold'}}; }
           cols.forEach((cc, ci) => { if(cc.alert && cc.alert.includes(String(r[cc.k] ?? ''))) out[ci + (f.num ? 1 : 0)] = {content: pt(r[cc.k]), styles: {textColor: [180, 35, 24], fontStyle: 'bold'}}; });
           if(f.rowTotal) out.push(String(dayCols.reduce((a, cc) => a + (parseFloat(r[cc.k]) || 0), 0)));
@@ -4524,7 +4627,7 @@ async function makePDF(id, opt){
         const preH = (showSub ? 6.5 : 0) + (dayCols.length > 14 && data.from ? 5 : 0);
         const drawPre = () => {
           if(showSub){ y += 1.5; doc.setFont('helvetica','bold'); doc.setFontSize(8.8 * hs); doc.setTextColor(...INK); doc.text(pt(f.l.toUpperCase()), halfX, y + 3.5 * hs); y += 5 * hs; }
-          if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(data.from + 'T00:00:00'), m2 = new Date((data.to || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + ')'), L, y + 3); } y += 5; } };
+          if(dayCols.length > 14 && data.from){ doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); { const m1 = new Date(gridStart(data) + 'T00:00:00'), m2 = new Date((data.gridTo || data.to || data.from) + 'T00:00:00'), mf = dt => dt.toLocaleDateString('en-GB', {month:'long', year:'numeric'}); doc.text(pt('Days of ' + (mf(m1) === mf(m2) ? mf(m1) : mf(m1).replace(/ \d{4}$/, m1.getFullYear() === m2.getFullYear() ? '' : ' ' + m1.getFullYear()) + ' & ' + mf(m2)) + ' (' + fmtDate(gridStart(data)) + ' – ' + fmtDate(data.gridTo || data.to) + ')'), L, y + 3); } y += 5; } };
         const colStyles = {}; let ci = 0;
         if(f.num) colStyles[ci++] = {cellWidth:12, halign:'center'};
         cols.forEach(cc => { colStyles[ci] = {...(cc.n || cc.day != null || cc.center ? {halign:'center'} : {}), ...(cc.pw ? {cellWidth:cc.pw} : {})}; ci++; });
@@ -4560,6 +4663,7 @@ async function makePDF(id, opt){
             doc.autoTable({...tOpt, ...(smP ? {rowPageBreak: 'avoid'} : {}), startY: y, head: HR, body: part, foot: last ? foot : undefined, showFoot: 'lastPage', showHead: (first || atTop) ? 'everyPage' : 'never'}); after(); });
         }
         if(f.k === 'scurve' && rows.length) { drawSCurve(doc, rows); after(); }
+        if(f.levelColors && rows.length){ need(6); doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(80); doc.text('*Legend: Completed (green) | On-going (yellow) | N/A (not applicable)', L, y + 3.5); y += 6; }
       } else if(f.t === 'calc' && f.calc === 'scrap'){
         const c = scrapCum(d);
         subLabel(f.l.toUpperCase());
@@ -4606,6 +4710,7 @@ async function makePDF(id, opt){
     }
     flush();
     if(!T.cover){ y += 6 * sc; if(T.onePage && T.sigs.length <= 3) await sigTable(); else { heading('Signatures', T.onePage ? 36 : 54); await sigTable(); } }
+    if(T.endLine){ need(12); y += 6; doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...INK); doc.text(pt(T.endLine), HS.W/2, y + 3, {align:'center'}); y += 6; }
     else { y += 5; if(y + 5 > BOTTOM + 3){ doc.addPage(); y = TOP; } doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(102); doc.text('— END OF ' + pt(docName(T, data).toUpperCase()) + ' —', HS.W/2, y + 4, {align:'center'}); }
 
     if(T.cover && typeof tocPage === 'number'){
