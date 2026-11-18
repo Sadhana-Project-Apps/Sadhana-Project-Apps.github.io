@@ -3162,7 +3162,7 @@ async function makeDocx(id){
       const imgs = await Promise.all(T.sigs.map(async (s, i) => { if(!sigs[i] || !sigs[i].img) return null; try { return new ImageRun({type: 'png', data: durl2u8((await imgData(sigs[i].img, 600, 'png')).url), transformation: {width: 120, height: 40}}); } catch(e){ return null; } }));
       return table(w, [row([cell('', w[0], {fill: GREEN}), ...T.sigs.map((s, i) => cell(s.role.toUpperCase(), w[i + 1], {bold: true, fill: GREEN, align: AlignmentType.CENTER}))], {head: true}),
         row([cell('Name', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i]?.name || '', w[i + 1], {align: AlignmentType.CENTER}))]),
-        row([cell('Designation', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i]?.designation || s.hint || '', w[i + 1], {align: AlignmentType.CENTER}))]),
+        row([cell('Designation', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i] ? (sigs[i].designation || '') : '', w[i + 1], {align: AlignmentType.CENTER}))]),
         row([cell('Signature', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(new Paragraph({alignment: AlignmentType.CENTER, spacing: {before: 120, after: 120}, children: imgs[i] ? [imgs[i]] : [t('')]}), w[i + 1]))]),
         row([cell('Date', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i] ? fmtDT(sigs[i].at) : '', w[i + 1], {align: AlignmentType.CENTER}))])]); };
     const docTitleTxt = T.letter ? '' : docName(T, data);
@@ -3209,7 +3209,7 @@ async function makeDocx(id){
           .map(([a, b]) => { const w = widths([45, 125]); return row([cell(a, w[0], {bold: true, fill: LIGHT}), cell(b || '-', w[1])]); })));
       } else {
         body.push(P([t(docTitleTxt.toUpperCase(), {bold: true, size: 30})], {align: AlignmentType.CENTER, after: 60}));
-        body.push(P(`${(data.from && data.to) ? 'Period: ' + fmtDate(data.from) + ' – ' + fmtDate(data.to) + '     |     ' : ''}Status: ${st.label}`, {size: 20, align: AlignmentType.CENTER, after: 160}));
+        if(data.from && data.to) body.push(P('Period: ' + fmtDate(data.from) + ' – ' + fmtDate(data.to), {size: 20, align: AlignmentType.CENTER, after: 160}));
         body.push(kvTable([['PROJECT', p.name || ''], ['DOC NO.', d.number], ['CLIENT', p.client || '-'], ['DATE', fmtDate(docDate(d))], ['LOCATION', p.location || '-'], ['CONTRACT NO.', p.contractNo || '-'], ...(data._subcon ? [['SUBCON', data._subcon], ['PREPARED BY', data._subconBy || '-']] : [])]));
       }
       const showResp = st.next === -1 || (st.next >= 0 && T.sigs[st.next].needsResponse) || T.fields.some(f => f.phase === 'response' && !isEmpty(data[f.k]));
@@ -3414,7 +3414,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · Daily report: no work + reason</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · Cleaner print: no draft status, blank unsigned boxes</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4599,7 +4599,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z62';
+const APP_VER = 'Z63';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4939,14 +4939,14 @@ async function makePDF(id, opt){
       if(T.onePage && n <= 3){   // one-page forms: one compact row per signer
         need(8 + 16 * n); 
         doc.autoTable({...base, startY: y, head: [['SIGN-OFF', 'NAME', 'DESIGNATION', 'SIGNATURE', 'DATE & TIME']],
-          body: T.sigs.map((s, i) => { const sg = sigs[i]; return [pt(s.role.toUpperCase()), pt(sg?.name || ''), pt(sg?.designation || s.hint), '', sg ? pt(fmtDT(sg.at)) : '']; }),
+          body: T.sigs.map((s, i) => { const sg = sigs[i]; return [pt(s.role.toUpperCase()), pt(sg?.name || ''), pt(sg ? (sg.designation || '') : ''), '', sg ? pt(fmtDT(sg.at)) : '']; }),
           columnStyles: {0: {cellWidth: 30, fontStyle: 'bold', fillColor: LABEL_FILL}, 1: {cellWidth: 40}, 2: {cellWidth: 34}, 3: {cellWidth: 40, minCellHeight: 14 * sc}, 4: {halign: 'center'}}, styles: {...base.styles, valign: 'middle'},
           didDrawCell: h => { if(h.section === 'body' && h.column.index === 3 && imgs[h.row.index]){ const I = imgs[h.row.index], r = Math.min((h.cell.width - 4) / I.w, (h.cell.height - 2) / I.h); doc.addImage(I.url, 'PNG', h.cell.x + (h.cell.width - I.w * r) / 2, h.cell.y + (h.cell.height - I.h * r) / 2, I.w * r, I.h * r); } }});
         after(); return; }
       need(45);
       doc.autoTable({...base, ...(n === 1 ? {tableWidth: lw + cw, margin: {...base.margin, left: L + CW - lw - cw}} : {}), startY:y, head:[['', ...T.sigs.map(s => pt(s.role.toUpperCase()))]],
         body:[['Name', ...T.sigs.map((s,i) => pt(sigs[i]?.name || ''))],
-              ['Designation', ...T.sigs.map((s,i) => pt(sigs[i]?.designation || s.hint))],
+              ['Designation', ...T.sigs.map((s,i) => pt(sigs[i] ? (sigs[i].designation || '') : ''))],
               ['Signature', ...T.sigs.map(() => '')],
               ['Date', ...T.sigs.map((s,i) => sigs[i] ? pt(fmtDT(sigs[i].at)) : '')]],
         columnStyles: Object.fromEntries([[0, {cellWidth:lw, fontStyle:'bold', fillColor:LABEL_FILL}], ...T.sigs.map((s, i) => [i + 1, {cellWidth:cw, halign:'center'}])]),
@@ -5010,8 +5010,7 @@ async function makePDF(id, opt){
       doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...INK);
       doc.text(fitTxt(doc, pt((T.nameFn ? docName(T, data) : T.name).toUpperCase()), CW), HS.W/2, y + 5, {align:'center'});
       doc.setFont('helvetica','normal'); doc.setFontSize(10);
-      doc.text(fitTxt(doc, pt(((data.from && data.to) ? 'Period: ' + periodTxt + '     |     ' : '') + 'Status: ' + st.label), CW), HS.W/2, y + 11, {align:'center'});
-      y += 16;
+      if(data.from && data.to){ doc.text(fitTxt(doc, pt('Period: ' + periodTxt), CW), HS.W/2, y + 11, {align:'center'}); y += 16; } else y += 10;
       if(T.formRef){ doc.setFontSize(7.5); doc.setTextColor(110); doc.text(pt(T.formRef), HS.W/2, y - 1, {align:'center'}); doc.setTextColor(...INK); y += 3; }
       doc.autoTable({...base, startY:y, body:[
         ['PROJECT', pt(p.name || ''), 'DOC NO.', pt(d.number)],
