@@ -2271,6 +2271,15 @@ function claimSummary(d){
     ['Net value of work done', fmtRM(c.net)], ['Less: previous payments', '(' + fmtRM(c.prev) + ')'], [c.final ? 'AMOUNT DUE — FINAL CLAIM' : 'AMOUNT DUE THIS CLAIM', fmtRM(c.due)]];
   return {rows, words: rmWords(c.due), c};
 }
+// claims are kept in their own Firestore area — it only opens once the admin has published the Z55 rules
+function claimsBlockedMsg(){
+  if(S.canAdmin) showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>⚠ Claims are not switched on in Firebase yet</h3></div><div class="mb">
+    <p style="margin-top:0">Claims and delivery orders are kept in their own protected area, so interns, the programmer and sub-contractors can't see the money. Firebase only allows it after the rules update is published:</p>
+    <ol style="padding-left:20px;margin:0"><li>Open <b>console.firebase.google.com</b> › your project › <b>Firestore Database</b> › <b>Rules</b>.</li><li>Delete everything there and paste the whole text of <b>"Firebase rules (Z55).txt"</b> (sent in the chat with Claude).</li><li>Tap <b>Publish</b>, wait 1 minute, then save the draft again.</li></ol>
+    <p class="small muted">Nothing is lost — the draft stays open on this screen.</p></div></div>`);
+  else toast('Claims can\'t be saved yet — the admin must publish the Firebase rules update (Z55). Your draft stays open; try again after that.', true);
+}
+const claimsBanner = () => S.claimsBlocked ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);margin-bottom:12px">⚠ Claims can't be saved yet — ${S.canAdmin ? 'publish the Firebase rules update (Z55): Firebase › Firestore Database › Rules › paste › Publish.' : 'the admin must publish the Firebase rules update (Z55).'}</div>` : '';
 // a delivery order made from a claim: the claimed items and amounts
 async function makeDOFromClaim(id){
   const c = docById(id); if(!c) return;
@@ -2400,7 +2409,10 @@ function projectView(id, tab){
     if((p.eots || []).length) it.push(`<div><span>Extension of time</span>${(p.eots || []).map(e => `EOT ${e.n}: +${e.days} days to ${fmtDate(e.newEnd)} (approved ${fmtDate(e.approvedOn)}${e.ref ? ', ' + esc(e.ref) : ''})`).join('<br>')}<br><span class="small muted">Original completion ${fmtDate(p.origEnd)}</span></div>`);
     return it.length ? `<div class="card projinfo">${it.join('')}</div>` : ''; })()}
   ${folders}
+  ${(() => { const L = (p.delLog || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at))); if(!S.canAdmin || !L.length) return '';
+    return `<details class="more" style="margin-bottom:12px"><summary>🗑 Deleted documents (${L.length})</summary><div class="card" style="margin-top:8px"><table class="reg stack"><thead><tr><th>Doc no.</th><th>Title</th><th>Deleted</th><th>Reason</th></tr></thead><tbody>${L.slice(0, 50).map(x => `<tr><td class="mono" style="white-space:nowrap">${esc(x.number)}</td><td>${esc(x.title)}</td><td class="small" style="white-space:nowrap">${esc(x.name || nameOf(x.by) || '')}<br><span class="muted">${fmtDT(x.at)}</span>${x.askedBy ? `<br><span class="muted">asked by ${esc(x.askedBy)}</span>` : ''}</td><td>${esc(x.reason)}</td></tr>`).join('')}</tbody></table></div></details>`; })()}
   ${cat.k === 'SCR' ? scrapCard(id) : ''}
+  ${cat.k === 'CLM' ? claimsBanner() : ''}
   ${S.canWrite && (p.status||'Active')!=='Completed' ? `<div class="createbar"><button class="btn pri" data-act="newpick" data-p="${esc(id)}" data-c="${cat.k}">+ New document</button>${quickTypes(id, cat, allP).map(k => `<button class="btn qk" data-act="new" data-p="${esc(id)}" data-t="${k}" title="${esc(TYPES[k].name)}">+ ${esc(qkName(projFmt(id, k)?.name || TYPES[k].name))}</button>`).join('')}
     ${intern() ? '' : `<details class="more"><summary>More ▾</summary><div class="morebox">${S.canEdit ? `<button class="btn sm" data-act="fmtedit" data-p="${esc(id)}">⚙ Report format (this project)</button><button class="btn sm" data-act="typenames">✎ Names & folders</button>` : ''}<button class="btn sm" data-act="sentltr" data-p="${esc(id)}" data-k="">✉ Record a letter / email I sent</button></div></details>`}</div>`:''}
   ${(() => { const tk = ['ALL', ...ckeys.filter(k => all.some(d => d.type === k) || k === tab)]; if(tk.length <= 2) return '';
@@ -3320,7 +3332,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 17 Nov 2026 (${APP_VER}) · Subcontractor EHS guideline & evaluation forms</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · Reason when deleting · claims save check</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4113,6 +4125,7 @@ async function saveResponse(){
 function dbErr(e){
   console.error(e);
   const c = e?.code;
+  if(c === 'permission-denied' && (isClaimType(S.draft?.type) || isClaimType(docById(S.view?.id)?.type))){ S.claimsBlocked = true; claimsBlockedMsg(); return; }
   toast(c==='permission-denied'||c==='invalid_argument' ? 'You don\'t have permission to do this — ask an admin.' : c==='too_large' ? 'That photo is too large — try another.' : c==='quota_exceeded' ? 'Storage is full — delete old drafts or contact the owner.' : 'Could not save — check your connection and try again.', true);
 }
 
@@ -4493,7 +4506,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z58';
+const APP_VER = 'Z59';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6130,9 +6143,20 @@ document.addEventListener('click', async e => {
       try { const v = {by: S.me || null, name: S.names[S.me] || '', at: new Date().toISOString(), reason: why}; await S.db.doc(dpath(id)).update({delReq: v}); const g = docById(id); if(g) g.delReq = v; closeModal(); toast('Request sent to the admin'); render(); }
       catch(err){ if(err && err.code === 'permission-denied') toast('Not allowed yet — the admin needs to publish the latest Firebase rules.', true); else dbErr(err); } break; }
     case 'delkeep': try { await S.db.doc(dpath(id)).update({delReq: null}); const g = docById(id); if(g) g.delReq = null; toast('Kept'); render(); } catch(err){ dbErr(err); } break;
-    case 'del': confirmBox('Delete this document?', 'This permanently removes the document and its signatures from the project record.', 'Delete', async () => {
-      const gone = docById(id), pid = gone?.projectId; try { await S.db.doc(dpath(id)).delete(); if(gone) await releaseSeq(gone.projectId, gone.type).catch(() => {}); delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); }
-      catch(err){ if(err && err.code === 'permission-denied' && !S.canAdmin) toast('Not allowed yet — the admin needs to publish the latest Firebase rules, or use "Ask admin to delete".', true); else dbErr(err); } }, true); break;
+    case 'del': { const g0 = docById(id); showModal(`<div class="box" style="max-width:460px"><div class="mh"><h3>🗑 Delete ${esc(g0 ? g0.number : 'this document')}?</h3></div><div class="mb">
+        <p class="small muted" style="margin-top:0">This permanently removes the document and its signatures. The reason is kept in the project's deletion record.</p>
+        <div class="fld"><label>Reason for deleting <em>*</em></label><input id="delWhy2" value="${esc(g0?.delReq?.reason || '')}" placeholder="e.g. Made by mistake / duplicate of … / wrong project"></div></div>
+        <div class="mf"><button class="btn danger" data-act="delgo" data-id="${esc(id)}">Delete</button></div></div>`); setTimeout(() => $('#delWhy2')?.focus(), 50); break; }
+    case 'delgo': { const why = ($('#delWhy2')?.value || '').trim(); if(why.length < 3){ toast('Write a short reason for deleting.', true); break; }
+      const gone = docById(id), pid = gone?.projectId;
+      try { await S.db.doc(dpath(id)).delete(); closeModal();
+        if(gone){ await releaseSeq(gone.projectId, gone.type).catch(() => {});
+          // keep a record of what was deleted, by whom and why
+          const entry = {number: gone.number || '', type: gone.type, title: docTitle(gone) || '', by: S.me || null, name: S.names[S.me] || '', at: new Date().toISOString(), reason: why,
+            ...(gone.delReq ? {askedBy: gone.delReq.name || nameOf(gone.delReq.by) || ''} : {})};
+          try { const pr = await S.db.doc('projects/' + pid).get(); const old = (pr.exists && pr.data().delLog) || []; await S.db.doc('projects/' + pid).update({delLog: [...old, entry].slice(-300)}); } catch(e){ console.warn('delLog', e); } }
+        delete S.extra[id]; recomputeDocs(); toast('Deleted'); go('project', {id:pid}); }
+      catch(err){ if(err && err.code === 'permission-denied' && !S.canAdmin) toast('Not allowed yet — the admin needs to publish the latest Firebase rules, or use "Ask admin to delete".', true); else dbErr(err); } break; }
     case 'savesettings': { const vals = {}; document.querySelectorAll('[data-set]').forEach(i => vals[i.dataset.set] = i.value.trim()); if(!vals.name) vals.name = COMPANY_DEFAULT.name;
       try { await S.db.doc('settings/company').set({...company(), ...vals}); toast('Saved'); } catch(err){ dbErr(err); } break; }
     case 'rmlh': try { await S.db.doc('settings/company').set({...company(), letterheadId:''}); } catch(err){ dbErr(err); } break;
@@ -7273,7 +7297,7 @@ function startData(){
 // claims stream only for the people who may see them (Firestore rules refuse everyone else)
 function startClaims(){
   const ok = canClaims();
-  if(ok && !S.claimsUnsub){ S.claimsUnsub = S.db.collection('claims').onSnapshot(s => { S.claimDocs = s.docs.map(x => ({id: x.id, ...x.data()})); recomputeDocs(); softRender(); }, e => { console.warn('claims', e); S.claimDocs = []; });
+  if(ok && !S.claimsUnsub){ S.claimsUnsub = S.db.collection('claims').onSnapshot(s => { S.claimsBlocked = false; S.claimDocs = s.docs.map(x => ({id: x.id, ...x.data()})); recomputeDocs(); softRender(); }, e => { console.warn('claims', e); S.claimDocs = []; if(e && e.code === 'permission-denied'){ S.claimsBlocked = true; softRender(); } });
     unsubs.push(() => { try { S.claimsUnsub && S.claimsUnsub(); } catch(e){} S.claimsUnsub = null; S.claimDocs = []; }); }
   else if(!ok && S.claimsUnsub){ try { S.claimsUnsub(); } catch(e){} S.claimsUnsub = null; S.claimDocs = []; recomputeDocs(); }
 }
