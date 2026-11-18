@@ -976,10 +976,18 @@ const TYPES = {
     fields: [
       {sec:'Delivery Order'},
       {k:'date', l:'Date', t:'date', req:1, w:'half', def: () => today()},
-      {k:'claimRef', l:'For claim', t:'text', req:1, w:'half', hint:'Filled in when the DO is made from a claim'},
+      {k:'claimRef', l:'For claim', t:'text', w:'half', hideEmpty:1, hint:'Filled in when the DO is made from a claim'},
       {k:'attn', l:'Attention', t:'text', w:'half'},
-      {k:'items', l:'Work done', t:'table', num:1, sub:false, req:1, sumCols:['amount'],
-        cols:[{k:'desc', l:'Description of work done', pw:50}, {k:'pct', l:'% completed to date', n:1, center:1, w:90}, {k:'amount', l:'Amount this claim (RM)', n:1, dp:2, w:120}], def: () => [{}]},
+      {k:'mode', l:'Show', t:'select', o:['Amount (RM)', 'Quantity only'], w:'half', def:'Amount (RM)', pdf:false, hint:'"Quantity only" prints the items with quantity and unit, without amounts.'},
+      {k:'items', l:'Work done', t:'table', num:1, sub:false, req:1, sumCols:['amount'], when: d => d.mode !== 'Quantity only',
+        sumLabel: d => d.sst === 'Yes' ? 'SUBTOTAL (EXCL. SST)' : 'TOTAL',
+        cols:[{k:'desc', l:'Description of work done'}, {k:'pct', l:'% completed to date', n:1, center:1, w:90, suffix:'%'}, {k:'amount', l:'Amount this claim (RM)', n:1, dp:2, w:120}], def: () => [{}]},
+      {k:'qtyItems', l:'Items delivered', t:'table', num:1, sub:false, req:1, when: d => d.mode === 'Quantity only',
+        cols:[{k:'desc', l:'Description'}, {k:'qty', l:'Quantity', n:1, center:1, w:80}, {k:'unit', l:'Unit', center:1, w:80, ph:'e.g. lot, nos, m³, trip'}], def: () => [{}]},
+      {k:'sst', l:'SST', t:'select', o:['No', 'Yes'], w:'half', def:'No', pdf:false, when: d => d.mode !== 'Quantity only'},
+      {k:'sstRate', l:'SST rate (%)', t:'number', w:'half', def:'6', pdf:false, when: d => d.mode !== 'Quantity only' && d.sst === 'Yes', hint:'Service tax on construction services is 6%. Change it if the client\'s contract says otherwise.'},
+      {k:'sstShow', l:'Total with SST', t:'auto', pdf:false, noView:1, when: d => d.mode !== 'Quantity only' && d.sst === 'Yes', calc: x => { const st = doSST(x); return `Subtotal RM ${fmtN(st.sub, 2)} + SST ${st.rate}% RM ${st.sstTxt} = RM ${st.totTxt}`; }},
+      {k:'_sst', l:'SST', t:'calc', calc:'sst', when: d => d.mode !== 'Quantity only' && d.sst === 'Yes'},
       {k:'note', l:'Acknowledgement', t:'textarea', def:'We acknowledge receipt of the above work done in good order and condition.'}
     ]
   },
@@ -2095,6 +2103,59 @@ function docRow(d, showProj){
     <div class="t"><b>${esc(docTitle(d))}</b><span><span class="mono">${esc(d.number)}</span>${showProj&&p?' · '+esc(p.name):''}</span></div>${pill(d)}</div>`;
 }
 
+/* ---------- column widths that suit the words: short columns (numbers, dates, codes) never wrap, long text gets the rest ---------- */
+// cells: strings (or {content, colSpan}); fs = font size (pt); pad = left+right cell padding (mm)
+function planWidths(doc, head, rows, total, fs, pad, opt = {}){
+  const n = head.length; if(!n) return null;
+  const txt = c => c == null ? '' : typeof c === 'object' ? (c.colSpan > 1 ? null : String(c.content ?? '')) : String(c);
+  const meas = (s, bold, size) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); let nat = 0, word = 0;
+    String(s).split('\n').forEach(l => { nat = Math.max(nat, doc.getTextWidth(l)); l.split(/\s+/).forEach(w => { if(w) word = Math.max(word, doc.getTextWidth(w)); }); }); return {nat, word}; };
+  const hs = opt.headFs || fs, out = [];
+  for(let j = 0; j < n; j++){
+    const h = meas(txt(head[j]) || '', true, hs); let nat = 0, word = 0, cnt = 0;
+    rows.forEach(r => { const s = txt(r[j]); if(s == null || s === '') return; const m = meas(s, false, fs); nat = Math.max(nat, m.nat); word = Math.max(word, m.word); cnt++; });
+    out.push({hNat: h.nat + pad, hWord: h.word + pad, nat: nat + pad, word: word + pad, fixed: opt.fixed && opt.fixed[j]});
+  }
+  doc.setFont('helvetica', 'normal');
+  const rigidMax = total * (opt.rigidShare || 0.3);
+  // a column is "short" when its longest entry fits easily on one line
+  out.forEach(c => { c.min = Math.max(c.word, c.hWord); c.short = c.fixed || c.nat <= rigidMax;
+    c.w = c.fixed || (c.short ? Math.max(c.nat, c.hWord, Math.min(c.hNat, Math.max(c.nat, c.hWord) * 1.6, rigidMax)) : 0); });
+  let used = out.reduce((a, c) => a + (c.short ? c.w : 0), 0);
+  // too wide on one line each: let the longest text columns wrap (never the short ones)
+  if(used > total){ out.forEach(c => { if(c.short && !c.fixed && c.nat > c.min * 1.5) { c.short = false; c.w = 0; } }); used = out.reduce((a, c) => a + (c.short ? c.w : 0), 0); }
+  while(used > total){ const cand = out.filter(c => c.short && !c.fixed && c.nat > c.min + 1).sort((a, b) => b.nat - a.nat)[0]; if(!cand) break; cand.short = false; cand.w = 0; used = out.reduce((a, c) => a + (c.short ? c.w : 0), 0); }
+  const flex = out.filter(c => !c.short);
+  if(flex.length){
+    let left = total - used;
+    const need = flex.reduce((a, c) => a + c.min, 0);
+    if(left < need){ // not enough room: shrink the short columns back towards their minimum
+      const shrinkable = out.filter(c => c.short && !c.fixed), spare = shrinkable.reduce((a, c) => a + Math.max(0, c.w - c.min), 0), want = need - left;
+      shrinkable.forEach(c => { const cut = spare ? (c.w - c.min) / spare * Math.min(want, spare) : 0; c.w -= cut; }); used = out.reduce((a, c) => a + (c.short ? c.w : 0), 0); left = total - used; }
+    const wsum = flex.reduce((a, c) => a + Math.max(c.nat, c.min), 0);
+    flex.forEach(c => { c.w = Math.max(c.min, left * Math.max(c.nat, c.min) / wsum); });
+    // flexible columns that need less than their share give the rest back to the others
+    let over = flex.reduce((a, c) => a + c.w, 0) - left;
+    if(over > 0.5){ const big = flex.filter(c => c.w > c.min); const bs = big.reduce((a, c) => a + c.w - c.min, 0); big.forEach(c => { c.w -= bs ? (c.w - c.min) / bs * over : 0; }); }
+    flex.forEach(c => { if(c.w > c.nat && c.nat > 0){ const extra = c.w - c.nat; c.w = c.nat; c.give = extra; } });
+    const give = flex.reduce((a, c) => a + (c.give || 0), 0);
+    if(give > 0.5){ const tgt = flex.filter(c => !c.give); (tgt.length ? tgt : out.filter(c => !c.fixed)).forEach((c, _, arr) => { c.w += give / arr.length; }); }
+  } else if(used < total){ const fl = out.filter(c => !c.fixed), s = fl.reduce((a, c) => a + c.w, 0); fl.forEach(c => { c.w += (total - used) * c.w / s; }); }
+  let sum = out.reduce((a, c) => a + c.w, 0);
+  if(sum > total + 0.5){ const k = total / sum; out.forEach(c => { c.w *= k; }); sum = total; }
+  if(Math.abs(sum - total) > 0.01){ const last = out.reduce((a, c, i) => out[a].fixed || c.w > out[a].w ? i : a, 0); out[last].w += total - sum; }
+  return out.map(c => Math.max(4, c.w));
+}
+// lines broken in the middle of a sentence (text pasted from a PDF / e-mail) are joined back; lists and short lines stay as typed
+function reflow(s){
+  s = String(s ?? ''); if(!s.includes('\n')) return s;
+  const L = s.split('\n'), out = [], mark = /^\s*([a-z0-9ivx]{1,4}[.)]|[-•*–·]|\(\w{1,3}\))\s/i;
+  L.forEach(l => { const prev = out[out.length - 1];
+    if(prev != null && prev.trim().length >= 25 && l.trim() && !/[.:;!?]\s*$/.test(prev) && !mark.test(l)) out[out.length - 1] = prev.replace(/\s+$/, '') + ' ' + l.trim();
+    else out.push(l); });
+  return out.join('\n');
+}
+
 /* ---------- meeting recorder (Minutes of Meeting): records the meeting and writes a live transcript with the phone's own speech-to-text ---------- */
 const MREC = {on: false};
 window.addEventListener('beforeunload', e => { if(MREC.on){ e.preventDefault(); e.returnValue = 'A meeting is still being recorded.'; } });
@@ -2248,6 +2309,9 @@ function rmWords(v){
   return (numv(v) < 0 ? 'Minus ' : '') + 'Ringgit Malaysia ' + w(rm) + (sen ? ' and Sen ' + w(sen) : '') + ' Only';
 }
 const claimRows = rows => (rows || []).filter(r => r && !r._g && !isEmpty(r.amount));
+// delivery order: subtotal + SST = total
+function doSST(x){ const sub = claimRows(x.items).reduce((a, r) => a + numv(r.amount), 0), rate = isEmpty(x.sstRate) ? 6 : numv(x.sstRate), sst = Math.round(sub * rate) / 100;
+  return {sub, rate, sst, total: sub + sst, sstTxt: fmtN(sst, 2), totTxt: fmtN(sub + sst, 2)}; }
 // standard Malaysian claim: work done to date − retention (10% of work done, up to 5% of the contract sum; half released on the final claim) − previous payments
 function claimCalc(d){
   const x = d.data || {}, rows = [...claimRows(x.items), ...claimRows(x.vos)];
@@ -3150,7 +3214,8 @@ async function makeDocx(id){
       let kv = [], skip = false;
       const flush = () => { if(kv.length){ body.push(kvTable(kv)); kv = []; } };
       for(let fi = 0; fi < T.fields.length; fi++){ const f = T.fields[fi];
-        if(f.phase === 'response' && !showResp) continue; if(f.pdf === false) continue;
+        if(f.phase === 'response' && !showResp) continue; if(f.pdf === false) continue; if(!f.sec && !shown(f, data)) continue;
+        if(f.hideEmpty && !f.sec && isEmpty(data[f.k])) continue;
         if(f.sec){ flush(); skip = false;
           curSec = f.sec;
           if(T.cover || PR_.signedAny){ let any = false; for(let j = fi + 1; j < T.fields.length && !T.fields[j].sec; j++) if(T.fields[j].pdf !== false && (T.fields[j].phase !== 'response' || showResp) && hasC(T.fields[j]) && !PR_.dupField(T.fields[j])) any = true; if(!any){ skip = true; continue; } }
@@ -3173,7 +3238,12 @@ async function makeDocx(id){
           const dayCols = cols.filter(cc => cc.day != null);
           const head = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => (cc.day != null ? dayLabel(gridStart(data), cc.day).slice(0, days > 14 ? 2 : 5) : cc.l).toUpperCase()), ...(f.rowTotal ? ['TOTAL'] : [])];
           const lenOf = cc => Math.max(String(cc.l).length * 0.8, ...rows.map(r => Math.min(70, String(r[cc.k] ?? '').length)));
-          const wts = [...(f.num ? [15] : []), ...cols.map(cc => cc.day != null ? 6 : (cc.pw || Math.max(17, Math.min(55, lenOf(cc) * (cc.n ? 1.6 : 1.2))))), ...(f.rowTotal ? [13] : [])], w = widths(wts);
+          let wts = [...(f.num ? [15] : []), ...cols.map(cc => cc.day != null ? 6 : (cc.pw || Math.max(17, Math.min(55, lenOf(cc) * (cc.n ? 1.6 : 1.2))))), ...(f.rowTotal ? [13] : [])];
+          // same width rules as the PDF: short columns on one line, long text gets the rest
+          if(!dayCols.length && !f.rowTotal){ try { const md = new window.jspdf.jsPDF({unit: 'mm'}), cv = cc => r => cc.date && !isEmpty(r[cc.k]) ? fmtDate(r[cc.k]) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : String(r[cc.k] ?? '');
+            const hd = [...(f.num ? [PR_.numLabel(f)] : []), ...cols.map(cc => String(cc.l).toUpperCase())], bd = rows.map(r => [...(f.num ? ['00'] : []), ...cols.map(cc => cv(cc)(r))]);
+            const Wp = planWidths(md, hd, bd, 170, 9, 3.2, {headFs: 8.5, fixed: f.num ? {0: 11} : null}); if(Wp) wts = Wp; } catch(e){} }
+          const w = widths(wts);
           const small = head.length > 12 ? 13 : head.length > 8 ? 15 : 17;
           const tc0 = cols.find(cc => !cc.n && cc.day == null);
           const isGrp = r => !f.keepRows && tc0 && (r._g || (cols.filter(cc => cc !== tc0).every(cc => isEmpty(r[cc.k])) && String(r[tc0.k] || '').trim() === String(r[tc0.k] || '').trim().toUpperCase() && /[A-Z]{3}/.test(r[tc0.k] || '')));
@@ -3190,10 +3260,10 @@ async function makeDocx(id){
               out.push(row([cell(P([t(lab, {bold: true, italics: !main, size: small})], {after: 0, keepNext: true}), CW, {fill: main ? GRPF : 'F2F2F2', span: head.length})])); return; }
             if(grpOn && isGrp(r)){ gN++; sN = 0; const lab = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
               out.push(row([...(f.num ? [cell(P([t(gN + '.', {bold: true, size: small})], {align: AlignmentType.CENTER, after: 0, keepNext: true}), w[0], {fill: GRPF})] : []), cell(P([t(f.num ? lab : r[tc0.k], {bold: true, size: small})], {after: 0, keepNext: true}), CW - (f.num ? w[0] : 0), {fill: GRPF, span: head.length - (f.num ? 1 : 0)})])); return; }
-            const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : f.subNum ? (gN ? gN + '.' : '') + (++sN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? fmtDate(r[cc.k]) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : (r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
+            const vals = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : f.subNum ? (gN ? gN + '.' : '') + (++sN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? fmtDate(r[cc.k]) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? String(r[cc.k]).replace(/%$/, '') + cc.suffix : cc.n ? (r[cc.k] ?? '') : reflow(r[cc.k] ?? '')), ...(f.rowTotal ? [String(dayCols.reduce((a, cc) => a + numv(r[cc.k]), 0))] : [])];
             out.push(row(vals.map((v, k) => { const sc = smw && cols[k - (f.num ? 1 : 0)] ? smw[i][cols[k - (f.num ? 1 : 0)].k] : null; return sc === 0 ? null : cell(v, w[k], {rs: sc > 1 ? sc : undefined, size: small, align: (k === 0 && f.num) || (k - (f.num ? 1 : 0) >= 0 && cols[k - (f.num ? 1 : 0)] && (cols[k - (f.num ? 1 : 0)].n || cols[k - (f.num ? 1 : 0)].center || cols[k - (f.num ? 1 : 0)].day != null)) || (f.rowTotal && k === vals.length - 1) ? AlignmentType.CENTER : undefined}); }).filter(Boolean))); });
           const sk = f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? dayCols.map(cc => cc.k) : [];
-          if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
+          if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? (f.sumLabel ? f.sumLabel(data) : 'TOTAL') : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
             out.push(row(vals.map((v, k) => cell(v, w[k], {bold: true, fill: YEL, size: small, align: k ? AlignmentType.CENTER : undefined})))); }
           if(!rows.length) out.push(row([cell(f.nil ? 'Nil' : '-', CW, {span: head.length, align: AlignmentType.CENTER})]));
           body.push(table(w, out), P('', {after: 80}));
@@ -3207,6 +3277,10 @@ async function makeDocx(id){
                 cs.push(cell([new Paragraph({alignment: AlignmentType.CENTER, children: im ? [im] : [t('')]}), ...(!capd && q ? [P(q.caption || 'Photo ' + (i + k + 1), {size: 15, align: AlignmentType.CENTER, after: 0})] : [])], w[k])); }
               out.push(row(cs)); } }
           body.push(table(w, out), P('', {after: 80}));
+        } else if(f.t === 'calc' && f.calc === 'sst'){ const w = widths([125, 45]), st = doSST(data);
+          body.push(table(w, [row([cell('SST (' + st.rate + '%)', w[0], {align: AlignmentType.RIGHT}), cell(st.sstTxt, w[1], {align: AlignmentType.CENTER})]),
+            row([cell('TOTAL (INCL. SST)', w[0], {bold: true, fill: YEL, align: AlignmentType.RIGHT}), cell(st.totTxt, w[1], {bold: true, fill: YEL, align: AlignmentType.CENTER})]),
+            row([cell('(' + rmWords(st.total) + ')', w[0] + w[1], {span: 2})])]));
         } else if(f.t === 'calc' && f.calc === 'claim'){ const w = widths([125, 45]), cs = claimSummary(d), last = cs.rows.length - 1;
           body.push(table(w, [...cs.rows.map((r, i) => row([cell(r[0], w[0], {bold: i === last, fill: i === last ? GREEN : undefined}), cell(r[1], w[1], {bold: i === last, fill: i === last ? GREEN : undefined, align: AlignmentType.RIGHT})])),
             row([cell('(' + cs.words + ')', w[0] + w[1], {span: 2})])]));
@@ -3332,7 +3406,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · Reason when deleting · claims save check</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · DO: SST & quantity only · neater table columns</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3559,6 +3633,8 @@ function docBodyHTML(d){
   for(const f of T.fields){
     if(f.phase === 'response' && !showResp) continue;
     if(f.noView) continue;
+    if(!f.sec && !shown(f, data)) continue;
+    if(f.hideEmpty && !f.sec && isEmpty(data[f.k])) continue;
     if(f.sec){ closeSec(); openSec(f.sec); continue; }
     if(['date','datetime','select','text','number','auto'].includes(f.t)){
       if(d.type==='PR' && (f.k==='planned'||f.k==='actual')) continue;
@@ -3579,6 +3655,9 @@ function docBodyHTML(d){
       out += wrapStart + head + (c.rows.length ? `<table><thead><tr>${c.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}<tr style="font-weight:700;background:#fff6d6">${c.total.map(x => `<td>${esc(x)}</td>`).join('')}</tr></tbody></table><div class="small muted" style="padding:6px 10px">Includes ${c.records} record${c.records === 1 ? '' : 's'} up to and including this one.</div>` : `<div class="body"><span class="muted">—</span></div>`) + wrapEnd;
     } else if(f.t === 'rec'){
       const rl = data[f.k] || []; if(rl.length) out += wrapStart + head + `<div class="body" style="display:flex;gap:8px;flex-wrap:wrap">${rl.map((r, i) => `<button class="btn sm" data-act="fileopen" data-id="${esc(r.fileId)}">🎧 ${esc(r.name || 'Recording ' + (i + 1))}${r.dur ? ' · ' + recDur(r.dur) : ''}</button>`).join('')}</div>` + wrapEnd;
+    } else if(f.t === 'calc' && f.calc === 'sst'){
+      const st = doSST(data);
+      out += wrapStart + `<table><tbody><tr><td style="text-align:right">SST (${esc(st.rate)}%)</td><td style="text-align:right;white-space:nowrap">${esc(st.sstTxt)}</td></tr><tr style="font-weight:700"><td style="text-align:right">TOTAL (INCL. SST)</td><td style="text-align:right;white-space:nowrap">${esc(st.totTxt)}</td></tr><tr><td colspan="2"><i>${esc(rmWords(st.total))}</i></td></tr></tbody></table>` + wrapEnd;
     } else if(f.t === 'calc' && f.calc === 'claim'){
       const cs = claimSummary(d);
       out += wrapStart + head + `<table><tbody>${cs.rows.map((r, i) => `<tr${i === cs.rows.length - 1 ? ' style="font-weight:700"' : ''}><td>${esc(r[0])}</td><td style="text-align:right;white-space:nowrap">${esc(r[1])}</td></tr>`).join('')}<tr><td colspan="2"><i>${esc(cs.words)}</i></td></tr></tbody></table>` + wrapEnd;
@@ -4506,7 +4585,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z59';
+const APP_VER = 'Z60';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4812,7 +4891,8 @@ async function makePDF(id, opt){
       styles:{font:'helvetica', fontSize:8.5 * sc, cellPadding:1.6 * sc * sc, lineColor:GRID, lineWidth:0.15, textColor:INK, overflow:'linebreak', valign:'middle'},
       headStyles:{fillColor:GREEN_HEAD, textColor:INK, fontStyle:'bold', fontSize:8.2 * sc, halign:'center'},
       footStyles:{fillColor:TOTAL_FILL, textColor:INK, fontStyle:'bold'}};
-    const after = () => { y = doc.lastAutoTable.finalY; };
+    let lastAmtW = 0;
+    const after = () => { y = doc.lastAutoTable.finalY; try { const cs = doc.lastAutoTable.columns; lastAmtW = cs[cs.length - 1].width; } catch(e){} };
     const need = h => { if(y + (T.onePage ? h * sc : h) > BOTTOM) breakPage(); };
     const toc = [];
     const heading = (title, room = 18) => {
@@ -4924,15 +5004,24 @@ async function makePDF(id, opt){
         ['CLIENT', pt(p.client || '-'), 'DATE', docDateTxt],
         ['LOCATION', pt(p.location || '-'), 'CONTRACT NO.', pt(p.contractNo || '-')],
         ...(data._subcon ? [['SUBCON', pt(data._subcon), 'PREPARED BY', pt(data._subconBy || '-')]] : [])
-      ], columnStyles:{0:{cellWidth:24, fontStyle:'bold', fillColor:LABEL_FILL}, 2:{cellWidth:27, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth: T.landscape ? 60 : 45}}}); after();
+      ], columnStyles: (() => { const rows = [['PROJECT', 'DOC NO.'], ['CLIENT', 'DATE'], ['LOCATION', 'CONTRACT NO.'], ...(data._subcon ? [['SUBCON', 'PREPARED BY']] : [])], pd = 2 * 1.6 * sc * sc, fs = 8.5 * sc;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(fs); const l0 = Math.max(...rows.map(r => doc.getTextWidth(r[0]))) + pd + 1, l2 = Math.max(...rows.map(r => doc.getTextWidth(r[1]))) + pd + 1;
+        doc.setFont('helvetica', 'normal'); const rv = Math.max(...[d.number, docDateTxt, p.contractNo || '-', data._subconBy || ''].map(v => doc.getTextWidth(pt(String(v || ''))))) + pd + 1;
+        const v3 = Math.min(Math.max(rv, 26), CW * 0.36);
+        return {0:{cellWidth:l0, fontStyle:'bold', fillColor:LABEL_FILL}, 1:{cellWidth: CW - l0 - l2 - v3}, 2:{cellWidth:l2, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth: v3}}; })()}); after();
       y += 2;
     }
 
     // ---- sections ----
     let kv = [];
     const flush = () => { if(!kv.length) return; const rows = []; for(let i = 0; i < kv.length; i += 2) rows.push(kv[i+1] ? [kv[i][0], kv[i][1], kv[i+1][0], kv[i+1][1]] : [kv[i][0], {content: kv[i][1], colSpan: 3}]);
-      const vw = (CW - 72) / 2;
-      doc.autoTable({...base, startY:y + 1, body:rows, columnStyles:{0:{cellWidth:36, fontStyle:'bold', fillColor:LABEL_FILL}, 1:{cellWidth: kv.length > 1 ? vw : 'auto'}, 2:{cellWidth:36, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth: vw}}}); after(); kv = []; };
+      const pd = 2 * 1.6 * sc * sc, fs = 8.5 * sc; doc.setFont('helvetica', 'bold'); doc.setFontSize(fs);
+      const lab = i => Math.min(52, Math.max(26, ...kv.filter((_, k) => k % 2 === i).map(x => { const ws = String(x[0]).split(/\s+/); const one = doc.getTextWidth(String(x[0])); return one <= 52 - pd ? one : Math.max(...ws.map(w => doc.getTextWidth(w))); })) + pd + 0.5);
+      const l0 = lab(0), l2 = kv.length > 1 ? lab(1) : l0; doc.setFont('helvetica', 'normal');
+      const nat = i => Math.max(0, ...kv.filter((_, k) => k % 2 === i).map(x => Math.max(...String(x[1] ?? '').split('\n').map(z => doc.getTextWidth(z))))) + pd;
+      const rem = CW - l0 - l2; let v1 = rem / 2, v3 = rem / 2; const n1 = nat(0), n3 = nat(1);
+      if(kv.length > 1 && n1 + n3 > 0){ if(n1 <= rem / 2 && n3 > rem / 2){ v1 = Math.max(n1, rem * 0.3); v3 = rem - v1; } else if(n3 <= rem / 2 && n1 > rem / 2){ v3 = Math.max(n3, rem * 0.3); v1 = rem - v3; } }
+      doc.autoTable({...base, startY:y + 1, body:rows, columnStyles:{0:{cellWidth:l0, fontStyle:'bold', fillColor:LABEL_FILL}, 1:{cellWidth: kv.length > 1 ? v1 : 'auto'}, 2:{cellWidth:l2, fontStyle:'bold', fillColor:LABEL_FILL}, 3:{cellWidth: v3}}}); after(); kv = []; };
     const PR_ = printRules(T, d, p), hN = PR_.hN, dupField = PR_.dupField, signedAny = PR_.signedAny;
     let curSec = '';
     let started = false, pendingSub = null;
@@ -4945,10 +5034,10 @@ async function makePDF(id, opt){
       return !isEmpty(v); };
     const emptySec = new Set();
     if(T.cover || T.skipEmpty || signedAny){ let cs = null, any = false; const close = () => { if(cs && !any) emptySec.add(cs); };
-      T.fields.forEach(f => { if(f.pdf === false) return; if(f.sec){ close(); cs = f; any = false; } else if(cs && hasC(f) && !dupField(f)) any = true; }); close(); }
+      T.fields.forEach(f => { if(f.pdf === false || (!f.sec && !shown(f, data))) return; if(f.sec){ close(); cs = f; any = false; } else if(cs && hasC(f) && !dupField(f)) any = true; }); close(); }
     // rough height of a whole section (mm), used to start it on a new page when it would otherwise be split
     const estSec = i0 => { let h = 16, kvn = 0;
-      for(let i = i0 + 1; i < T.fields.length && !T.fields[i].sec; i++){ const f = T.fields[i]; if(f.pdf === false || (f.phase === 'response' && !showResp)) continue;
+      for(let i = i0 + 1; i < T.fields.length && !T.fields[i].sec; i++){ const f = T.fields[i]; if(f.pdf === false || (f.phase === 'response' && !showResp) || !shown(f, data)) continue;
         const v = data[f.k];
         if(['date','datetime','select','text','number','auto'].includes(f.t)){ kvn++; continue; }
         if(f.t === 'textarea' || f.t === 'checks'){ if(T.cover && isEmpty(v)) continue; h += 10 + Math.ceil(String(valueText(f, v) || '-').length / 110 + (String(v || '').match(/\n/g) || []).length) * 4.4; }
@@ -4964,6 +5053,8 @@ async function makePDF(id, opt){
     for(const f of T.fields){
       if(f.phase === 'response' && !showResp) continue;
       if(f.pdf === false) continue;
+      if(!f.sec && !shown(f, data)) continue;
+      if(f.hideEmpty && !f.sec && ['text', 'number', 'date', 'select'].includes(f.t) && isEmpty(data[f.k])) continue;
       if(f.sec) skipSec = emptySec.has(f);
       if(skipSec) continue;
       if((T.cover || f.opt) && !f.sec && f.t === 'photos' && !(data[f.k] || []).length) continue;
@@ -4978,7 +5069,7 @@ async function makePDF(id, opt){
       if(f.t === 'textarea' || f.t === 'checks'){
         need(16);
         const sameLbl = curSec && hN(f.l) === hN(curSec);
-        doc.autoTable({...base, startY:y + 1, ...(sameLbl ? {} : {head:[[{content:pt(f.l.toUpperCase()), styles:{halign:'left'}}]]}), body:[[pt(valueText(f, data[f.k])) || '-']]}); after();
+        doc.autoTable({...base, startY:y + 1, ...(sameLbl ? {} : {head:[[{content:pt(f.l.toUpperCase()), styles:{halign:'left'}}]]}), body:[[pt(reflow(valueText(f, data[f.k]))) || '-']]}); after();
       } else if(f.t === 'table' && f.k === 'scurve' && cleanRows(f, data[f.k]).length > 12){
         // long S-curve list: three column groups side by side, chart underneath
         const rows = cleanRows(f, data[f.k]), per = Math.ceil(rows.length / 3), heads = [], body = [];
@@ -5005,7 +5096,7 @@ async function makePDF(id, opt){
             return [{content: pt(label), colSpan: head.length, styles: {fillColor: main ? [226, 239, 218] : [242, 242, 242], fontStyle: main ? 'bold' : 'bolditalic'}}]; }
           if(grpOn && isGrp(r)){ gN++; sN = 0; const label = String(r[tc0.k]).trim().replace(/^\d+[.)]\s*/, '');
             return [...(f.num ? [{content: String(gN) + '.', styles: {fillColor: [226, 239, 218], fontStyle: 'bold', halign: 'center'}}] : []), {content: pt(f.num ? label : (/^\d/.test(r[tc0.k]) ? r[tc0.k] : label)), colSpan: cols.length + (f.rowTotal ? 1 : 0), styles: {fillColor: [226, 239, 218], fontStyle: 'bold'}}]; }
-          const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : f.subNum ? (gN ? gN + '.' : '') + (++sN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? pt(fmtDate(r[cc.k])) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(r[cc.k]))];
+          const out = [...(f.num ? [grpOn ? (f.numItems ? String(++iN) : f.subNum ? (gN ? gN + '.' : '') + (++sN) : '') : String(i + 1)] : []), ...cols.map(cc => cc.date && !isEmpty(r[cc.k]) ? pt(fmtDate(r[cc.k])) : (cc.dp || cc.fmt) && !isEmpty(r[cc.k]) ? fmtN(r[cc.k], cc.dp) : cc.suffix && !isEmpty(r[cc.k]) ? pt(String(r[cc.k]).replace(/%$/, '') + cc.suffix) : pt(cc.n ? r[cc.k] : reflow(r[cc.k])))];
           if(f.levelColors) cols.forEach((cc, ci) => { if(cc === tc0 || cc.k === 'rem') return; const v = String(r[cc.k] ?? '').trim(), at = ci + (f.num ? 1 : 0);
             if(/^on-?\s?going|in progress/i.test(v)) out[at] = {content: pt(v), styles: {fillColor: [255, 235, 156]}};
             else if(/^\d{1,2}[\/.-]\d{1,2}|complete/i.test(v)) out[at] = {content: pt(v), styles: {fillColor: [198, 239, 206]}}; });
@@ -5023,8 +5114,9 @@ async function makePDF(id, opt){
         if(!body.length) body.push([{content: f.nil ? 'Nil' : '-', colSpan:head.length, styles:{halign:'center'}}]);
         let foot;
         if(f.sumCols && f.sumCols.length && rows.length){
-          foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? 'TOTAL' : ''))]];
-          if(f.num){ foot[0][0] = ''; foot[0][1] = 'TOTAL'; }
+          const sl = f.sumLabel ? f.sumLabel(data) : 'TOTAL';
+          foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? sl : ''))]];
+          if(f.num){ foot[0][0] = ''; foot[0][1] = sl; }
         }
         if(f.colTotal && rows.length){
           const sums = dayCols.map(cc => rows.reduce((a, r) => a + (parseFloat(r[cc.k]) || 0), 0));
@@ -5046,6 +5138,10 @@ async function makePDF(id, opt){
         if(f.half === 'L') halfTop = y; else if(f.half === 'R' && halfTop != null){ halfEnd = y; y = halfTop; }
         const tOpt = {...base, columnStyles:colStyles, styles:{...base.styles, fontSize: (head.length > 20 ? (HS.CW < 200 ? 5.2 : 5.6) : head.length > 9 ? 6.8 : head.length > 7 ? 7.6 : 8.5) * sc, cellPadding: (head.length > 20 ? (HS.CW < 200 ? 0.5 : 0.8) : head.length > 9 ? 1 : 1.6) * sc * sc}, headStyles:{...base.headStyles, fontSize: (head.length > 20 ? 5.2 : head.length > 9 ? 6.6 : 8.2) * sc}};
         if(f.half) Object.assign(tOpt, {tableWidth: CW / 2 - 1.5, margin: {...base.margin, left: halfX}});
+        if(!dayCols.length && !f.rowTotal && !f.colTotal){ try {
+          const cp = tOpt.styles.cellPadding, pd = 2 * (typeof cp === 'number' ? cp : ((cp && cp.left) || 1.6)) + 0.6;
+          const W = planWidths(doc, head, [...body, ...(foot || [])], f.half ? CW / 2 - 1.5 : CW, tOpt.styles.fontSize, pd, {headFs: tOpt.headStyles.fontSize, fixed: f.num ? {0: Math.max(9, colStyles[0].cellWidth || 0)} : null});
+          if(W) W.forEach((w, i) => { tOpt.columnStyles[i] = {...(tOpt.columnStyles[i] || {}), cellWidth: w}; }); } catch(e){ console.warn('widths', e); } }
         const pageH = BOTTOM - TOP;
         // measure a piece of table on a scratch page (exact height)
         const measure = (part, withHead, withFoot) => { const t = new jspdf.jsPDF({unit:'mm', format:'a4', orientation: T.landscape ? 'landscape' : 'portrait'}); t.autoTable({...tOpt, startY: TOP, head: HR, body: part, foot: withFoot ? foot : undefined, showHead: withHead ? 'firstPage' : 'never', showFoot: 'lastPage'}); return t.getNumberOfPages() > 1 ? 9999 : t.lastAutoTable.finalY - TOP; };
@@ -5078,6 +5174,11 @@ async function makePDF(id, opt){
         doc.autoTable({...base, startY:y, head:[c.head.map(h => pt(h.toUpperCase()))], body: c.rows.length ? c.rows.map(r => r.map(pt)) : [[{content:'-', colSpan:7}]], foot: c.rows.length ? [c.total.map((x, i) => ({content: pt(x), styles: {halign: i === 0 ? 'left' : i < 3 ? 'center' : 'right'}}))] : undefined, showFoot:'lastPage',
           styles:{...base.styles, fontSize:7.6, cellPadding:1.2}, headStyles:{...base.headStyles, fontSize:7}, columnStyles:{0:{cellWidth:34}, 1:{halign:'center'}, 2:{halign:'center'}, 3:{halign:'right'}, 4:{halign:'right'}, 5:{halign:'right'}, 6:{halign:'right'}}}); after();
         doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(102); need(6); doc.text(pt('Includes ' + c.records + ' record(s) for this project up to and including this one.'), L, y + 3.5); y += 5;
+      } else if(f.t === 'calc' && f.calc === 'sst'){
+        const st = doSST(data), cw = Math.max(40, ...[st.sstTxt, st.totTxt].map(v => { doc.setFontSize(8.5 * sc); return doc.getTextWidth(v) + 6; }));
+        doc.autoTable({...base, startY:y, body:[[{content: pt(`SST (${st.rate}%)`), styles: {halign: 'right'}}, {content: st.sstTxt, styles: {halign: 'center'}}],
+          [{content: 'TOTAL (INCL. SST)', styles: {halign: 'right', fontStyle: 'bold', fillColor: TOTAL_FILL}}, {content: st.totTxt, styles: {halign: 'center', fontStyle: 'bold', fillColor: TOTAL_FILL}}],
+          [{content: pt('(' + rmWords(st.total) + ')'), colSpan: 2, styles: {fontStyle: 'italic'}}]], columnStyles: {1: {cellWidth: Math.max(cw, lastAmtW || 0)}}}); after();
       } else if(f.t === 'calc' && f.calc === 'claim'){
         const cs = claimSummary(d), last = cs.rows.length - 1;
         doc.autoTable({...base, startY:y, body: [...cs.rows.map((r, i) => [{content: pt(r[0]), styles: i === last ? {fontStyle: 'bold', fillColor: GREEN_HEAD} : {}}, {content: pt(r[1]), styles: {halign: 'right', ...(i === last ? {fontStyle: 'bold', fillColor: GREEN_HEAD} : {})}}]),
