@@ -468,6 +468,7 @@ const COMPANY_DEFAULT = {
 };
 
 /* ---------- Document type definitions ---------- */
+const NO_WORK_REASONS = ['', 'Public holiday', 'Rain / bad weather', 'Waiting for client instruction / approval', 'Permit / site access not ready', 'Stop-work order', 'Machinery breakdown', 'No manpower available', 'Materials / equipment not delivered', 'Site handed over / work completed', 'Other'];
 const WEATHER = ['Sunny','Cloudy','Light rain','Heavy rain','Thunderstorm','No work (weather)'];
 const MANPOWER_LIST = ['Project Manager','Site Manager','Safety Manager','Site Safety Supervisor','Site Supervisor','Machinery Operator','General Workers'];
 const MACHINERY_LIST = ['Excavator c/w Breaker','Excavator c/w Crusher','Excavator c/w Bucket','Excavator c/w Magnet','Excavator c/w Cutter','Excavator Long Arm','Mobile Crane','Boomlift','Forklift','Oxygen & Acetylene Set','Tipper Lorry','Roro Bin','Genset'];
@@ -728,7 +729,10 @@ const TYPES = {
       {sec:'General'},
       {k:'date', l:'Day & date', t:'date', req:1, w:'half', def: () => today()},
       {k:'dayNo', l:'Contract day', t:'auto', w:'half', calc:(x, d, p) => contractDay(p, x.date)},
-      {k:'hours', l:'Working hours', t:'text', w:'half', def:'8:00am – 6:00pm'},
+      {k:'status', l:'Work today', t:'select', o:['Work carried out', 'No work'], w:'half', def:'Work carried out', pdf:false, hint:'Choose "No work" when nothing was done on site today — then write why.'},
+      {k:'noWorkWhy', l:'Reason for no work', t:'select', o:NO_WORK_REASONS, req:1, w:'half', when: d => d.status === 'No work'},
+      {k:'noWorkNote', l:'Details of no work', t:'textarea', req:1, when: d => d.status === 'No work', ph:'e.g. Public holiday (Deepavali). / Heavy rain from 8:00 am, site flooded. / Waiting for client approval of the propping drawing.'},
+      {k:'hours', l:'Working hours', t:'text', w:'half', def:'8:00am – 6:00pm', when: d => d.status !== 'No work'},
       {k:'weatherAM', l:'Weather (AM)', t:'select', o:WEATHER, w:'half', def:'Sunny'},
       {k:'weatherPM', l:'Weather (PM)', t:'select', o:WEATHER, w:'half', def:'Sunny'},
       {k:'rainHours', l:'Hours lost to rain', t:'number', w:'half', hint:'Worked out from the rain times below — or type it in.'},
@@ -744,7 +748,7 @@ const TYPES = {
         def: () => MANPOWER_LIST.map(trade => ({trade}))},
       {k:'machinery', l:'Machinery', t:'table', keepRows:1, printFilled:1, nil:1, half:'R', sumCols:['qty'], cols:[{k:'item',l:'Machinery'},{k:'qty',l:'No.',n:1,w:60,pw:20},{k:'hrs',l:'Hours',n:1,w:70,pw:20},{k:'remarks',l:'Remarks'}],
         def: () => MACHINERY_LIST.map(item => ({item}))},
-      {sec:'Activities'},
+      {sec:'Activities', when: d => d.status !== 'No work'},
       {k:'works', l:'Works done today & progress', t:'table', num:1, sub:false, req:1, sumCols:[], actList:1, hint:'Works from the last daily report are brought forward — just update the %. Works at 100% drop off the next day.',
         cols:[{k:'work',l:'Work activity / location'},{k:'pct',l:'Progress (%)',n:1,w:110,pw:28,suffix:'%'}], def: () => [{}]},
       {k:'activities', l:'Other activities / notes', t:'textarea', ph:'e.g. Housekeeping, toolbox talk, site visit by client…'},
@@ -755,7 +759,7 @@ const TYPES = {
       {k:'issues', l:'Issues / delays / instructions received', t:'textarea'},
       {sec:'Sign-off', pdf:false},
       {k:'clientSign', l:'Client / consultant to sign this report?', t:'select', o:['No', 'Yes'], def:'No', pdf:false, w:'half', hint:'Yes adds an "Acknowledged by (Client / Consultant)" signature box. You can still remove it later if it is not needed.'},
-      {sec:'Site Photos (record for the progress report)', pdf:false},
+      {sec:'Site Photos (record for the progress report)', pdf:false, when: d => d.status !== 'No work'},
       {k:'photos', l:'Site photos — today\'s progress', t:'photos', req:1, pdf:false, hint:'At least 1 photo is needed to submit. Photos are kept as a record for the progress report — they are not printed on the daily report.'}
     ]
   },
@@ -3214,7 +3218,7 @@ async function makeDocx(id){
       let kv = [], skip = false;
       const flush = () => { if(kv.length){ body.push(kvTable(kv)); kv = []; } };
       for(let fi = 0; fi < T.fields.length; fi++){ const f = T.fields[fi];
-        if(f.phase === 'response' && !showResp) continue; if(f.pdf === false) continue; if(!f.sec && !shown(f, data)) continue;
+        if(f.phase === 'response' && !showResp) continue; if(f.pdf === false) continue; if(!shown(f, data)) continue;
         if(f.hideEmpty && !f.sec && isEmpty(data[f.k])) continue;
         if(f.sec){ flush(); skip = false;
           curSec = f.sec;
@@ -3410,7 +3414,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · DO: SST lines inside the table</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · Daily report: no work + reason</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3594,6 +3598,10 @@ function waText(d, opt){
   const w = x.weatherAM && x.weatherPM && x.weatherAM !== x.weatherPM ? `AM ${x.weatherAM}, PM ${x.weatherPM}` : (x.weatherAM || x.weatherPM || '');
   if(w) L.push(`*Weather: ${w}*` + (numv(x.rainHours) ? ` (${x.rainHours} hr lost to rain)` : ''));
   (x.rainLog || []).filter(r => r && (r.from || r.to)).forEach(r => L.push(`🌧 ${r.from || '?'} – ${r.to || '?'} ${r.kind || 'rain'}${r.stop ? ' · work stopped: ' + r.stop : ''}${r.remarks ? ' · ' + r.remarks : ''}`));
+  if(x.status === 'No work'){ L.push('', `*No work today*`, `Reason: ${x.noWorkWhy || '-'}`, ...bullets(x.noWorkNote));
+    if(bullets(x.tomorrow).length) L.push('', `*Tomorrow's Plan*`, ...bullets(x.tomorrow));
+    if(bullets(x.issues).length) L.push('', `*Issues / Delays*`, ...bullets(x.issues));
+    return L.join('\n').replace(/\n{3,}/g, '\n\n'); }
   L.push('', `*Today's Activity*`);
   if(x.hours) L.push(x.hours);
   L.push('');
@@ -3637,7 +3645,7 @@ function docBodyHTML(d){
   for(const f of T.fields){
     if(f.phase === 'response' && !showResp) continue;
     if(f.noView) continue;
-    if(!f.sec && !shown(f, data)) continue;
+    if(!shown(f, data)) continue;
     if(f.hideEmpty && !f.sec && isEmpty(data[f.k])) continue;
     if(f.sec){ closeSec(); openSec(f.sec); continue; }
     if(['date','datetime','select','text','number','auto'].includes(f.t)){
@@ -4263,7 +4271,7 @@ function fillFromDailyReports(){
   // progress summary: start / finish / status of each activity from the daily reports' works %
   let nW = 0;
   if(d.type === 'PR' && Array.isArray(data.mainWorks)){
-    const seen = {}; allDsr.forEach(x => (x.data.works || []).forEach(w => { const k = norm(w?.work); if(!k) return; const pc = parseFloat(w.pct);
+    const seen = {}; allDsr.filter(x => x.data.status !== 'No work').forEach(x => (x.data.works || []).forEach(w => { const k = norm(w?.work); if(!k) return; const pc = parseFloat(w.pct);
       const o = seen[k] = seen[k] || {first: x.data.date}; o.last = x.data.date; if(!isNaN(pc)){ o.pct = pc; if(pc >= 100 && !o.done) o.done = x.data.date; } }));
     data.mainWorks = data.mainWorks.map(r => { const o = r && seen[norm(r.desc)]; if(!o) return r; nW++;
       const fd = v => T0.coverStyle === 'axis' ? v.slice(8, 10) + '/' + v.slice(5, 7) + '/' + v.slice(2, 4) : fmtDate(v);
@@ -4591,7 +4599,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z61';
+const APP_VER = 'Z62';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4669,14 +4677,14 @@ function dsrCal(pid, ym, pickIn){
   let cells = ''; for(let i = 0; i < lead; i++) cells += '<div></div>';
   for(let dd = 1; dd <= nDays; dd++){ const k = ym + '-' + pad2(dd), L = byDay[k] || [], done = L.some(d => statusOf(d).next === -1), wd = new Date(Y, M - 1, dd).getDay();
     const cls = L.length ? (done ? 'ok' : 'part') : (k < t && k >= (p.start || '') && wd !== 0 ? 'miss' : '');
-    cells += `<button class="dcd ${cls} ${k === S.dcal.pick ? 'sel' : ''} ${k === t ? 'tod' : ''}" data-act="dcalday" data-d="${k}" ${k > t ? 'disabled' : ''}>${dd}${L.length ? `<i>${done ? '✓' : '•'}</i>` : ''}</button>`; }
+    cells += `<button class="dcd ${cls} ${k === S.dcal.pick ? 'sel' : ''} ${k === t ? 'tod' : ''}" data-act="dcalday" data-d="${k}" ${k > t ? 'disabled' : ''}>${dd}${L.length ? `<i>${L.every(d => d.data?.status === 'No work') ? '–' : done ? '✓' : '•'}</i>` : ''}</button>`; }
   const pick = S.dcal.pick, L = pick ? (byDay[pick] || []) : [];
   showModal(`<div class="box" style="max-width:520px"><div class="mh"><div><div class="eyebrow">${esc(p.code)} · ${esc(p.name)}</div><h3>Daily reports</h3></div></div><div class="mb">
     ${S.canWrite ? `<label class="btn" style="margin:0 0 12px;width:100%;justify-content:center;border-style:dashed">📥 Import old daily reports (PDF)<input type="file" accept="application/pdf,.pdf" multiple hidden data-olddsr="${esc(pid)}"></label>` : ''}
     <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn sm" data-act="dcalm" data-m="${fy(prevYm)}">‹</button><b style="flex:1;text-align:center">${first.toLocaleString('en-GB', {month: 'long', year: 'numeric'})}</b><button class="btn sm" data-act="dcalm" data-m="${fy(nextYm)}" ${fy(nextYm) > t.slice(0, 7) ? 'disabled' : ''}>›</button>
       <input type="date" id="dcalGo" value="${esc(pick || '')}" max="${t}" title="Go to a date" style="width:150px"></div>
     <div class="dcal"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>${cells}</div>
-    <div class="small muted" style="margin:8px 0 12px"><span class="dkey ok">✓</span> signed &nbsp; <span class="dkey part">•</span> draft / waiting signature &nbsp; <span class="dkey miss"></span> no report (working day)</div>
+    <div class="small muted" style="margin:8px 0 12px"><span class="dkey ok">✓</span> signed &nbsp; <span class="dkey part">•</span> draft / waiting signature &nbsp; <span class="dkey miss"></span> no report (working day) &nbsp; – no work</div>
     ${pick ? `<div class="card pad" style="margin-bottom:10px"><b>${fmtDate(pick)}</b>${L.length ? L.map(d => `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><span class="mono small">${esc(d.number)}</span><span class="pill ${statusOf(d).cls}">${esc(statusOf(d).label)}</span><div class="sp"></div>
         <button class="btn sm" data-act="open" data-id="${esc(d.id)}">Open</button><button class="btn sm dark" data-act="pdf" data-id="${esc(d.id)}">⤓ PDF / print</button></div>`).join('')
       : `<div class="small muted" style="margin-top:6px">No daily report for this date.</div>${S.canWrite ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn sm pri" data-act="dcalnew" data-p="${esc(pid)}" data-d="${pick}">+ Make the daily report for this date</button><label class="btn sm" style="margin:0">📥 Import the old report<input type="file" accept="application/pdf,.pdf" multiple hidden data-olddsr="${esc(pid)}"></label></div>` : ''}`}</div>` : '<div class="small muted">Tap a date to open or print its daily report.</div>'}
@@ -5059,7 +5067,7 @@ async function makePDF(id, opt){
     for(const f of T.fields){
       if(f.phase === 'response' && !showResp) continue;
       if(f.pdf === false) continue;
-      if(!f.sec && !shown(f, data)) continue;
+      if(!shown(f, data)) continue;
       if(f.hideEmpty && !f.sec && ['text', 'number', 'date', 'select'].includes(f.t) && isEmpty(data[f.k])) continue;
       if(f.sec) skipSec = emptySec.has(f);
       if(skipSec) continue;
