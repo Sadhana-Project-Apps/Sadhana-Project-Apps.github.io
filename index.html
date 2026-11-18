@@ -981,13 +981,13 @@ const TYPES = {
       {k:'mode', l:'Show', t:'select', o:['Amount (RM)', 'Quantity only'], w:'half', def:'Amount (RM)', pdf:false, hint:'"Quantity only" prints the items with quantity and unit, without amounts.'},
       {k:'items', l:'Work done', t:'table', num:1, sub:false, req:1, sumCols:['amount'], when: d => d.mode !== 'Quantity only',
         sumLabel: d => d.sst === 'Yes' ? 'SUBTOTAL (EXCL. SST)' : 'TOTAL',
+        extraFoot: d => { if(d.sst !== 'Yes') return null; const st = doSST(d); return {key: 'amount', rows: [{label: `SST (${st.rate}%)`, val: st.sstTxt, plain: 1}, {label: 'TOTAL (INCL. SST)', val: st.totTxt}], words: '(' + rmWords(st.total) + ')'}; },
         cols:[{k:'desc', l:'Description of work done'}, {k:'pct', l:'% completed to date', n:1, center:1, w:90, suffix:'%'}, {k:'amount', l:'Amount this claim (RM)', n:1, dp:2, w:120}], def: () => [{}]},
       {k:'qtyItems', l:'Items delivered', t:'table', num:1, sub:false, req:1, when: d => d.mode === 'Quantity only',
         cols:[{k:'desc', l:'Description'}, {k:'qty', l:'Quantity', n:1, center:1, w:80}, {k:'unit', l:'Unit', center:1, w:80, ph:'e.g. lot, nos, m³, trip'}], def: () => [{}]},
       {k:'sst', l:'SST', t:'select', o:['No', 'Yes'], w:'half', def:'No', pdf:false, when: d => d.mode !== 'Quantity only'},
       {k:'sstRate', l:'SST rate (%)', t:'number', w:'half', def:'6', pdf:false, when: d => d.mode !== 'Quantity only' && d.sst === 'Yes', hint:'Service tax on construction services is 6%. Change it if the client\'s contract says otherwise.'},
       {k:'sstShow', l:'Total with SST', t:'auto', pdf:false, noView:1, when: d => d.mode !== 'Quantity only' && d.sst === 'Yes', calc: x => { const st = doSST(x); return `Subtotal RM ${fmtN(st.sub, 2)} + SST ${st.rate}% RM ${st.sstTxt} = RM ${st.totTxt}`; }},
-      {k:'_sst', l:'SST', t:'calc', calc:'sst', when: d => d.mode !== 'Quantity only' && d.sst === 'Yes'},
       {k:'note', l:'Acknowledgement', t:'textarea', def:'We acknowledge receipt of the above work done in good order and condition.'}
     ]
   },
@@ -3264,7 +3264,11 @@ async function makeDocx(id){
             out.push(row(vals.map((v, k) => { const sc = smw && cols[k - (f.num ? 1 : 0)] ? smw[i][cols[k - (f.num ? 1 : 0)].k] : null; return sc === 0 ? null : cell(v, w[k], {rs: sc > 1 ? sc : undefined, size: small, align: (k === 0 && f.num) || (k - (f.num ? 1 : 0) >= 0 && cols[k - (f.num ? 1 : 0)] && (cols[k - (f.num ? 1 : 0)].n || cols[k - (f.num ? 1 : 0)].center || cols[k - (f.num ? 1 : 0)].day != null)) || (f.rowTotal && k === vals.length - 1) ? AlignmentType.CENTER : undefined}); }).filter(Boolean))); });
           const sk = f.sumCols && f.sumCols.length ? f.sumCols : f.colTotal ? dayCols.map(cc => cc.k) : [];
           if(sk.length && rows.length){ const vals = [...(f.num ? [''] : []), ...cols.map((cc, ci) => sk.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? (f.sumLabel ? f.sumLabel(data) : 'TOTAL') : '')), ...(f.rowTotal ? [String(rows.reduce((a, r) => a + dayCols.reduce((b, cc) => b + numv(r[cc.k]), 0), 0))] : [])];
-            out.push(row(vals.map((v, k) => cell(v, w[k], {bold: true, fill: YEL, size: small, align: k ? AlignmentType.CENTER : undefined})))); }
+            out.push(row(vals.map((v, k) => cell(v, w[k], {bold: true, fill: YEL, size: small, align: k ? AlignmentType.CENTER : undefined}))));
+            const ex = f.extraFoot && f.extraFoot(data);
+            if(ex){ ex.rows.forEach(er => { const v2 = [...(f.num ? [''] : []), ...cols.map((cc, ci) => cc.k === ex.key ? er.val : ci === 0 ? er.label : '')];
+                out.push(row(v2.map((v, k) => cell(v, w[k], {bold: !er.plain, fill: er.plain ? undefined : YEL, size: small, align: k ? AlignmentType.CENTER : undefined})))); });
+              if(ex.words) out.push(row([cell(ex.words, w.reduce((a, b) => a + b, 0), {span: head.length, size: small})])); } }
           if(!rows.length) out.push(row([cell(f.nil ? 'Nil' : '-', CW, {span: head.length, align: AlignmentType.CENTER})]));
           body.push(table(w, out), P('', {after: 80}));
         } else if(f.t === 'photos'){ const ph = data[f.k] || []; if(!ph.length) continue;
@@ -3406,7 +3410,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · DO: SST & quantity only · neater table columns</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 18 Nov 2026 (${APP_VER}) · DO: SST lines inside the table</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3694,6 +3698,8 @@ function viewTable(f, data){
   if(f.colTotal && dayCols.length){ const real = rows.filter(r => !r._g);
     foot = `<tr class="tot"><td>Total</td>${cols.slice(1).map(c => c.day != null ? `<td>${real.reduce((a, r) => a + numv(r[c.k]), 0) || ''}</td>` : '<td></td>').join('')}${rt ? `<td>${real.reduce((a, r) => a + dayCols.reduce((b, c) => b + numv(r[c.k]), 0), 0)}</td>` : ''}</tr>`; }
   else foot = tableTotals({...f, cols}, rows.filter(r => !r._g));
+  { const ex = f.extraFoot && f.extraFoot(data || {}); if(ex && foot){ ex.rows.forEach(er => { foot += `<tr style="${er.plain ? '' : 'font-weight:700;background:#faf8f4'}">${cols.map((c, i) => `<td>${i === 0 ? esc(er.label) : c.k === ex.key ? esc(er.val) : ''}</td>`).join('')}</tr>`; });
+    if(ex.words) foot += `<tr><td colspan="${cols.length}"><i>${esc(ex.words)}</i></td></tr>`; } }
   return `${f.check ? `<div class="small" style="padding:6px 2px">${chkCount(rows, f)}</div>` : ''}<div class="tscroll"><table class="${grid ? 'daygrid' : f.headGroups || cols.length > 9 ? 'wide' : ''}"><thead><tr>${th}</tr></thead><tbody>${body}${foot}</tbody></table></div>${dayCols.length > 7 ? `<div class="small muted" style="padding:4px 2px">${esc(dayLabel(gridStart(data), 0))} – ${esc(dayLabel(gridStart(data), days - 1))} · swipe sideways to see all days</div>` : ''}`;
 }
 function tableTotals(f, rows){
@@ -4585,7 +4591,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z60';
+const APP_VER = 'Z61';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5117,6 +5123,10 @@ async function makePDF(id, opt){
           const sl = f.sumLabel ? f.sumLabel(data) : 'TOTAL';
           foot = [[...(f.num ? [''] : []), ...cols.map((cc, ci) => f.sumCols.includes(cc.k) ? fmtN(rows.reduce((a, r) => a + numv(r[cc.k]), 0), cc.dp) : (ci === 0 ? sl : ''))]];
           if(f.num){ foot[0][0] = ''; foot[0][1] = sl; }
+          const ex = f.extraFoot && f.extraFoot(data);
+          if(ex){ const plain = {fillColor: [255, 255, 255], fontStyle: 'normal'};
+            ex.rows.forEach(er => foot.push([...(f.num ? [er.plain ? {content: '', styles: plain} : ''] : []), ...cols.map((cc, ci) => { const v = cc.k === ex.key ? er.val : ci === 0 ? er.label : ''; return er.plain ? {content: v, styles: plain} : v; })]));
+            if(ex.words) foot.push([{content: pt(ex.words), colSpan: (f.num ? 1 : 0) + cols.length, styles: {...plain, fontStyle: 'italic', halign: 'left'}}]); }
         }
         if(f.colTotal && rows.length){
           const sums = dayCols.map(cc => rows.reduce((a, r) => a + (parseFloat(r[cc.k]) || 0), 0));
