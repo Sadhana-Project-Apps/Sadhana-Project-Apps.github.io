@@ -3446,7 +3446,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · No-work daily report signs without photos; updates even while editing</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 19 Nov 2026 (${APP_VER}) · Check for update button; updates reach the phone at once</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4639,18 +4639,32 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z68';
+const APP_VER = 'Z69';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
     const base = location.href.split('#')[0].split('?')[0];
     const r = await fetch(base + '?check=' + Date.now(), {cache: 'no-store'}); if(!r.ok) return;
     const m = (await r.text()).match(/const APP_VER = '([^']+)'/); if(!m || m[1] === APP_VER) return;
-    const busy = S.modalOpen || document.querySelector('#sgPad') || (typeof MREC !== 'undefined' && MREC.on);
+    const busy = document.querySelector('#modal .modal') || document.querySelector('#sgPad') || (typeof MREC !== 'undefined' && MREC.on);
     if(busy){ if(!S.updWaiting){ S.updWaiting = true; toast('A new version of the app is ready — it will update when you finish this.'); } return; }
     toast('Updating to the latest version…');
-    setTimeout(() => { S.updating = true; saveView(); location.replace(base + '?v=' + encodeURIComponent(m[1]) + location.hash); }, 900);
+    setTimeout(() => hardReload(m[1]), 900);
   } catch(e){}
+}
+// reload with the newest copy: clear the saved offline copy, ask the service worker to update, then open a fresh address
+async function hardReload(ver){
+  S.updating = true; saveView();
+  try { const regs = navigator.serviceWorker && navigator.serviceWorker.getRegistrations ? await navigator.serviceWorker.getRegistrations() : []; await Promise.all(regs.map(r => r.update().catch(() => {}))); } catch(e){}
+  try { if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch(e){}
+  const base = location.href.split('#')[0].split('?')[0];
+  location.replace(base + '?v=' + encodeURIComponent((ver || 'new') + '-' + Date.now()) + location.hash);
+}
+async function manualUpdate(btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+  let v = null; try { const base = location.href.split('#')[0].split('?')[0]; const r = await fetch(base + '?check=' + Date.now(), {cache: 'no-store'}); const m = r.ok && (await r.text()).match(/const APP_VER = '([^']+)'/); v = m ? m[1] : null; } catch(e){}
+  if(v && v === APP_VER){ toast('You have the latest version (' + APP_VER + ').'); if(btn){ btn.disabled = false; btn.textContent = 'Check for update'; } return; }
+  toast(v ? 'Updating to ' + v + '…' : 'Reloading the newest copy…'); setTimeout(() => hardReload(v), 600);
 }
 setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') checkUpdate(); });
@@ -6095,6 +6109,7 @@ document.addEventListener('click', async e => {
     case 'nav': go(el.dataset.v); break;
     case 'gsignin': googleSignIn(); break;
     case 'authmode': S.authMode = el.dataset.m; render(); break;
+    case 'chkupd': manualUpdate(el); break;
     case 'signout': closeModal(); try { sessionStorage.removeItem(VIEW_KEY); } catch(e){} S.view = {name:'home'}; FB.authM.signOut(FB.auth); break;
     case 'addstaff': addStaffForm(); break;
     case 'savestaff': createStaff(); break;
