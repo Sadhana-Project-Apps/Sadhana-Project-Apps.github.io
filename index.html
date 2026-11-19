@@ -118,10 +118,14 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .folder{display:flex;gap:10px;align-items:center;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
 .folder .fi{font-size:24px;line-height:1}
 .folder .ft{display:flex;flex-direction:column;min-width:0}
-.folder .ft b{font-size:13px;letter-spacing:.04em}
+.folder .ft b{font-size:13px;letter-spacing:.04em;text-transform:uppercase}
 .folder .ft span{font-size:12px;color:var(--muted)}
 .folder.on{border-color:var(--ok);background:#e9f6ee;box-shadow:inset 0 -3px 0 var(--ok)}
-@media (max-width:640px){ .folders{grid-template-columns:1fr 1fr;gap:8px} .folder{padding:10px;gap:8px} .folder .ft b{font-size:12px} .folder .ft span{font-size:11.5px} }
+.folder{min-width:0;overflow:hidden}
+.folder .ft b,.folder .ft span{overflow-wrap:anywhere}
+.folder:last-child:nth-child(3n+1){grid-column:1/-1}
+@media (max-width:640px){ .folders{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px} .folder{flex-direction:column;align-items:flex-start;justify-content:flex-start;padding:10px 12px;gap:6px} .folder .fi{font-size:22px;flex:none} .folder .ft b{font-size:13.5px;letter-spacing:0;text-transform:none;line-height:1.25;overflow-wrap:break-word} .folder .ft span{font-size:12px;margin-top:2px}
+  .folder:last-child:nth-child(3n+1){grid-column:auto} .folder:last-child:nth-child(odd){grid-column:1/-1;flex-direction:row;align-items:center;gap:10px} }
 .projgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
 .proj{padding:16px;cursor:pointer;position:relative;overflow:hidden;transition:transform .12s}
 .proj:hover{transform:translateY(-2px)}
@@ -2459,7 +2463,7 @@ function projectView(id, tab){
   const ds = (tab === 'ALL' ? all : all.filter(d => d.type === tab)).sort((a,b) => String(docDate(b)).localeCompare(String(docDate(a))) || String(b.number).localeCompare(String(a.number)));
   const tabs = ['ALL', ...ckeys.filter(k => all.some(d => d.type === k) || k === tab)].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
   const folders = `<div class="folders">${docCats().map(c => { const ct = catTypes(c, true), n = allP.filter(d => ct.includes(d.type)).length, pend = allP.filter(d => ct.includes(d.type) && statusOf(d).next >= 0).length;
-    return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name.toUpperCase())}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · ' + pend + ' awaiting' : ''}</span></span></button>`; }).join('')}</div>`;
+    return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name)}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · ' + pend + ' awaiting' : ''}</span></span></button>`; }).join('')}</div>`;
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
@@ -3414,7 +3418,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · No-work daily report: no photos needed</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · Folder tiles fit the phone screen</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4607,7 +4611,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z65';
+const APP_VER = 'Z66';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4620,7 +4624,7 @@ async function checkUpdate(){
     setTimeout(() => location.replace(base + '?v=' + encodeURIComponent(m[1]) + location.hash), 900);
   } catch(e){}
 }
-setTimeout(checkUpdate, 20000); setInterval(checkUpdate, 10 * 60 * 1000);
+setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') checkUpdate(); });
 
 
