@@ -3446,7 +3446,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · Refresh stays on the same page</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · No-work daily report signs without photos; updates even while editing</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4639,17 +4639,17 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z67';
+const APP_VER = 'Z68';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
     const base = location.href.split('#')[0].split('?')[0];
     const r = await fetch(base + '?check=' + Date.now(), {cache: 'no-store'}); if(!r.ok) return;
     const m = (await r.text()).match(/const APP_VER = '([^']+)'/); if(!m || m[1] === APP_VER) return;
-    const busy = S.view?.name === 'edit' || S.modalOpen || document.querySelector('#sgPad');
+    const busy = S.modalOpen || document.querySelector('#sgPad') || (typeof MREC !== 'undefined' && MREC.on);
     if(busy){ if(!S.updWaiting){ S.updWaiting = true; toast('A new version of the app is ready — it will update when you finish this.'); } return; }
     toast('Updating to the latest version…');
-    setTimeout(() => location.replace(base + '?v=' + encodeURIComponent(m[1]) + location.hash), 900);
+    setTimeout(() => { S.updating = true; saveView(); location.replace(base + '?v=' + encodeURIComponent(m[1]) + location.hash); }, 900);
   } catch(e){}
 }
 setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
@@ -6346,6 +6346,9 @@ document.addEventListener('input', e => {
       else if(a) toast('Answers already entered — checklist not changed. Start a new walkabout for another area.', true); }
     if(S.draft.type === 'RFI' && t.dataset.f === 'requiredBy') S.draft._reqSet = true;
     if(S.draft.type === 'RFI' && t.dataset.f === 'issued' && S.draft.data.issued && !S.draft._reqSet){ S.draft.data.requiredBy = addDays(S.draft.data.issued, 7); const te = document.querySelector('[data-f="requiredBy"]'); if(te) te.value = S.draft.data.requiredBy; }
+    // daily report: weather "No work (weather)" for the whole day (AM and PM) = No work, reason rain / bad weather
+    if(S.draft.type === 'DSR' && (t.dataset.f === 'weatherAM' || t.dataset.f === 'weatherPM')){ const x = S.draft.data;
+      if(x.weatherAM === 'No work (weather)' && x.weatherPM === 'No work (weather)' && x.status !== 'No work'){ x.status = 'No work'; if(!x.noWorkWhy) x.noWorkWhy = 'Rain / bad weather'; toast('Set to "No work" — no photos needed. Write the details of no work.'); } }
     refreshAutos();
     // a choice that shows / hides other parts of the form (e.g. "No work", "Quantity only", SST): redraw the form in place
     { const wf = TT(S.draft).fields.filter(f => f.when), sig = wf.map(f => shown(f, S.draft.data) ? 1 : 0).join('');
@@ -6390,7 +6393,7 @@ document.addEventListener('change', async e => {
     catch(err){ dbErr(err); }
   }
 });
-window.addEventListener('beforeunload', e => { if(S.dirty || (S.modalOpen && S.modalKey && MDRAFT.get(S.modalKey))){ e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if(S.updating) return; if(S.dirty || (S.modalOpen && S.modalKey && MDRAFT.get(S.modalKey))){ e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- boot ---------- */
 /* ============================================================
