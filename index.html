@@ -1959,6 +1959,32 @@ function checkDeepLink(){
   if(docById(L.id)){ S.deepLink = null; try { history.replaceState(history.state, '', location.pathname); } catch(e){} go('doc', {id: L.id}); return true; }
   return false;
 }
+/* ---------- reload / refresh keeps the same page (saved for this tab only) ---------- */
+const VIEW_KEY = 'sde-view';
+function saveView(){
+  try { const v = S.view; if(!v || !v.name || S.authState !== 'in') return;
+    const o = {v, y: Math.round(window.scrollY), at: Date.now()};
+    if(v.name === 'doc'){ const d = docById(v.id); if(d) o.p = d.projectId; }
+    if(v.name === 'edit' && S.draft){ o.p = S.draft.projectId; o.fb = S.draft.id ? {name: 'doc', id: S.draft.id} : {name: 'project', id: S.draft.projectId};
+      try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({...o, draft: S.draft, dirty: !!S.dirty, resp: !!S.respMode})); return; } catch(e){} }
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify(o)); } catch(e){}
+}
+S.restore = (() => { try { const o = JSON.parse(sessionStorage.getItem(VIEW_KEY) || 'null'); return o && o.v && o.v.name && o.v.name !== 'home' && Date.now() - o.at < 12 * 3600e3 ? o : null; } catch(e){ return null; } })();
+if(S.restore && /doc=/.test(location.hash)) S.restore = null;
+['pagehide', 'beforeunload'].forEach(ev => window.addEventListener(ev, saveView));
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') saveView(); });
+function tryRestore(m){
+  const o = S.restore; let v = o.v; S.restoreT0 = S.restoreT0 || Date.now();
+  const late = Date.now() - S.restoreT0 > 15000;
+  if(v.name === 'edit' && !o.draft) v = o.fb || {name: 'home'};
+  const pid = (v.name === 'project' || v.name === 'files') ? v.id : o.p;
+  if(pid && !S.isSub) loadProjectDocs(pid);
+  const ready = (v.name === 'project' || v.name === 'files') ? !!projById(v.id) : v.name === 'doc' ? !!docById(v.id) : v.name === 'edit' ? (!o.draft.projectId || !!projById(o.draft.projectId)) : true;
+  if(!ready && !late){ m.innerHTML = '<div class="loading"><div><div class="spin"></div>Opening the page you were on…</div></div>'; setTimeout(() => { if(S.restore) render(); }, 700); return true; }
+  S.restore = null; if(!ready) return false;
+  if(v.name === 'edit'){ S.draft = o.draft; S.dirty = !!o.dirty; S.respMode = !!o.resp; }
+  S.view = v; render(); const y = o.y || 0; requestAnimationFrame(() => setTimeout(() => window.scrollTo(0, y), 80)); return true;
+}
 function render(){
   if(S.deepLink && checkDeepLink()) return;
   const v = S.view, m = $('#main');
@@ -1977,6 +2003,7 @@ function render(){
   if(S.authState === 'pending'){ m.innerHTML = pendingView(); return; }
   if(S.authState !== 'in' || !S.db){ m.innerHTML = '<div class="loading"><div><div class="spin"></div>Loading…</div></div>'; return; }
   if(!S.loaded.p || !S.loaded.d){ m.innerHTML = '<div class="loading"><div><div class="spin"></div>Loading site records…</div></div>'; return; }
+  if(S.restore && tryRestore(m)) return;
   let html = '';
   try {
     if(S.isSub) html = subView(v);
@@ -1994,6 +2021,7 @@ function render(){
     }
   } catch(e){ console.error(e); html = `<div class="card pad">Something went wrong showing this page. <button class="btn sm" data-act="nav" data-v="home">Back to projects</button></div>`; }
   m.innerHTML = html; document.body.classList.toggle('intern', intern());
+  saveView();
   if(v.name === 'register') applyRegFilter();
 }
 function noDbView(){
@@ -3418,7 +3446,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · Folder tiles fit the phone screen</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · Refresh stays on the same page</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4611,7 +4639,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z66';
+const APP_VER = 'Z67';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6067,7 +6095,7 @@ document.addEventListener('click', async e => {
     case 'nav': go(el.dataset.v); break;
     case 'gsignin': googleSignIn(); break;
     case 'authmode': S.authMode = el.dataset.m; render(); break;
-    case 'signout': closeModal(); S.view = {name:'home'}; FB.authM.signOut(FB.auth); break;
+    case 'signout': closeModal(); try { sessionStorage.removeItem(VIEW_KEY); } catch(e){} S.view = {name:'home'}; FB.authM.signOut(FB.auth); break;
     case 'addstaff': addStaffForm(); break;
     case 'savestaff': createStaff(); break;
     case 'copycreds': try { await navigator.clipboard.writeText(el.dataset.t); toast('Copied'); } catch(err){ toast('Copy failed — select the text instead.', true); } break;
