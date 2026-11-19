@@ -121,6 +121,7 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .folder .ft b{font-size:13px;letter-spacing:.04em;text-transform:uppercase}
 .folder .ft span{font-size:12px;color:var(--muted)}
 .folder.on{border-color:var(--ok);background:#e9f6ee;box-shadow:inset 0 -3px 0 var(--ok)}
+.viewas-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff4d6;border:1px solid #e8c766;color:#5a4300;border-radius:10px;padding:8px 12px;margin:0 0 12px;font-size:13.5px}.viewas-bar span{flex:1;min-width:200px}
 .folder{min-width:0;overflow:hidden}
 .folder .ft b,.folder .ft span{overflow-wrap:anywhere}
 .folder:last-child:nth-child(3n+1){grid-column:1/-1}
@@ -2020,7 +2021,7 @@ function render(){
       default: html = homeView();
     }
   } catch(e){ console.error(e); html = `<div class="card pad">Something went wrong showing this page. <button class="btn sm" data-act="nav" data-v="home">Back to projects</button></div>`; }
-  m.innerHTML = html; document.body.classList.toggle('intern', intern());
+  m.innerHTML = viewAsBar() + html; document.body.classList.toggle('intern', intern());
   saveView();
   if(v.name === 'register') applyRegFilter();
 }
@@ -2035,7 +2036,7 @@ function noDbView(){
 function subView(v){
   if(v.name === 'doc'){ const d = docById(v.id); return d && SUB_TYPES.includes(d.type) ? docView(v.id) : subHome(); }
   if(v.name === 'edit') return S.draft && SUB_TYPES.includes(S.draft.type) ? editView() : subHome();
-  if(v.name === 'settings') return `<div class="pagehead"><div><div class="eyebrow">${esc(S.subCompany || 'Sub-contractor')}</div><h1>Settings</h1></div></div>${esigCard()}
+  if(v.name === 'settings') return `<div class="pagehead"><div><div class="eyebrow">${esc(S.subCompany || 'Sub-contractor')}</div><h1>Settings</h1></div></div>${esigCard()}${viewAsCard()}
     <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me] || '')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email || '')} · ${esc(S.subCompany || '')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div>
     <div style="margin-top:10px">${installCard()}</div></div>`;
   if(v.name === 'project' && projById(v.id)) return subProject(v.id);
@@ -3446,7 +3447,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 19 Nov 2026 (${APP_VER}) · Check for update button; updates reach the phone at once</div>
+  ${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 19 Nov 2026 (${APP_VER}) · Admin: View the app as staff / intern / programmer / sub-contractor</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4639,7 +4640,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z69';
+const APP_VER = 'Z70';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6110,7 +6111,10 @@ document.addEventListener('click', async e => {
     case 'gsignin': googleSignIn(); break;
     case 'authmode': S.authMode = el.dataset.m; render(); break;
     case 'chkupd': manualUpdate(el); break;
-    case 'signout': closeModal(); try { sessionStorage.removeItem(VIEW_KEY); } catch(e){} S.view = {name:'home'}; FB.authM.signOut(FB.auth); break;
+    case 'viewas': if(el.dataset.r === 'sub') viewAsSubForm(); else setViewAs(el.dataset.r ? {role: el.dataset.r} : null); break;
+    case 'viewassub': { const ps = [...document.querySelectorAll('[data-vap]:checked')].map(x => x.dataset.vap); if(!ps.length){ toast('Tick at least one project.', true); break; }
+      const co = ($('#vaCo')?.value || '').trim() || 'Demo Sub-contractor'; closeModal(); setViewAs({role: 'sub', projects: ps, company: co}); break; }
+    case 'signout': closeModal(); S.viewAs = null; try { sessionStorage.removeItem(VIEW_KEY); sessionStorage.removeItem(VIEWAS_KEY); } catch(e){} S.view = {name:'home'}; FB.authM.signOut(FB.auth); break;
     case 'addstaff': addStaffForm(); break;
     case 'savestaff': createStaff(); break;
     case 'copycreds': try { await navigator.clipboard.writeText(el.dataset.t); toast('Copied'); } catch(err){ toast('Copy failed — select the text instead.', true); } break;
@@ -6424,7 +6428,7 @@ const ROLE_LABEL = {pending:'Waiting for approval', staff:'Staff', intern:'Inter
 // approved people are remembered by email (settings/company.approved), so signing in again — even as a new account — needs no new approval
 const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
 const userEmail = uid => uid === S.me ? (FB.auth?.currentUser?.email || '') : (S.users.find(u => u.id === uid)?.email || '');
-const isIntern = uid => !!(uid && S.company && ((S.company.interns && S.company.interns[uid]) || (S.company.approved && S.company.approved[emailKey(userEmail(uid))] === 'intern')));
+const isIntern = uid => !!(uid && uid === S.me && S.viewAs && S.viewAs.role === 'intern') || !!(uid && S.company && ((S.company.interns && S.company.interns[uid]) || (S.company.approved && S.company.approved[emailKey(userEmail(uid))] === 'intern')));
 async function companyUpdate(upd){   // dotted-path update of settings/company; creates the record if it doesn't exist yet
   const ref = S.db.doc('settings/company');
   try { await ref.update(upd); }
@@ -7482,13 +7486,51 @@ function startClaims(){
   else if(!ok && S.claimsUnsub){ try { S.claimsUnsub(); } catch(e){} S.claimsUnsub = null; S.claimDocs = []; recomputeDocs(); }
 }
 const ROLE_CACHE = 'sde-role-';
+/* ---------- admin: View as staff / intern / programmer / sub-contractor (test and demo) ---------- */
+const VIEWAS_KEY = 'sde-viewas';
+const VIEWAS_LABEL = {staff: 'Staff', intern: 'Intern', dev: 'Programmer', sub: 'Sub-contractor'};
+S.viewAs = (() => { try { const o = JSON.parse(sessionStorage.getItem(VIEWAS_KEY) || 'null'); return o && VIEWAS_LABEL[o.role] ? o : null; } catch(e){ return null; } })();
+function setViewAs(va){
+  if(S.realRole !== 'admin') return;
+  if(!S.viewAs && S.projects.length){ S.vaList = S.projects.map(p => ({id: p.id, code: p.code, name: p.name})); try { sessionStorage.setItem('sde-valist', JSON.stringify(S.vaList)); } catch(e){} }
+  S.viewAs = va; try { va ? sessionStorage.setItem(VIEWAS_KEY, JSON.stringify(va)) : sessionStorage.removeItem(VIEWAS_KEY); } catch(e){}
+  S.restore = null; S.draft = null; S.dirty = false; closeModal();
+  stopData(); S.reapply && S.reapply(); startData();
+  S.view = {name: 'home'}; render(); window.scrollTo(0, 0);
+  toast(va ? 'Now viewing as ' + VIEWAS_LABEL[va.role] + (va.role === 'sub' ? ' (' + va.company + ')' : '') + '.' : 'Back to your admin view.');
+}
+function viewAsBar(){
+  if(!S.viewAs || S.realRole !== 'admin') return '';
+  const va = S.viewAs;
+  return `<div class="viewas-bar"><span>👁 Viewing as <b>${esc(VIEWAS_LABEL[va.role])}</b>${va.role === 'sub' ? ' · ' + esc(va.company || '') : ''} — the app shows only what they see. Anything you save or sign is real.</span><button class="btn sm" data-act="viewas" data-r="">Back to admin</button></div>`;
+}
+function viewAsCard(){
+  if(S.realRole !== 'admin') return '';
+  const cur = S.viewAs ? S.viewAs.role : '';
+  const b = (r, l) => `<button class="btn sm${cur === r ? ' pri' : ''}" data-act="viewas" data-r="${r}">${l}</button>`;
+  return `<div class="card pad form" style="margin-top:16px"><b>View the app as…</b><div class="small muted" style="margin:2px 0 10px">Test or demo the app the way staff, interns, the programmer or a sub-contractor see it. Only you see this switch; your admin access stays. Anything saved or signed while viewing is real — use a test project for practice.</div>
+    <div class="row" style="flex-wrap:wrap;gap:8px">${b('', 'Admin (me)')}${b('staff', 'Staff')}${b('intern', 'Intern')}${b('dev', 'Programmer')}${b('sub', 'Sub-contractor')}</div></div>`;
+}
+function viewAsSubForm(){
+  if(!S.vaList){ try { S.vaList = JSON.parse(sessionStorage.getItem('sde-valist') || 'null'); } catch(e){} }
+  const ps = (S.viewAs ? (S.vaList || []) : S.projects).slice().sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+  if(!ps.length){ toast('Go back to your admin view first, then choose Sub-contractor.', true); return; }
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>View as sub-contractor</h3></div><div class="mb form">
+    <div class="small muted" style="margin-bottom:8px">Choose the projects the sub-contractor is given. They see only these projects and only the site reports they made themselves.</div>
+    <div class="fld"><label>Company name shown</label><input id="vaCo" value="Demo Sub-contractor Sdn Bhd"></div>
+    <div style="max-height:46vh;overflow:auto;border:1px solid var(--line,#e2e2dc);border-radius:8px;padding:6px 10px">${ps.map(p => `<label style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" data-vap="${esc(p.id)}"> <span><b>${esc(p.code || '')}</b> ${esc(p.name || '')}</span></label>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><div class="sp"></div><button class="btn pri" data-act="viewassub">View as sub-contractor</button></div></div></div>`);
+}
 async function onSignedIn(u){
   S.me = u.uid; S.names[u.uid] = u.displayName || u.email || 'Me';
   const ref = S.db.doc('users/' + u.uid);
   // already approved on this phone before → open straight away while the server confirms
   let cached = ''; try { cached = localStorage.getItem(ROLE_CACHE + u.uid) || ''; } catch(e){}
   const apply = d => {
-    const prev = S.myRole; S.myRole = d.role || 'pending';
+    const prev = S.myRole; S.lastMeDoc = d; S.realRole = d.role || 'pending';
+    // admin "View as": the app behaves like that role (screens only — the database still knows the real admin)
+    if(S.realRole !== 'admin') S.viewAs = null;
+    const va = S.viewAs; S.myRole = va ? (va.role === 'intern' ? 'staff' : va.role) : S.realRole;
     if(d.name) S.names[u.uid] = d.name;
     if('sigImg' in d || 'sigList' in d){ S.mySigs = Array.isArray(d.sigList) ? d.sigList.filter(x => x && x.img) : (d.sigImg ? [{img: d.sigImg}] : []); S.mySig = S.mySigs[0]?.img || ''; } if('stamps' in d) S.myStamps = (d.stamps || []).filter(x => x && x.img); if('designation' in d) S.myDes = d.designation || '';
     // admin: everything · dev (programmer): like admin but cannot delete or manage the team · staff
@@ -7496,10 +7538,11 @@ async function onSignedIn(u){
     // sub-contractor: only the site diary of the projects ticked for them, only their own reports
     const wasSub = S.isSub, oldSP = JSON.stringify(S.subProjects || []);
     S.isSub = S.myRole === 'sub'; if('subProjects' in d || S.isSub) S.subProjects = Array.isArray(d.subProjects) ? d.subProjects : (S.subProjects || []); if(d.subCompany) S.subCompany = d.subCompany;
+    if(va && va.role === 'sub'){ S.subProjects = (va.projects || []).slice(); S.subCompany = va.company || 'Demo Sub-contractor'; } else if(S.realRole === 'admin') S.subCompany = '';
     S.canEdit = S.canAdmin || S.isDev; S.canWrite = S.canEdit || S.myRole === 'staff' || S.isSub;
     const ACTIVE = ['admin', 'staff', 'dev', 'sub'];
     if(S.isSub && wasSub && oldSP !== JSON.stringify(S.subProjects)){ stopData(); startData(); }
-    try { if(S.canWrite) localStorage.setItem(ROLE_CACHE + u.uid, S.myRole); else if(S.myRole === 'removed') localStorage.removeItem(ROLE_CACHE + u.uid); } catch(e){}
+    try { if(S.canWrite) localStorage.setItem(ROLE_CACHE + u.uid, S.realRole === 'admin' ? 'admin' : S.myRole); else if(S.myRole === 'removed') localStorage.removeItem(ROLE_CACHE + u.uid); } catch(e){}
     if(S.canWrite && !ACTIVE.includes(prev)) startData();
     if(!S.canWrite && ACTIVE.includes(prev)) stopData();
     S.authState = S.canWrite ? 'in' : 'pending';
@@ -7520,6 +7563,7 @@ async function onSignedIn(u){
   }
   if(S.unsubMe) S.unsubMe();
   let triedBack = false;
+  S.reapply = () => S.lastMeDoc && apply(S.lastMeDoc);
   const listen = () => { S.unsubMe = ref.onSnapshot(s => {
     const d = s.exists ? s.data() : {role: 'pending'};
     if(isOwnerEmail(u) && s.exists && d.role !== 'admin'){ ref.update({role: 'admin'}).catch(console.error); d.role = 'admin'; }
