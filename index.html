@@ -3414,7 +3414,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · F01 evaluation: date on the form can be backdated</div>
+  <div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px">App version 19 Nov 2026 (${APP_VER}) · No-work daily report: no photos needed</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4135,6 +4135,7 @@ function editView(){
   const d = S.draft; if(!d) return '';
   if(S.fixDoc !== d){ S.fixUndo = {}; S.fixDoc = d; }
   const T = TT(d), p = projById(d.projectId) || {}, resp = S.respMode;
+  S.whenSig = {id: (d.id || d._tmp || 'new') + d.type, sig: T.fields.filter(f => f.when).map(f => shown(f, d.data) ? 1 : 0).join('')};
   let html = '', open = false;
   const fields = T.fields.filter(f => f.t !== 'calc' && (resp ? f.phase === 'response' : f.phase !== 'response'));
   for(const f of fields){
@@ -4606,7 +4607,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z64';
+const APP_VER = 'Z65';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6314,6 +6315,10 @@ document.addEventListener('input', e => {
     if(S.draft.type === 'RFI' && t.dataset.f === 'requiredBy') S.draft._reqSet = true;
     if(S.draft.type === 'RFI' && t.dataset.f === 'issued' && S.draft.data.issued && !S.draft._reqSet){ S.draft.data.requiredBy = addDays(S.draft.data.issued, 7); const te = document.querySelector('[data-f="requiredBy"]'); if(te) te.value = S.draft.data.requiredBy; }
     refreshAutos();
+    // a choice that shows / hides other parts of the form (e.g. "No work", "Quantity only", SST): redraw the form in place
+    { const wf = TT(S.draft).fields.filter(f => f.when), sig = wf.map(f => shown(f, S.draft.data) ? 1 : 0).join('');
+      if(S.whenSig && S.whenSig.id === (S.draft.id || S.draft._tmp || 'new') + S.draft.type && S.whenSig.sig !== sig){ const y0 = window.scrollY, k = t.dataset.f; render(); window.scrollTo(0, y0); const el = document.querySelector(`[data-f="${k}"]`); if(el && el.tagName !== 'SELECT') el.focus(); return; }
+      S.whenSig = {id: (S.draft.id || S.draft._tmp || 'new') + S.draft.type, sig}; }
     if(S.draft.type === 'LTR' && (t.dataset.f === 'category' || t.dataset.f === 'language')){ const y0 = window.scrollY; render(); window.scrollTo(0, y0); return; }
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
