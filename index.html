@@ -1068,6 +1068,48 @@ const TYPES = {
       {k:'r5', l:'Remarks', t:'text', w:'half'}
     ]
   },
+  JIF: {
+    name: 'Repair & Strengthening Works Joint Inspection Form', code: 'JIF', blurb: 'Axis REIT – Wisma Kemajuan: RFI / joint inspection at each hold point (HP1–HP5) for repair & strengthening works',
+    paperForm: 'jif', formRef: 'RFI SDESB/AXIS-WK', sigDate: true,
+    onlyProj: p => /^AXISWKP/i.test(p.code || '') || /WISMA KEMAJUAN/i.test(p.name || ''),
+    sigs: [
+      {role:'Inspected by', hint:'Sadhana (Contractor)'},
+      {role:'Verified by', hint:'C&S Engineer (Consultant)'},
+      {role:'Accepted by', hint:'Client (Axis)'}
+    ],
+    done: 'Accepted',
+    title: d => 'Joint Inspection — ' + [d.level, d.gridline].filter(Boolean).join(' / '),
+    dateField: 'date',
+    fields: [
+      {sec:'Inspection'},
+      {k:'rfiNo', l:'RFI / Form No. (after SDESB/AXIS-WK/RFI/)', t:'text', w:'half', ph:'e.g. 001 — blank = this document\'s running number'},
+      {k:'date', l:'Inspection date', t:'date', req:1, w:'half', def: () => today()},
+      {k:'time', l:'Inspection time', t:'text', w:'half', ph:'e.g. 10:30 am'},
+      {k:'level', l:'Level / Zone', t:'text', req:1, w:'half'},
+      {k:'gridline', l:'Gridline', t:'text', w:'half'},
+      {k:'dmr', l:'DMR Tagging ID', t:'text', w:'half'},
+      {k:'element', l:'Element', t:'checks', o:['Slab soffit', 'Beam', 'Column', 'Wall']},
+      {k:'drawing', l:'Drawing / Ref.', t:'text'},
+      {k:'axisRep', l:'Client / Consultant — Axis REIT', t:'text', w:'half'},
+      {k:'csEng', l:'Client / Consultant — C&S Engineer', t:'text', w:'half'},
+      {sec:'Type of Work & Inspection Stage'},
+      {k:'repair', l:'Type of repair / strengthening (tick)', t:'checks', o:['Crack repair – epoxy injection (Sikadur-52)', 'Spalling repair – formwork grouting (SikaGrout-215)', 'Column recast (hack & regrout) (SikaGrout 9610)', 'Slab soffit hack & regrout', 'Column / beam enlargement, slab thickening (SikaGrout 9610)', 'CFRP strengthening (SikaWrap / CarboDur)', 'Protective coating']},
+      {k:'stage', l:'Inspection stage / hold point (tick)', t:'checks', o:['HP1 – Defect mapping & repair limits', 'HP2 – Hacked substrate & existing rebar', 'HP3 – Anchors, new rebar & formwork before grouting', 'HP4 – CFRP substrate before bonding', 'HP5 – Completed repair / final acceptance', 'Re-inspection']},
+      {k:'reRfi', l:'Re-inspection — previous RFI No.', t:'text', when: d => (d.stage || []).includes('Re-inspection')},
+      {sec:'A. Joint Inspection Checklist'},
+      {k:'checklist', l:'Complete only the parts relevant to the type of work and stage ticked above. Mark N/A for items not applicable.', t:'table', sub:false, keepRows:1, check:1, ok:'Yes', bad:'No',
+        cols:[{k:'item', l:'Inspection item', pw:70}, {k:'ans', l:'Yes / No / N/A', o:['Yes','No','N/A'], w:110, center:1, pw:22, alert:['No']}, {k:'remarks', l:'Remarks'}],
+        def: () => [{"item": "A1. Pre-work & safety (all works)", "_g": 1}, {"item": "1.1  Back-propping installed, inspected, tagged and released for work in this area (min. 3 levels below)."}, {"item": "1.2  Permit to Work approved; area barricaded with signage; floor below cordoned off."}, {"item": "1.3  Repair location matches the approved defect mapping (DMR tag / gridline) and repair limits are marked on site."}, {"item": "1.4  Utilities / M&E in the work area isolated or protected; adjacent finishes and occupied areas protected (dust screens)."}, {"item": "A2. Hacking & surface preparation (HP2)", "_g": 1}, {"item": "2.1  Repair perimeter saw-cut to specified depth; no feather edges."}, {"item": "2.2  Loose, weak, fire-damaged and delaminated concrete removed to sound concrete."}, {"item": "2.3  Existing rebar exposed to approved extent; no bars cut; rust and contamination removed."}, {"item": "2.4  Rebar section loss / loose bars recorded and referred to C&S Engineer (photo attached)."}, {"item": "2.5  Substrate roughened, cleaned (vacuum / oil-free air / water) and pre-wetted to SSD condition."}, {"item": "A3. Before grouting / casting (HP3)", "_g": 1}, {"item": "3.1  Starter bars / dowels drilled to approved diameter and depth; holes cleaned (blow-brush-blow)."}, {"item": "3.2  Anchoring adhesive (Fischer FIS EB II 390 S or approved) installed; curing time achieved before loading."}, {"item": "3.3  New reinforcement size, spacing, laps, cover and spacers as per approved drawing."}, {"item": "3.4  Formwork grout-tight (sponge strips), braced, with inlet / vent / overflow points; leakage check done."}, {"item": "3.5  SikaGrout 215 or 9610 within shelf life; mixing ratio and equipment as per data sheet; batch no. recorded."}, {"item": "3.6  Cube samples prepared (6 nos. 50 mm cubes for 7 and 28 days) and labelled."}, {"item": "A4. Crack repair – epoxy injection", "_g": 1}, {"item": "4.1  Crack classified by C&S Engineer as suitable for rigid epoxy injection (not active / wet)."}, {"item": "4.2  Crack width, length and location recorded; crack surface cleaned."}, {"item": "4.3  Injection ports at approx. 200–400 mm centres; crack face sealed; system secure before injection."}, {"item": "4.4  Sikadur-52 mixed per manufacturer; injection from lowest port until resin reaches next port; pressure within approved limit."}, {"item": "4.5  Ports and seal removed after cure; surface made good; consumption recorded."}, {"item": "A5. CFRP strengthening (HP4)", "_g": 1}, {"item": "5.1  Substrate ground to sound concrete; voids / unevenness repaired; corners rounded to required radius."}, {"item": "5.2  Substrate flatness, moisture and temperature within product data sheet limits."}, {"item": "5.3  Pull-off test result meets specified minimum (result recorded in Part B)."}, {"item": "5.4  SikaWrap 301C / Sika CarboDur S1014 type, size, orientation and layers as per strengthening drawing."}, {"item": "5.5  SikaWrap FX-50C anchors installed at locations shown on drawing."}, {"item": "5.6  Sikadur-30 / impregnation resin mixed per ratio, within pot life; laminate rolled to full adhesive squeeze-out."}, {"item": "5.7  Overlaps meet approved design length; fabric free of wrinkles, folds and air pockets."}, {"item": "A6. Completed repair & final acceptance (HP5)", "_g": 1}, {"item": "6.1  Formwork removed only after required strength / period; no voids, honeycombing, cracks or debonding."}, {"item": "6.2  Repaired / enlarged member dimensions, line and level as per drawing."}, {"item": "6.3  CFRP visual and tap test done; no debonded area."}, {"item": "6.4  Curing applied for specified period; repair protected from vibration, impact and early loading."}, {"item": "6.5  Protective coating applied: correct system, number of coats, uniform coverage."}, {"item": "6.6  Debris removed; area clean; as-built repair mapping and photos submitted."}].map(r => ({...r}))},
+      {sec:'B. Test Results / Records Attached'},
+      {k:'tests', l:'Test results / records', t:'table', sub:false, keepRows:1,
+        cols:[{k:'test', l:'Test / Record', pw:30}, {k:'required', l:'Required'}, {k:'result', l:'Result'}, {k:'ref', l:'Ref. / Lab Report'}, {k:'att', l:'Attached', o:['Yes', 'N/A'], w:90, center:1}],
+        def: () => ['Grout cube test – 7 days', 'Grout cube test – 28 days', 'Pull-off test (CFRP substrate)', 'Rebar scanning / cover check', 'Photo record (before / during / after)'].map(test => ({test}))},
+      {sec:'C. Outstanding Items / Comments'},
+      {k:'comments', l:'Outstanding items / comments', t:'textarea'},
+      {sec:'D. Inspection Status'},
+      {k:'status', l:'Inspection status', t:'select', o:['', 'ACCEPTED – Work may proceed to the next stage', 'ACCEPTED WITH COMMENTS – Work may proceed subject to the comments stated above being rectified', 'REJECTED – Rectify and re-submit for inspection before proceeding']}
+    ]
+  },
   SEA: {
     name: 'EHS Guidelines for Subcontractor', code: 'SEA', blurb: 'SDESB-PUR-F04 — the guideline plus the subcontractor\'s signed acknowledgement, before work starts',
     paperForm: 'f04', formRef: 'SDESB-PUR-F04',
@@ -2054,10 +2096,10 @@ function subProject(id){
   const p = projById(id), mine = S.docs.filter(d => d.projectId === id).sort((a, b) => String(docDate(b)).localeCompare(String(docDate(a))));
   return `<button class="crumb" data-act="nav" data-v="home">← Projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">${esc(p.nick || p.name)}</h1></div></div>
-  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn pri" data-act="new" data-p="${esc(id)}" data-t="DSR">+ Daily report</button><button class="btn pri" data-act="new" data-p="${esc(id)}" data-t="PR">+ Progress report</button></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn pri" data-act="new" data-p="${esc(id)}" data-t="DSR">+ Daily report</button><button class="btn pri" data-act="new" data-p="${esc(id)}" data-t="PR">+ Progress report</button>${TYPES.JIF.onlyProj(p) ? `<button class="btn pri" data-act="new" data-p="${esc(id)}" data-t="JIF">+ Joint inspection (RFI)</button>` : ''}</div>
   <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><button class="btn" data-act="dcal" data-p="${esc(id)}">🗓 Daily reports</button><button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button></div>
   <div class="card"><div class="sechead"><h3>My reports</h3></div>${mine.length ? `<div class="list">${mine.map(d => { const st = statusOf(d);
-    return `<div class="it" data-act="open" data-id="${esc(d.id)}" style="cursor:pointer"><span class="pill type">${d.type === 'PR' ? 'Progress' : 'Daily'}</span><div class="t"><b>${esc(d.type === 'PR' && d.data?.from && d.data?.to ? fmtDate(d.data.from) + ' – ' + fmtDate(d.data.to) : fmtDate(docDate(d)))}</b><span>${esc(d.number || 'Draft')}</span></div><span class="pill ${st.cls}">${esc(st.label)}</span></div>`; }).join('')}</div>` : '<p class="muted pad">None yet. Tap <b>+ Daily report</b> to start today\'s.</p>'}</div>`;
+    return `<div class="it" data-act="open" data-id="${esc(d.id)}" style="cursor:pointer"><span class="pill type">${d.type === 'PR' ? 'Progress' : d.type === 'JIF' ? 'Inspection' : 'Daily'}</span><div class="t"><b>${esc(d.type === 'PR' && d.data?.from && d.data?.to ? fmtDate(d.data.from) + ' – ' + fmtDate(d.data.to) : fmtDate(docDate(d)))}</b><span>${esc(d.number || 'Draft')}</span></div><span class="pill ${st.cls}">${esc(st.label)}</span></div>`; }).join('')}</div>` : '<p class="muted pad">None yet. Tap <b>+ Daily report</b> to start today\'s.</p>'}</div>`;
 }
 function homeView(){
   const t = today();
@@ -2289,7 +2331,7 @@ async function audioPlayer(f){
 }
 
 /* ---------- company paper forms printed on their original pages (SDESB-PUR-F01, SDESB-PUR-F04) ---------- */
-const PAPER_FORMS = {f01: ['forms/sdesb-pur-f01-1.jpg'], f04: [1, 2, 3, 4, 5, 6].map(i => 'forms/sdesb-pur-f04-' + i + '.jpg')};
+const PAPER_FORMS = {jif: ['forms/axis-jif-1.jpg', 'forms/axis-jif-2.jpg'], f01: ['forms/sdesb-pur-f01-1.jpg'], f04: [1, 2, 3, 4, 5, 6].map(i => 'forms/sdesb-pur-f04-' + i + '.jpg')};
 const pfCache = {};
 async function pfImg(url){
   if(pfCache[url]) return pfCache[url];
@@ -2301,8 +2343,9 @@ const seaSigned = (pid, company) => { const n = s => String(s || '').toLowerCase
   return !!c && S.docs.some(o => o.type === 'SEA' && o.projectId === pid && (o.signatures || []).some(Boolean) && n(o.data?.subCompany) === c); };
 async function paperFormPDF(d){
   const T = TT(d), x = d.data || {}, pages = PAPER_FORMS[T.paperForm];
-  const {jsPDF} = window.jspdf, doc = new jsPDF({unit: 'pt', format: 'letter'});
-  for(let i = 0; i < pages.length; i++){ if(i) doc.addPage('letter', 'portrait'); doc.addImage(await pfImg(pages[i]), 'JPEG', 0, 0, 612, 792); }
+  const a4 = T.paperForm === 'jif', fmt = a4 ? 'a4' : 'letter', PW = a4 ? 595.28 : 612, PH = a4 ? 841.89 : 792;
+  const {jsPDF} = window.jspdf, doc = new jsPDF({unit: 'pt', format: fmt});
+  for(let i = 0; i < pages.length; i++){ if(i) doc.addPage(fmt, 'portrait'); doc.addImage(await pfImg(pages[i]), 'JPEG', 0, 0, PW, PH); }
   doc.setTextColor(0, 32, 96); doc.setFont('helvetica', 'normal');
   // text that shrinks to fit its space
   const fit = (t, x0, y, w, size = 10, opt = {}) => { t = pt(String(t || '')); if(!t) return; let s = size; doc.setFontSize(s); while(s > 6 && doc.getTextWidth(t) > w){ s -= 0.5; doc.setFontSize(s); } doc.text(t, x0, y, opt); doc.setFontSize(size); };
@@ -2321,6 +2364,43 @@ async function paperFormPDF(d){
     [[x.o4, 514], [x.o5, 557]].forEach(([t, y]) => { if(!t) return; doc.setFillColor(255, 255, 255); doc.rect(118, y + 0.5, 6, 11, 'F'); fit(t, 119, y + 9.5, 182, 9); });
     for(const [i, x0, nx, dx] of [[0, 92, 125, 120], [1, 320, 353, 348]]){ const sg = sgs[i]; if(!sg) continue;
       await sigImg(sg, x0, 618, 150, 58); fit(sg.name, nx, 691, 175, 10); fit(dmy(sg.date ? sg.date + 'T12:00:00' : sg.at), dx, 709, 100, 10); }
+  } else if(T.paperForm === 'jif'){
+    // ✓ drawn over a ☐ on the form (x0 / top of the box glyph)
+    const box = (x0, top) => { doc.setDrawColor(0, 32, 96); doc.setLineWidth(1.3); doc.setLineCap('round'); doc.setLineJoin('round'); doc.lines([[2.6, 3.4], [6, -8]], x0 + 1.6, top + 4.4); };
+    const tickAt = (cx, cy) => { doc.setDrawColor(0, 32, 96); doc.setLineWidth(1.5); doc.setLineCap('round'); doc.setLineJoin('round'); doc.lines([[3, 4], [7, -9]], cx - 5, cy + 0.5); };
+    const has = (arr, v) => Array.isArray(arr) && arr.includes(v);
+    doc.setPage(1);
+    fit(isEmpty(x.rfiNo) ? (d.seq ? String(d.seq).padStart(3, '0') : '') : x.rfiNo, 475, 103.6, 84, 9.5);
+    fit(x.date ? dmy(x.date + 'T12:00:00') : '', 411, 125.4, 72, 9.5); fit(x.time, 510, 125.4, 49, 9.5);
+    fit(x.level, 124.5, 143, 170, 9.5); fit(x.gridline, 388, 143, 170, 9.5); fit(x.dmr, 388, 157.8, 170, 9.5);
+    wrap(x.drawing, 124.5, 171.5, 170, 15, 9);
+    fit(x.axisRep, 433, 171.6, 125, 9); fit(x.csEng, 447, 182.4, 112, 9);
+    [['Slab soffit', 124.5], ['Beam', 178.8], ['Column', 218.1], ['Wall', 264.4]].forEach(([v, bx]) => { if(has(x.element, v)) box(bx, 151.1); });
+    const REP = TYPES.JIF.fields.find(f => f.k === 'repair').o, STG = TYPES.JIF.fields.find(f => f.k === 'stage').o;
+    REP.forEach((v, i) => { if(has(x.repair, v)) box(39.5, 223.5 + i * 10.8); });
+    STG.forEach((v, i) => { if(has(x.stage, v)) box(303.1, 228.9 + i * 10.8); });
+    if(has(x.stage, 'Re-inspection') && x.reRfi) fit(x.reRfi, 453, 289.4, 52, 8.5);
+    // A. checklist: page, row top, row bottom for each item number
+    const ROWS = {'1.1':[1,359.1,381.5],'1.2':[1,381.5,396.2],'1.3':[1,396.2,418.3],'1.4':[1,418.3,440.1],'2.1':[1,453,468],'2.2':[1,468,482.7],'2.3':[1,482.7,504.8],'2.4':[1,504.8,526.9],'2.5':[1,526.9,548.7],'3.1':[1,561.5,583.9],'3.2':[1,583.9,606],'3.3':[1,606,620.7],'3.4':[1,620.7,642.8],'3.5':[1,642.8,664.9],'3.6':[1,664.9,679.3],'4.1':[1,692.2,714.6],'4.2':[1,714.6,729.3],'4.3':[1,729.3,751.4],'4.4':[1,751.4,773.5],
+      '4.5':[2,100.9,115.6],'5.1':[2,128.5,150.9],'5.2':[2,150.9,165.6],'5.3':[2,165.6,180.3],'5.4':[2,180.3,202.4],'5.5':[2,202.4,217.1],'5.6':[2,217.1,239.2],'5.7':[2,239.2,253.6],'6.1':[2,266.4,288.8],'6.2':[2,288.8,303.5],'6.3':[2,303.5,318.2],'6.4':[2,318.2,340.3],'6.5':[2,340.3,355],'6.6':[2,355,369.7]};
+    const ANS_X = {Yes: 406.6, No: 437.9, 'N/A': 469.1};
+    (x.checklist || []).forEach(r => { if(!r || r._g) return; const m = String(r.item || '').match(/^\s*(\d\.\d)/); const R = m && ROWS[m[1]]; if(!R) return;
+      doc.setPage(R[0]); const cy = (R[1] + R[2]) / 2;
+      if(ANS_X[r.ans]) tickAt(ANS_X[r.ans], cy);
+      if(r.remarks) wrap(r.remarks, 487.5, R[1] + 8, 72, R[2] - R[1] - 2, 7.5); });
+    // B. test results
+    doc.setPage(2);
+    (x.tests || []).slice(0, 5).forEach((r, i) => { if(!r) return; const top = 405.5 + i * 12.7, base = top + 9.4;
+      fit(r.required, 190, base, 88, 8); fit(r.result, 283.5, base, 88, 8); fit(r.ref, 377, base, 88, 8);
+      if(r.att === 'Yes') box(486.6, 408.3 + i * 12.7); if(r.att === 'N/A') box(518.3, 408.3 + i * 12.7); });
+    // C. comments, D. status
+    wrap(x.comments, 39, 503, 518, 44, 9.5);
+    const ST = TYPES.JIF.fields.find(f => f.k === 'status').o.filter(Boolean), si = ST.indexOf(x.status);
+    if(si >= 0) box(36.1, [564.2, 576.6, 589.4][si] + 0.4);
+    // E. inspection confirmation: name, designation, signature, date in each column
+    for(const [i, cx] of [[0, 34.1], [1, 209.8], [2, 385.5]]){ const sg = sgs[i]; if(!sg) continue;
+      fit(sg.name, cx + 34, 686, 138, 9.5); fit(sg.designation, cx + 58, 701.6, 115, 9);
+      await sigImg(sg, cx + 50, 707.5, 118, 30); fit(dmy(sg.date ? sg.date + 'T12:00:00' : sg.at), cx + 30, 751, 140, 9.5); }
   } else if(T.paperForm === 'f04'){
     doc.setPage(6);
     fit(x.repName, 108, 305, 163, 10.5); fit(x.subCompany, 291, 305, 194, 10.5);
@@ -2421,11 +2501,11 @@ const typeCat = t => isClaimType(t) ? 'CLM' : ((S.company && S.company.typeCats)
 // Retired types: replaced by a company form (PTW → PTM/PWH/PLW/PCS/PEX) or waiting for the correct list (POG duplicated SWI).
 // Not offered for new documents; old records of these types stay viewable.
 const RETIRED = new Set(['PTW','POG','RNG']);
-const catTypes = (c, withRetired) => TYPE_KEYS.filter(k => typeCat(k) === c.k && (withRetired || !RETIRED.has(k)) && (!isClaimType(k) || canClaims()));
+const catTypes = (c, withRetired, pid) => TYPE_KEYS.filter(k => typeCat(k) === c.k && (withRetired || !RETIRED.has(k)) && (!isClaimType(k) || canClaims()) && (!pid || !TYPES[k].onlyProj || TYPES[k].onlyProj(projById(pid) || {})));
 const catOfType = t => docCats().find(c => c.k === typeCat(t)) || DOC_CATS[0];
 // quick-start buttons: the forms this project uses most in the open folder (or the usual ones)
 const QUICK_DEF = {OPS:['DSR','PR','LTR'], SHE:['TBT','PTM','WLK'], ENV:['SWI','NMC','BMP'], EQP:['EXD','CRD','ETI'], SCR:['SSO'], PUR:['SEA','SSE'], CLM:['PC','DO']};
-function quickTypes(pid, cat, docs){ const ok = catTypes(cat), cnt = {}; docs.forEach(d => { if(ok.includes(d.type)) cnt[d.type] = (cnt[d.type] || 0) + 1; });
+function quickTypes(pid, cat, docs){ const ok = catTypes(cat, false, pid), cnt = {}; docs.forEach(d => { if(ok.includes(d.type)) cnt[d.type] = (cnt[d.type] || 0) + 1; });
   const used = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]), out = [];
   [...used, ...(QUICK_DEF[cat.k] || []), ...ok].forEach(k => { if(out.length < 3 && ok.includes(k) && !out.includes(k)) out.push(k); }); return out; }
 const qkName = n => { let t = String(n).replace(/ Inspection Checklist$/, ' check').replace(/ Checklist$/, '').replace(/^Permit to Work – /, 'PTW – ').replace(/ \(.*\)$/, '').replace(/ Report$/, '').replace(/ Register$/, '');
@@ -2433,7 +2513,7 @@ const qkName = n => { let t = String(n).replace(/ Inspection Checklist$/, ' chec
 function newPicker(pid, ck){
   const cats = [...docCats().filter(c => c.k === ck), ...docCats().filter(c => c.k !== ck)];
   showModal(`<div class="box" style="max-width:560px"><div class="mh"><h3>New document</h3></div><div class="mb"><input id="npQ" class="npq" placeholder="Search — e.g. permit, excavator, toolbox, letter" autocomplete="off">
-    ${cats.map(c => `<div class="npg"><div class="eyebrow" style="margin:14px 0 6px">${c.icon} ${esc(c.name)}</div>${catTypes(c).map(k => `<button class="npi" data-act="new" data-p="${esc(pid)}" data-t="${k}" data-s="${esc((TYPES[k].name + ' ' + TYPES[k].blurb + ' ' + k + ' ' + (TYPES[k].formRef || '')).toLowerCase())}"><b>${esc(projFmt(pid, k)?.name || TYPES[k].name)}</b><span>${esc(TYPES[k].blurb)}</span></button>`).join('')}</div>`).join('')}
+    ${cats.map(c => `<div class="npg"><div class="eyebrow" style="margin:14px 0 6px">${c.icon} ${esc(c.name)}</div>${catTypes(c, false, pid).map(k => `<button class="npi" data-act="new" data-p="${esc(pid)}" data-t="${k}" data-s="${esc((TYPES[k].name + ' ' + TYPES[k].blurb + ' ' + k + ' ' + (TYPES[k].formRef || '')).toLowerCase())}"><b>${esc(projFmt(pid, k)?.name || TYPES[k].name)}</b><span>${esc(TYPES[k].blurb)}</span></button>`).join('')}</div>`).join('')}
     <div class="npg"><div class="eyebrow" style="margin:14px 0 6px">✉ Done outside the app</div><button class="npi" data-act="sentltr" data-p="${esc(pid)}" data-k="" data-s="letter email sent upload record eot notice claim vo outside"><b>Record a letter / email I sent</b><span>Wrote it in Word or email? Upload the sent copy as the record</span></button></div>
     <div class="npnone muted small" style="display:none;padding:14px 4px">Nothing found — try another word.</div></div></div>`);
   setTimeout(() => { const q = $('#npQ'); if(q && window.innerWidth > 640) q.focus(); }, 50); }
@@ -3447,7 +3527,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 19 Nov 2026 (${APP_VER}) · Admin: View the app as staff / intern / programmer / sub-contractor</div>
+  ${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 20 Nov 2026 (${APP_VER}) · Axis Wisma Kemajuan: Repair & Strengthening Joint Inspection Form</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4640,7 +4720,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z70';
+const APP_VER = 'Z71';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -4904,7 +4984,7 @@ async function saveSentLetter(pid, btn){
 }
 
 /* ---------- PDF ---------- */
-const pt = s => String(s ?? '').replace(/[–—]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/[✓✔]/g,'').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g,'');
+const pt = s => String(s ?? '').replace(/[–—]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/≥/g,'>=').replace(/≤/g,'<=').replace(/[✓✔]/g,'').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g,'');
 // photo cropped from the centre to a fixed shape, so every photo in a grid is the same size
 async function imgCover(src, aspect, max = 1100){
   const im = await loadImg(src), W = im.naturalWidth, H = im.naturalHeight;
@@ -7440,7 +7520,7 @@ function installBanner(){
 /* --- boot --- */
 let unsubs = [];
 function stopData(){ unsubs.forEach(u => { try { u(); } catch(e){} }); unsubs = []; S.loaded = {p: 0, d: 0}; S.projects = []; S.docs = []; S.recent = []; S.extra = {}; S.loadedProj = {}; S.allLoaded = false; S.files = []; }
-const SUB_TYPES = ['DSR', 'PR'];   // what a sub-contractor may make: daily report, progress report
+const SUB_TYPES = ['DSR', 'PR', 'JIF'];   // what a sub-contractor may make: daily report, progress report, joint inspection (Axis Wisma Kemajuan only)
 function startSubData(){
   const db = S.db, ids = (S.subProjects || []).slice(0, 30), got = {};
   const onErr = e => { console.warn(e); };
