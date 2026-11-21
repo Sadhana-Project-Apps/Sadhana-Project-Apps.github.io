@@ -3478,7 +3478,7 @@ async function storageCheck(btn){
     const docsB = S.docs.reduce((a, d) => a + sz(d), 0);
     const ph = await S.db.collection('photos').get(); let photosB = 0, ph30 = 0; const t30 = addDays(today(), -30);
     ph.docs.forEach(x => { const d = x.data(), b = (d.data || '').length + 200; photosB += b; if(String(d.createdAt || '') >= t30) ph30 += b; });
-    let files = S.files; try { const fs = await S.db.collection('files').get(); files = fs.docs.map(x => ({id: x.id, ...x.data()})); } catch(e){}
+    let files = S.files; try { const fs = await S.db.collection('files').get(); files = fs.docs.map(x => ({id: x.id, ...x.data()})); if(canSecret()){ try { const ss = await S.db.collection('secureFiles').get(); files = files.concat(ss.docs.map(x => ({id: x.id, ...x.data()}))); } catch(e){} } } catch(e){}
     let filesB = 0, f30 = 0; files.forEach(f => { const b = Math.round((f.size || 0) * 1.37) + 600; filesB += b; if(String(f.uploadedAt || '') >= t30) f30 += b; });
     const d30 = S.docs.filter(d => String(d.createdAt || '') >= t30).reduce((a, d) => a + sz(d), 0);
     const other = (S.chat.length + S.projects.length + S.users.length) * 1500;
@@ -3527,7 +3527,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 20 Nov 2026 (${APP_VER}) · Joint Inspection Form with the Axis logo</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 21 Nov 2026 (${APP_VER}) · 🔒 Confidential project files (LOA…) for authorised staff only</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4720,7 +4720,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z72';
+const APP_VER = 'Z73';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6463,6 +6463,11 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => { const t = e.target; if(t.dataset?.tbl && t.dataset.col === 'name' && t.getAttribute('list') && S.draft){ const r = (S.draft.data[t.dataset.tbl] || [])[+t.dataset.row]; if(r) setTimeout(() => pplAutofill(t, r), 0); } if(t.classList?.contains('tsel') && S.draft){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; refreshAutos();
   const tf = TT(S.draft).fields.find(f => f.k === t.dataset.tbl); if(tf && tf.check && t.dataset.col === 'ans'){ t.closest('tr')?.classList.toggle('tno', t.value === (tf.bad || 'No')); const cnt = t.closest('.fld')?.querySelector('.row .small.muted'); if(cnt) cnt.innerHTML = chkCount(rows, tf); if(t.value === (tf.bad || 'No')) t.closest('tr')?.querySelector('[data-col=remarks]')?.focus(); } } });
 document.addEventListener('submit', e => { if(e.target.id === 'authForm'){ e.preventDefault(); emailAuth(e.target); } });
+// admin: who may open confidential project files
+document.addEventListener('change', async e => { const t = e.target; if(!t.dataset || !t.dataset.secu || !S.canAdmin) return;
+  const uid = t.dataset.secu, on = t.checked; t.disabled = true;
+  try { await companyUpdate({['secure.' + uid]: on}); toast((on ? '🔒 ' : '') + (S.names[uid] || 'Staff') + (on ? ' can now open confidential files.' : ' can no longer open confidential files.')); } catch(err){ t.checked = !on; dbErr(err); }
+  t.disabled = false; });
 document.addEventListener('change', async e => {
   if(e.target.dataset && e.target.dataset.chatst){ try { await S.db.doc('counters/' + e.target.dataset.chatst).update({status: e.target.value}); } catch(err){ dbErr(err); } return; }
   if(e.target.id === 'chatPh' && e.target.files?.length){ S.chatDraft = $('#chatText').value; const fs = [...e.target.files].slice(0, 4); $('#chatPhN').textContent = 'Uploading…';
@@ -7171,7 +7176,7 @@ function filesView(pid){
   const used = S.files.filter(f => f.kind === 'upload' && f.status !== 'uploading').reduce((a, f) => a + (f.size || 0), 0) * 1.37;
   const row = f => { const ex = expiryInfo(f); const mine = f.uploadedBy === S.me;
     return `<div class="it" style="cursor:default"><div style="font-size:22px;width:28px;text-align:center">${fileIcon(f)}</div>
-      <div class="t"><b style="white-space:normal">${esc(f.title)}</b><span>${[f.subfolder && '📂 ' + esc(f.subfolder), f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0) + (f.compressed ? ' (compressed from ' + fmtSize(f.origSize || 0) + ')' : '')].filter(Boolean).join(' · ')}${f.notes && !f.notes.startsWith('Folder: ') ? '<br>' + esc(f.notes) : ''}</span>
+      <div class="t"><b style="white-space:normal">${f._sec ? '🔒 ' : ''}${esc(f.title)}</b><span>${[f.subfolder && '📂 ' + esc(f.subfolder), f.refNo && esc(f.refNo), f.date && fmtDate(f.date), f.kind === 'link' ? 'Link' : esc(f.name || '') + ' · ' + fmtSize(f.size || 0) + (f.compressed ? ' (compressed from ' + fmtSize(f.origSize || 0) + ')' : '')].filter(Boolean).join(' · ')}${f.notes && !f.notes.startsWith('Folder: ') ? '<br>' + esc(f.notes) : ''}</span>
       ${ex ? `<div style="margin-top:4px"><span class="pill ${ex.cls === 'bad' ? '' : ex.cls}" style="${ex.cls === 'bad' ? 'background:#fbeeed;color:var(--bad)' : ''}"><span class="dot"></span>${esc(ex.label)}</span></div>` : ''}</div>
       <div class="row" style="gap:6px;flex-wrap:nowrap">
         <button class="btn sm" data-act="fileopen" data-id="${esc(f.id)}">Open</button>
@@ -7179,7 +7184,7 @@ function filesView(pid){
         ${(S.canEdit || mine) ? `<button class="btn sm ghost" data-act="fileedit" data-id="${esc(f.id)}" title="Edit">✎</button>` : ''}
       </div></div>`; };
   return `<button class="crumb" data-act="proj" data-id="${esc(pid)}">← ${esc(p.name)}</button>
-  <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">Project files</h1><div class="muted small">Tender, LOA, insurance, stamp duty and other reference documents — everyone on the team can open them.</div></div><div class="sp"></div>
+  <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span><h1 style="margin-top:6px">Project files</h1><div class="muted small">Tender, LOA, insurance, stamp duty and other reference documents — everyone on the team can open them, except 🔒 confidential files.</div></div><div class="sp"></div>
   ${S.canWrite ? `<div class="row"><label class="btn pri" style="margin:0">⇪ Upload files<input type="file" multiple hidden data-bulk="files" data-p="${esc(pid)}"></label>${'webkitdirectory' in document.createElement('input') && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<label class="btn" style="margin:0">📁 Upload a folder<input type="file" webkitdirectory multiple hidden data-bulk="folder" data-p="${esc(pid)}"></label>` : ''}<button class="btn ghost" data-act="fileadd" data-p="${esc(pid)}">+ Add one (with details or link)</button></div>` : ''}</div>
   ${S.canWrite && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? `<div class="dropzone small muted">Tip: drag a folder or files from your computer onto this page to upload them all at once. Sub-folders become groups.</div>` : ''}
   ${S.filesErr ? `<div class="card pad" style="margin-bottom:14px;border-color:var(--bad)"><b>⚠ Project files could not be loaded${S.filesErr === 'permission-denied' ? ' — no permission' : ''}.</b><div class="small muted">${S.filesErr === 'permission-denied' ? (S.canEdit ? 'The Firebase rules are blocking this account. Publish the latest rules (Firebase console › Firestore › Rules).' : 'Your account is not allowed to open project files. Please tell the admin.') : 'Check your internet connection and open this page again.'}</div></div>` : ''}
@@ -7198,6 +7203,7 @@ function fileForm(pid, f){
     <div class="fld half"><label>Document date</label><input type="date" id="fDate" value="${esc(f.date || '')}"></div>
     <div class="fld half"><label>Expiry date (if any)</label><input type="date" id="fExp" value="${esc(f.expiry || '')}"><div class="hint">You'll be warned 30 days before it expires.</div></div>
     <div class="fld"><label>Notes</label><textarea id="fNotes" style="min-height:60px">${esc(f.notes || '')}</textarea></div>
+    ${canSecret() ? `<div class="fld"><label style="display:flex;gap:8px;align-items:flex-start;font-weight:600"><input type="checkbox" id="fSec" ${f._sec ? 'checked' : ''} ${!isNew && !S.canAdmin ? 'disabled' : ''} style="margin-top:3px"> <span>🔒 Confidential<span class="hint" style="display:block;font-weight:400">Only admins and the authorised staff (Settings → Confidential project files) can see or open it.${!isNew && !S.canAdmin ? ' Only an admin can change this.' : ''}</span></span></label></div>` : ''}
     ${isNew ? `<div class="fld"><label>Add as</label><div class="tabs" style="margin:0"><button type="button" class="on" data-act="fkind" data-k="upload">Upload file</button><button type="button" data-act="fkind" data-k="link">Link (Google Drive etc.)</button></div></div>
     <div class="fld" id="fUpBox"><label>File <em>*</em></label><input type="file" id="fFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv"><div class="hint">PDF, photo, Word or Excel · big files are compressed under 10 MB automatically</div></div>
     <div class="fld" id="fLinkBox" style="display:none"><label>Link <em>*</em></label><input id="fUrl" placeholder="https://drive.google.com/…"><div class="hint">Make sure the link is shared with your staff.</div></div>`
@@ -7213,8 +7219,13 @@ async function saveFile(pid, id, btn){
   const meta = {projectId: pid, category: $('#fCat').value.trim() || 'General', title, refNo: $('#fRef').value.trim(), date: $('#fDate').value, expiry: $('#fExp').value, notes: $('#fNotes').value.trim(), updatedAt: new Date().toISOString(), updatedBy: S.me || null};
   btn.disabled = true; const prog = $('#fProg');
   try {
-    if(id){ const {projectId, ...upd} = meta; await S.db.doc('files/' + id).update({...upd, folder: meta.category}); closeModal(); toast('Saved'); render(); return; }
-    const ref = S.db.collection('files').doc();
+    const wantSec = !!($('#fSec') && $('#fSec').checked);
+    if(id){ const f0 = S.files.find(x => x.id === id), {projectId, ...upd} = meta; await S.db.doc(FCOL(f0) + '/' + id).update({...upd, folder: meta.category});
+      if(f0 && S.canAdmin && wantSec !== !!f0._sec){ await moveFileSec({...f0, ...upd, folder: meta.category}, wantSec, m => prog.textContent = m); toast(wantSec ? '🔒 Now confidential — only admins and authorised staff can see it' : 'No longer confidential — the whole team can see it'); }
+      else toast('Saved');
+      closeModal(); render(); return; }
+    if(wantSec) meta.secure = true;
+    const ref = S.db.collection(wantSec ? 'secureFiles' : 'files').doc();
     if(S.fileKind === 'link'){
       const url = $('#fUrl').value.trim();
       if(!/^https?:\/\//i.test(url)){ toast('Paste a full link starting with https://', true); btn.disabled = false; return; }
@@ -7233,7 +7244,7 @@ async function saveFile(pid, id, btn){
 }
 async function fileBlob(f){
   const parts = [];
-  for(let i = 0; i < (f.chunks || 0); i++){ const s = await S.db.doc('fileChunks/' + f.id + '_' + i).get(); if(!s.exists) throw new Error('missing part'); parts.push(s.data().data); }
+  for(let i = 0; i < (f.chunks || 0); i++){ const s = await S.db.doc(CCOL(f) + '/' + f.id + '_' + i).get(); if(!s.exists) throw new Error('missing part'); parts.push(s.data().data); }
   const bin = atob(parts.join('')); const u8 = new Uint8Array(bin.length);
   for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
   const blob = new Blob([u8], {type: f.mime || 'application/octet-stream'});
@@ -7283,8 +7294,8 @@ async function openFile(id, download){
 async function deleteFile(id){
   const f = S.files.find(x => x.id === id); if(!f) return;
   try {
-    for(let i = 0; i < (f.chunks || 0); i++) await S.db.doc('fileChunks/' + id + '_' + i).delete();
-    await S.db.doc('files/' + id).delete();
+    for(let i = 0; i < (f.chunks || 0); i++) await S.db.doc(CCOL(f) + '/' + id + '_' + i).delete();
+    await S.db.doc(FCOL(f) + '/' + id).delete();
     closeModal(); toast('Deleted'); render();
   } catch(e){ dbErr(e); }
 }
@@ -7294,7 +7305,8 @@ async function uploadOne(pid, file, meta, onPart, say){
   const sh = await shrinkFile(file, say);
   const b64 = await readAsBase64(sh.blob);
   const n = Math.ceil(b64.length / FILE_CHUNK) || 1;
-  const ref = S.db.collection('files').doc();
+  const sec = !!meta.secure, cc = sec ? 'secureChunks' : 'fileChunks';
+  const ref = S.db.collection(sec ? 'secureFiles' : 'files').doc();
   let made = 0, metaMade = false;
   try {
   await ref.set({...meta, projectId: pid, kind: 'upload', name: sh.name, mime: sh.mime, size: sh.size, chunks: n,
@@ -7302,12 +7314,12 @@ async function uploadOne(pid, file, meta, onPart, say){
     uploadedBy: S.me || null, uploadedAt: new Date().toISOString(), status: 'uploading'});
   for(let i = 0; i < n; i++){
     if(onPart) onPart(i, n);
-    await S.db.doc('fileChunks/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)}); made++;
+    await S.db.doc(cc + '/' + ref.id + '_' + i).set({fileId: ref.id, i, data: b64.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK)}); made++;
   }
   await ref.update({status: 'ready'}); return ref.id;
   } catch(e){
     // remove the half-uploaded file so nothing is left behind
-    for(let i = 0; i < made; i++){ try { await S.db.doc('fileChunks/' + ref.id + '_' + i).delete(); } catch(x){} }
+    for(let i = 0; i < made; i++){ try { await S.db.doc(cc + '/' + ref.id + '_' + i).delete(); } catch(x){} }
     try { await ref.delete(); } catch(x){}
     throw e;
   }
@@ -7465,7 +7477,7 @@ async function renameGroupSave(btn){
   btn.disabled = true;
   try {
     for(const f of S.files.filter(f => f.projectId === pid && (f.folder || f.category || 'General') === g))
-      await S.db.doc('files/' + f.id).update({folder: nn, category: nn});
+      await S.db.doc(FCOL(f) + '/' + f.id).update({folder: nn, category: nn});
     closeModal(); toast('Group renamed'); render();
   } catch(e){ btn.disabled = false; dbErr(e); }
 }
@@ -7535,7 +7547,7 @@ function startSubData(){
 // a copy of the company details without the access lists, for sub-contractors' PDFs
 let brandSent = '';
 function syncBrand(){
-  if(!S.canEdit || !S.company) return; const b = {...S.company}; delete b.approved; delete b.interns;
+  if(!S.canEdit || !S.company) return; const b = {...S.company}; delete b.approved; delete b.interns; delete b.secure;
   const j = JSON.stringify(b); if(j === brandSent) return; brandSent = j;
   S.db.doc('settings/brand').set(b).catch(() => { brandSent = ''; });
 }
@@ -7544,7 +7556,7 @@ function startData(){
   const db = S.db;
   const onErr = e => { console.error(e); if(e && e.code === 'permission-denied') return; toast('Lost connection to records — reload the page.', true); };
   unsubs.push(db.collection('projects').onSnapshot(s => { S.projects = s.docs.map(x => ({id: x.id, ...x.data()})); S.loaded.p = 1; softRender(); }, onErr));
-  unsubs.push(db.collection('files').onSnapshot(s => { S.files = s.docs.map(x => ({id: x.id, ...x.data()})); S.filesErr = ''; softRender(); }, e => { S.filesErr = (e && e.code) || 'error'; console.warn('files', e); softRender(); }));
+  unsubs.push(db.collection('files').onSnapshot(s => { S.filesN = s.docs.map(x => ({id: x.id, ...x.data()})); mergeFiles(); S.filesErr = ''; softRender(); }, e => { S.filesErr = (e && e.code) || 'error'; console.warn('files', e); softRender(); }));
   // Only recent documents stream live (keeps daily database reads inside the free plan).
   // Older ones load when a project or the full register is opened.
   unsubs.push(db.collection('docs').orderBy('createdAt', 'desc').limit(RECENT_LIMIT).onSnapshot(s => {
@@ -7556,9 +7568,37 @@ function startData(){
     syncApprovals(); softRender();
   }, () => {}));
   unsubs.push(startChat(db));
-  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); syncApprovals(); syncBrand(); startClaims(); softRender(); }, () => {}));
+  unsubs.push(db.doc('settings/company').onSnapshot(s => { S.company = s.exists ? s.data() : {}; applyTypeNames(); syncApprovals(); syncBrand(); startClaims(); startSecure(); softRender(); }, () => {}));
 }
 // claims stream only for the people who may see them (Firestore rules refuse everyone else)
+/* ---------- confidential project files (LOA, contracts…): admins + staff on the company's authorised list only ---------- */
+// kept in their own Firestore area (secureFiles / secureChunks) so the rules can refuse everyone else
+const canSecret = () => !!(S.canAdmin || (S.myRole === 'staff' && !isIntern(S.me) && S.company && S.company.secure && S.company.secure[S.me] === true));
+const FCOL = f => f && f._sec ? 'secureFiles' : 'files', CCOL = f => f && f._sec ? 'secureChunks' : 'fileChunks';
+function mergeFiles(){ S.files = [...(S.filesN || []), ...(S.filesS || [])]; }
+function startSecure(){
+  const ok = canSecret();
+  if(ok && !S.secUnsub){ S.secUnsub = S.db.collection('secureFiles').onSnapshot(s => { S.filesS = s.docs.map(x => ({id: x.id, ...x.data(), _sec: 1})); mergeFiles(); softRender(); }, e => { console.warn('secure files', e); S.filesS = []; mergeFiles(); S.secBlocked = e && e.code === 'permission-denied'; softRender(); });
+    unsubs.push(() => { try { S.secUnsub && S.secUnsub(); } catch(e){} S.secUnsub = null; S.filesS = []; }); }
+  else if(!ok && S.secUnsub){ try { S.secUnsub(); } catch(e){} S.secUnsub = null; S.filesS = []; mergeFiles(); }
+}
+// move a file between the normal and the confidential area (admin)
+async function moveFileSec(f, toSec, say){
+  const from = {...f}, to = {...f, _sec: toSec ? 1 : 0}, n = f.kind === 'upload' ? (f.chunks || 0) : 0;
+  const {id, _sec, ...meta} = f; const nref = S.db.doc(FCOL(to) + '/' + id);
+  await nref.set({...meta, secure: !!toSec, status: 'uploading', movedAt: new Date().toISOString(), movedBy: S.me});
+  for(let i = 0; i < n; i++){ if(say) say(`Moving… ${Math.round(i / n * 100)}%`); const c = await S.db.doc(CCOL(from) + '/' + id + '_' + i).get(); if(!c.exists) throw new Error('missing part'); await S.db.doc(CCOL(to) + '/' + id + '_' + i).set(c.data()); }
+  await nref.update({status: f.status || 'ready'});
+  for(let i = 0; i < n; i++){ try { await S.db.doc(CCOL(from) + '/' + id + '_' + i).delete(); } catch(e){} }
+  await S.db.doc(FCOL(from) + '/' + id).delete();
+}
+function secureCard(){
+  if(!S.canAdmin) return '';
+  const sec = (S.company && S.company.secure) || {};
+  const people = (S.users || []).filter(u => u.role === 'staff' && !isIntern(u.id)).sort((a, b) => String(S.names[a.id] || a.name || '').localeCompare(String(S.names[b.id] || b.name || '')));
+  return `<div class="card pad form" style="margin-top:16px"><b>🔒 Confidential project files</b><div class="small muted" style="margin:2px 0 10px">Files marked confidential (e.g. LOA, contract, quotations) can be opened only by admins and the staff ticked here — in every project. Interns, the programmer and sub-contractors never see them.</div>
+    ${people.length ? people.map(u => `<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line2,#eee)"><input type="checkbox" data-secu="${esc(u.id)}" ${sec[u.id] === true ? 'checked' : ''}> <span><b>${esc(S.names[u.id] || u.name || u.email || '')}</b> <span class="small muted">${esc(u.designation || u.email || '')}</span></span></label>`).join('') : '<div class="small muted">No staff yet.</div>'}</div>`;
+}
 function startClaims(){
   const ok = canClaims();
   if(ok && !S.claimsUnsub){ S.claimsUnsub = S.db.collection('claims').onSnapshot(s => { S.claimsBlocked = false; S.claimDocs = s.docs.map(x => ({id: x.id, ...x.data()})); recomputeDocs(); softRender(); }, e => { console.warn('claims', e); S.claimDocs = []; if(e && e.code === 'permission-denied'){ S.claimsBlocked = true; softRender(); } });
