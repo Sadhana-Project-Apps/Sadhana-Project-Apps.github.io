@@ -1809,7 +1809,8 @@ function buildType(type, fmt){
 const DSR_OLD_SIGS = [{role:'Prepared by', hint:'Site Supervisor'}, {role:'Checked by', hint:'Project Manager'}, {role:'Acknowledged by', hint:'Client / Consultant'}];
 const DSR_CLIENT_SIG = {role:'Acknowledged by', hint:'Client / Consultant', wait:'Waiting for client'};
 // the Axis (client) progress report format applies to every report of that project not already signed under another format
-const fmtOf = d => { if(d.type === 'PR' && typeof projPreset === 'function'){ const pre = projPreset(d.projectId); if(pre && pre.PR && (!d.fmt || d.fmt.coverStyle === 'axis') && (d.signatures || []).filter(Boolean).length <= 1) return pre.PR; } return d.fmt; };
+// a client's progress report format always wins for that project (even over a format saved earlier), unless the report is already signed by more than "Prepared by"
+const fmtOf = d => { if(d.type === 'PR' && typeof projPreset === 'function'){ const pre = projPreset(d.projectId); if(pre && pre.PR && (d.signatures || []).filter(Boolean).length <= 1) return pre.PR; } return d.fmt; };
 const TT = d => { const T = buildType(d.type, fmtOf(d)); const n = (d.signatures || []).filter(Boolean).length;
   if(d.type !== 'DSR') return T;
   const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
@@ -1833,7 +1834,7 @@ const PROJECT_PRESETS = [{
     order: ['Reporting period', 'S-Curve', 'Progress Summary – Main Works', 'Progress Summary – Other Works', 'Look-Ahead (Next Period)', 'Design & Analysis – Progress by Level', 'Major Issues Affecting Progress', 'Manpower at Site', 'Plant & Machinery at Site', 'Safety Statistics & Manhours', 'Progress Photos']}
 }];
 const projPreset = pid => { const p = projById(pid); return p ? PROJECT_PRESETS.find(x => x.test(p)) || null : null; };
-const projFmt = (pid, type) => ((projById(pid) || {}).formCfg || {})[type] || (projPreset(pid) || {})[type] || null;
+const projFmt = (pid, type) => (type === 'PR' && (projPreset(pid) || {}).PR) || ((projById(pid) || {}).formCfg || {})[type] || (projPreset(pid) || {})[type] || null;
 
 function fmtEditor(pid, type){
   const p = projById(pid); if(!p || !S.canEdit) return;
@@ -3529,7 +3530,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Wisma Kemajuan: S-curve fills itself; reminder to bring in the submitted progress reports</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Wisma Kemajuan progress report always in the client format</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4039,7 +4040,7 @@ function newDraft(pid, type){
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
   const prevOf = t => S.docs.filter(x => x.type === t && x.projectId === pid).sort((a, b) => (b.seq || 0) - (a.seq || 0));
   if(type === 'PR' || type === 'SW' || type === 'ENM'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
-  const lastPRof = () => S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0];
+  const lastPRof = () => { const all = S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to), full = all.filter(x => (x.data.mainWorks || []).some(r => r && r.desc)); return (full.length ? full : all).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0]; };
   if(type === 'PR'){ const last = lastPRof() || prevOf('PR')[0];
     if(last && last.data?.hse) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
@@ -4466,7 +4467,11 @@ function fillFromDailyReports(){
   // progress photos: kept with the daily reports (not printed there) — first days → Before, last days → After
   let nPh = 0;
   if(d.type === 'PR' && T0.coverStyle === 'axis' && !(data.photosAfter || []).length){
-    dsr.forEach(x => (x.data.photos || []).forEach(ph => { if((data.photosAfter = data.photosAfter || []).length < 12){ data.photosAfter.push({...ph}); nPh++; } })); }
+    // client format: a heading bar per activity (the photo's caption, else the day's first work item), 3 photos per row
+    let lastCap = ''; data.photosAfter = [];
+    dsr.forEach(x => { const w = (x.data.works || []).find(z => z && String(z.work || '').trim());
+      (x.data.photos || []).forEach(ph => { if(data.photosAfter.length >= 15) return; const cap = String(ph.caption || (w ? w.work : 'Site progress ' + fmtDate(x.data.date))).trim().toUpperCase();
+        data.photosAfter.push({...ph, caption: cap === lastCap ? '' : cap}); lastCap = cap; nPh++; }); }); }
   if(d.type === 'PR'){ const withPh = dsr.filter(x => (x.data.photos || []).length), take = (list, n) => { const out = []; list.forEach(x => (x.data.photos || []).forEach(ph => { if(out.length < n) out.push({...ph, caption: ph.caption || 'Daily report ' + fmtDate(x.data.date)}); })); return out; };
     if(withPh.length){ const half = Math.max(1, Math.floor(withPh.length / 2));
       if(!(data.photosBefore || []).length){ data.photosBefore = take(withPh.slice(0, half), 6); nPh += data.photosBefore.length; }
@@ -4785,7 +4790,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z76';
+const APP_VER = 'Z77';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -7256,12 +7261,14 @@ async function importAxisPRs(pid, files){
   const ok = [], bad = [];
   for(const f of files){ try { ok.push({f, o: await parseAxisPRDocx(f)}); } catch(e){ console.error(e); bad.push({name: f.name, why: e.message || 'could not read it'}); } }
   ok.sort((a, b) => (+a.o.reportNo) - (+b.o.reportNo));
-  const have = new Set(S.docs.filter(d => d.type === 'PR' && d.projectId === pid && !d.deleted).map(d => String(parseInt(d.data?.reportNo) || '')));
+  const prs = S.docs.filter(d => d.type === 'PR' && d.projectId === pid && !d.deleted);
+  const dupOf = o => prs.find(d => String(parseInt(d.data?.reportNo) || '') === String(+o.reportNo) && (d.data?._import || (d.data?.from && d.data.from <= o.to && d.data.to >= o.from)));
+  const have = new Set();
   const made = [], keepDraft = S.draft;
   const prog = n => { const el = $('#aiProg'); if(el) el.textContent = n; };
   showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>📥 Importing progress reports…</h3></div><div class="mb"><p id="aiProg" class="small muted">Starting…</p></div></div>`);
   for(const {f, o} of ok){
-    if(have.has(String(+o.reportNo))){ bad.push({name: f.name, why: `Progress Report No.${o.reportNo} is already in the app`}); continue; }
+    if(have.has(String(+o.reportNo)) || dupOf(o)){ bad.push({name: f.name, why: `Progress Report No.${o.reportNo} is already in the app`}); continue; }
     try {
       prog(`No.${o.reportNo}: photos…`);
       const d = axisImportToPR(pid, o, f), x = d.data;
