@@ -63,7 +63,15 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .crumb:hover{color:var(--hazard)}
 .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
 .pill.draft{background:#eceae5;color:#55595e}
-.pill.pending{background:var(--warn-l);color:var(--warn)}
+.pill.pending{background:#fde8e8;color:#b42318;font-weight:700}
+.nbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:#d92d20;color:#fff;font-size:11px;font-weight:800;text-align:center;vertical-align:1px}
+.bnav .nbadge{margin-left:3px}
+.actcard{border:2px solid #d92d20 !important;background:#fff5f5}
+.actcard h3{color:#b42318}
+.actcard .btn.pri{background:#d92d20;border-color:#d92d20}
+.awaitn{color:#b42318;font-weight:700}
+@keyframes actpulse{0%,100%{box-shadow:0 0 0 0 rgba(217,45,32,.35)}50%{box-shadow:0 0 0 6px rgba(217,45,32,0)}}
+.actcard{animation:actpulse 2.4s ease-in-out 3}
 .pill.done{background:var(--ok-l);color:var(--ok)}
 .pill.type{background:var(--steel);color:#fff;font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.04em}
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
@@ -322,7 +330,8 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 .sig .nm{font-weight:600;font-size:13.5px}
 .sig .ds,.sig .when{font-size:12px;color:var(--muted)}
 .sig.wait .img{color:#b9b2a5;font-size:12.5px}
-.sig.next{border-color:var(--hazard);background:var(--hazard-l)}
+.sig.next{border:2px solid #d92d20;background:#fff5f5}
+.sig.next .role{color:#b42318}
 .prog{height:12px;border-radius:99px;background:#ece8e1;position:relative;overflow:hidden}
 .prog i{position:absolute;left:0;top:0;bottom:0;background:var(--hazard);border-radius:99px}
 .prog s{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--steel)}
@@ -2068,6 +2077,8 @@ function render(){
     }
   } catch(e){ console.error(e); html = `<div class="card pad">Something went wrong showing this page. <button class="btn sm" data-act="nav" data-v="home">Back to projects</button></div>`; }
   m.innerHTML = viewAsBar() + html; document.body.classList.toggle('intern', intern());
+  try { const n = S.authState === 'in' ? myRequests().length + (S.canAdmin ? S.docs.filter(x => x.delReq).length : 0) : 0;
+    document.querySelectorAll('.nav [data-v="home"], #bnav [data-v="home"]').forEach(b => { let e = b.querySelector('.nbadge'); if(n){ if(!e){ e = document.createElement('span'); e.className = 'nbadge'; b.appendChild(e); } e.textContent = n; } else if(e) e.remove(); }); } catch(e){}
   saveView();
   if(v.name === 'register') applyRegFilter();
 }
@@ -2130,9 +2141,9 @@ function homeView(){
   <div class="pagehead"><div><div class="eyebrow">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><h1>Projects</h1></div><div class="sp"></div>
     ${S.canWrite && !intern() ? `<button class="btn pri" data-act="newproj">+ New project</button>` : ''}</div>
   ${installBanner()}
-  ${(() => { if(!S.canAdmin) return ''; const dr = S.docs.filter(x => x.delReq); return dr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--bad)"><div class="sechead"><h3>🗑 Deletion requests</h3><div class="sp"></div><span class="pill" style="background:#fde8e8;color:#b42318">${dr.length}</span></div><div class="list">${dr.map(x => `<div class="it" data-act="open" data-id="${esc(x.id)}" style="cursor:pointer;flex-wrap:wrap"><span class="pill type">${esc(TT(x).code)}</span><div class="t" style="white-space:normal"><b style="font-weight:500">${esc(x.number)} · ${esc(docTitle(x))}</b><span>${esc(x.delReq.name || nameOf(x.delReq.by))}: “${esc(x.delReq.reason || '')}”</span></div><span class="small">Review ›</span></div>`).join('')}</div></div>` : ''; })()}
+  ${(() => { if(!S.canAdmin) return ''; const dr = S.docs.filter(x => x.delReq); return dr.length ? `<div class="card actcard" style="margin-bottom:16px"><div class="sechead"><h3>🗑 Deletion requests — your action</h3><div class="sp"></div><span class="nbadge" style="font-size:13px;height:22px;line-height:22px;min-width:22px">${dr.length}</span></div><div class="list">${dr.map(x => `<div class="it" data-act="open" data-id="${esc(x.id)}" style="cursor:pointer;flex-wrap:wrap"><span class="pill type">${esc(TT(x).code)}</span><div class="t" style="white-space:normal"><b style="font-weight:500">${esc(x.number)} · ${esc(docTitle(x))}</b><span>${esc(x.delReq.name || nameOf(x.delReq.by))}: “${esc(x.delReq.reason || '')}”</span></div><span class="small">Review ›</span></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { const mm = myMentions(); return mm.length ? `<div class="card" style="margin-bottom:16px;border-color:#1d4ed8"><div class="sechead"><h3>📌 Assigned to you</h3><div class="sp"></div><span class="pill" style="background:#e7f0ff;color:#1d4ed8">${mm.length}</span></div><div class="list">${mm.map(({p, a, v}) => `<div class="it" style="align-items:flex-start;flex-wrap:wrap"><span class="pill type">${esc(p.code)}</span><div class="t" style="white-space:normal"><b class="full" style="font-weight:500">${a.icon} ${a.text}</b><span>from ${esc(v.fromName || nameOf(v.from))} · ${esc(fmtDate(v.at))}${v.note ? ' — “' + esc(v.note) + '”' : ''}</span></div><span class="row" style="gap:6px">${S.canWrite ? alertBtn(a.act) : ''}<button class="btn sm" data-act="mndone" data-p="${esc(p.id)}" data-k="${esc(a.key)}">✓ Done</button></span></div>`).join('')}</div></div>` : ''; } catch(e){ return ''; } })()}
-  ${(() => { const mr = myRequests(); return mr.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--warn)"><div class="sechead"><h3>✍ Waiting for your signature</h3><div class="sp"></div><span class="pill pending"><span class="dot"></span>${mr.length}</span></div><div class="list">${mr.map(({d, r, p}) => `<div class="it" data-act="open" data-id="${esc(d.id)}"><span class="pill type">${esc(d.type)}</span><div class="t"><b>${esc(d.number)} — ${esc(docTitle(d))}</b><span>${esc(p.code)} · ${esc(r.role)} · asked by ${esc(r.fromName || '')}${r.note ? ' — “' + esc(r.note) + '”' : ''}</span></div><button class="btn sm pri" data-act="open" data-id="${esc(d.id)}">Sign</button></div>`).join('')}</div></div>` : ''; })()}
+  ${(() => { const mr = myRequests(); return mr.length ? `<div class="card actcard" style="margin-bottom:16px"><div class="sechead"><h3>✍ Waiting for your signature</h3><div class="sp"></div><span class="nbadge" style="font-size:13px;height:22px;line-height:22px;min-width:22px">${mr.length}</span></div><div class="list">${mr.map(({d, r, p}) => `<div class="it" data-act="open" data-id="${esc(d.id)}"><span class="pill type">${esc(d.type)}</span><div class="t"><b>${esc(d.number)} — ${esc(docTitle(d))}</b><span>${esc(p.code)} · ${esc(r.role)} · asked by ${esc(r.fromName || '')}${r.note ? ' — “' + esc(r.note) + '”' : ''}</span></div><button class="btn sm pri" data-act="open" data-id="${esc(d.id)}">Sign</button></div>`).join('')}</div></div>` : ''; })()}
   ${(() => { try { return alertsHome(); } catch(e){ console.error(e); return ''; } })()}
   <div class="kpis">
     <div class="card kpi"><span class="eyebrow">Active projects</span><b>${active.length}</b></div>
@@ -2576,7 +2587,7 @@ function projectView(id, tab){
   const ds = (tab === 'ALL' ? all : all.filter(d => d.type === tab)).sort((a,b) => String(docDate(b)).localeCompare(String(docDate(a))) || String(b.number).localeCompare(String(a.number)));
   const tabs = ['ALL', ...ckeys.filter(k => all.some(d => d.type === k) || k === tab)].map(k => `<button class="${k===tab?'on':''}" data-act="tab" data-p="${esc(id)}" data-t="${k}">${k==='ALL'?'All':TYPES[k].name}<i>${k==='ALL'?all.length:all.filter(d=>d.type===k).length}</i></button>`).join('');
   const folders = `<div class="folders">${docCats().map(c => { const ct = catTypes(c, true), n = allP.filter(d => ct.includes(d.type)).length, pend = allP.filter(d => ct.includes(d.type) && statusOf(d).next >= 0).length;
-    return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name)}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · ' + pend + ' awaiting' : ''}</span></span></button>`; }).join('')}</div>`;
+    return `<button class="folder ${c.k === cat.k ? 'on' : ''}" data-act="cat" data-c="${c.k}"><span class="fi">${c.icon}</span><span class="ft"><b>${esc(c.name)}</b><span>${n} document${n === 1 ? '' : 's'}${pend ? ' · <em class="awaitn" style="font-style:normal">' + pend + ' awaiting</em>' : ''}</span></span></button>`; }).join('')}</div>`;
   return `
   <button class="crumb" data-act="nav" data-v="home">← All projects</button>
   <div class="pagehead"><div><span class="pill type">${esc(p.code)}</span> <span class="pill ${p.status==='Completed'?'done':p.status==='On hold'?'draft':'pending'}">${esc(p.status||'Active')}</span><h1 style="margin-top:6px">${esc(p.name)}</h1></div><div class="sp"></div>
@@ -3534,7 +3545,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Progress report: upload a Word report or .mpp inside the report to fill it</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Signatures and actions waiting for you shown in red</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4938,7 +4949,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z86';
+const APP_VER = 'Z87';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
