@@ -823,6 +823,7 @@ const TYPES = {
         def: () => [{}, {}, {}]},
       {k:'cutoff', l:'S-curve cut-off date', t:'date', w:'half', def: () => today(), hint:'Progress is measured up to this date — normally the end of the reporting period.'},
       {k:'_gen', l:'', t:'draftbtn', act:'genscurve', btn:'📈 Generate the S-curve from the work programme', pdf:false},
+      {k:'_pgap', l:'', t:'draftbtn', act:'pgapply', btn:'📈 Update from the MS Project work programme (schedule %, actual %, forecast)', pdf:false},
       {k:'planned', l:'Scheduled progress to date (%)', t:'number', w:'half'},
       {k:'actual', l:'Actual progress to date (%)', t:'number', req:1, w:'half'},
       {k:'aheadDelay', l:'Ahead / delay', t:'auto', w:'half', calc:(x, d, p) => {
@@ -2581,6 +2582,7 @@ function projectView(id, tab){
   <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
   ${S.canWrite && !intern() ? `<button class="btn" data-act="scforms" data-p="${esc(id)}">📄 Subcon forms</button><label class="btn" style="margin:0" title="Upload a Word report sent back by the sub-contractor (or one of your existing reports) — the app makes it a Sadhana document">⇪ Upload subcon report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>` : ''}
   ${S.canWrite && !intern() && !S.isSub && PROJECT_PRESETS.some(x => x.test(p)) ? `<label class="btn" style="margin:0" title="Add progress reports already submitted to the client (their Word files) so the next one carries on from them">📥 Import progress reports (Word)<input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden data-axpr="${esc(id)}"></label>` : ''}
+  ${S.canWrite && !intern() && !S.isSub ? `<button class="btn" data-act="programme" data-p="${esc(id)}" title="MS Project work programme (saved as XML) — schedule % for the S-curve, actual %, forecast">📈 Work programme${p.programme ? ' · ' + esc(String(progActual(p.programme))) + '%' : ''}</button>` : ''}
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
@@ -3530,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Wisma Kemajuan progress report always in the client format</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Work programme (MS Project XML): schedule %, actual % and forecast fill the progress report</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3996,6 +3998,85 @@ function docView(id){
 }
 
 /* ---------- EDITOR ---------- */
+/* ---------- 📈 work programme from MS Project (saved as XML): schedule % for the S-curve, actual %, forecast, progress report autofill ---------- */
+// MS Project .mpp can't be read in a browser — in MS Project: File › Save As › "XML Format (*.xml)", then import that file.
+function parseMSPDI(text){
+  const dom = new DOMParser().parseFromString(text, 'application/xml');
+  if(dom.getElementsByTagName('parsererror').length) throw new Error('not a readable XML file');
+  const root = dom.documentElement; if(!root || root.localName !== 'Project') throw new Error('not an MS Project XML file');
+  const kid = (el, n) => [...el.children].find(c => c.localName === n), tx = (el, n) => { const c = kid(el, n); return c ? c.textContent.trim() : ''; };
+  const tasksEl = kid(root, 'Tasks'); if(!tasksEl) throw new Error('no tasks in this file');
+  const hrs = v => { const m = String(v || '').match(/^PT(\d+(?:\.\d+)?)H(\d+(?:\.\d+)?)M/); return m ? +m[1] + +m[2] / 60 : 0; };
+  const mpd = (+tx(root, 'MinutesPerDay') || 480) / 60;
+  const tasks = [...tasksEl.children].filter(t => t.localName === 'Task').map(t => ({name: tx(t, 'Name'), lvl: +tx(t, 'OutlineLevel') || 0, sum: tx(t, 'Summary') === '1',
+    s: tx(t, 'Start').slice(0, 10), f: tx(t, 'Finish').slice(0, 10), dur: Math.round(hrs(tx(t, 'Duration')) / mpd * 100) / 100, pc: +tx(t, 'PercentComplete') || 0}))
+    .filter(t => t.lvl >= 1 && t.name && t.s && t.f);
+  if(!tasks.length) throw new Error('no tasks in this file');
+  return {title: tx(root, 'Title') || tx(root, 'Name'), statusDate: (tx(root, 'StatusDate') || '').slice(0, 10), tasks};
+}
+const progLeaves = g => (g && g.tasks || []).filter(t => !t.sum);
+function progPlanAt(g, t){   // duration-weighted share of every task done by the end of day t (same as the client's S-curve)
+  const L = progLeaves(g).filter(a => a.f >= a.s); const W = L.reduce((a, b) => a + (b.dur || 1), 0); if(!W) return null;
+  return L.reduce((sum, a) => { const tot = dDiff(a.f, a.s) + 1, done = Math.max(0, Math.min(tot, dDiff(t, a.s) + 1)); return sum + (a.dur || 1) * done / tot; }, 0) / W * 100;
+}
+function progActual(g){ const top = (g.tasks || []).find(t => t.lvl === 1 && t.sum); if(top) return top.pc;
+  const L = progLeaves(g), W = L.reduce((a, b) => a + (b.dur || 1), 0); return W ? Math.round(L.reduce((a, b) => a + (b.dur || 1) * b.pc, 0) / W) : 0; }
+const progDMY = v => v ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}` : '';
+// "as at" date: from the file name (…_151126 → 15/11/2026), else the status date in the file, else today
+function progAsAt(name, g){ const m = String(name || '').match(/(?:^|[^\d])(\d{2})(\d{2})(\d{2})(?:[^\d]|$)/); if(m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return `20${m[3]}-${m[2]}-${m[1]}`;
+  return g.statusDate && g.statusDate > (g.tasks[0]?.s || '') ? g.statusDate : today(); }
+function programmeForm(pid){
+  const p = projById(pid); if(!p) return; const g = p.programme;
+  const hist = Object.entries(p.progHist || {}).sort((a, b) => a[0].localeCompare(b[0]));
+  showModal(`<div class="box" style="max-width:560px"><div class="mh"><div><div class="eyebrow">${esc(p.code)}</div><h3>📈 Work programme</h3></div></div><div class="mb">
+    ${g ? `<div class="card pad" style="margin-bottom:12px"><b>${esc(g.file || g.title || 'Programme')}</b><div class="small muted">${progLeaves(g).length} activities · ${esc(fmtDate(g.tasks[0]?.s))} – ${esc(fmtDate(g.tasks.reduce((m, t) => t.f > m ? t.f : m, '')))} · progress as at ${esc(fmtDate(g.asAt))}: <b>${esc(String(progActual(g)))}%</b> actual, ${esc(String(Math.round(progPlanAt(g, g.asAt))))}% scheduled</div>
+      ${hist.length > 1 ? `<div class="small muted" style="margin-top:6px">Actual % by date: ${hist.map(([d, v]) => esc(progDMY(d)) + ' ' + esc(String(v)) + '%').join(' · ')}</div>` : ''}</div>` : '<p class="small muted" style="margin-top:0">No work programme yet.</p>'}
+    <p class="small" style="margin:0 0 8px">Every progress report then gets the <b>schedule %</b> for each S-curve date from the programme, the <b>actual %</b> (% complete in MS Project) for its period, the <b>1-week forecast</b> and the status of activities that match the progress summary.</p>
+    <div class="fld"><label>MS Project file saved as XML <em>*</em></label><input type="file" id="pgFile" accept=".xml,text/xml,application/xml" multiple>
+      <div class="hint">In MS Project: <b>File › Save As › "XML Format (*.xml)"</b>. An .mpp file can't be read on a phone or in a browser. Update the % complete in MS Project each week and import it again — choose several files at once to add earlier weeks.</div></div>
+    <div class="fld"><label>Progress as at</label><input type="date" id="pgAsAt"><div class="hint">Leave empty to take it from the file name (e.g. WP_Axis_151126 → 15/11/2026).</div></div>
+    <div id="pgMsg" class="small muted"></div>
+    <div class="row" style="margin-top:10px"><div class="sp"></div><button class="btn pri" data-act="pgsave" data-p="${esc(pid)}">Import</button></div></div></div>`);
+}
+async function programmeSave(pid, btn){
+  const p = projById(pid); if(!p) return; const files = [...($('#pgFile')?.files || [])], asAt0 = $('#pgAsAt')?.value || '', msg = $('#pgMsg');
+  if(!files.length){ toast('Choose the MS Project XML file.', true); return; }
+  if(files.some(f => /\.mpp$/i.test(f.name))){ toast('That is an .mpp file — in MS Project use File › Save As › XML Format, then choose the .xml file.', true); return; }
+  btn.disabled = true;
+  try {
+    const got = [];
+    for(const f of files){ const g = parseMSPDI(await f.text()); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); g.asAt = files.length === 1 && asAt0 ? asAt0 : progAsAt(g.file, g); got.push(g); }
+    got.sort((a, b) => a.asAt.localeCompare(b.asAt));
+    const hist = {...(p.progHist || {})}; got.forEach(g => hist[g.asAt] = progActual(g));
+    const last = got[got.length - 1], keep = !p.programme || last.asAt >= (p.programme.asAt || '');
+    const upd = {progHist: hist, ...(keep ? {programme: {...last, importedAt: new Date().toISOString(), by: S.me || null}} : {})};
+    await S.db.doc('projects/' + pid).update(upd); Object.assign(p, upd);
+    closeModal(); toast(`Work programme saved — ${progLeaves(last).length} activities, ${progActual(last)}% complete as at ${fmtDate(last.asAt)}`); render();
+  } catch(e){ btn.disabled = false; if(msg) msg.textContent = '⚠ ' + (e.message || 'could not read the file'); if(e && e.code) dbErr(e); }
+}
+// progress report autofill from the programme (new report + "📈 Update from the work programme" button)
+function applyProgramme(d, opts = {}){
+  const x = d.data, p = projById(d.projectId) || {}, g = p.programme; if(!g || !x.to) return 0; let n = 0;
+  const T = TT(d), axis = T.coverStyle === 'axis';
+  // actual %: the programme figure dated inside this period (or the latest before its end)
+  const hist = Object.entries(p.progHist || {}).filter(([t]) => t <= addDays(x.to, 1) && t >= (x.from || x.to)).sort((a, b) => b[0].localeCompare(a[0]))[0];
+  if(hist && (isEmpty(x.actual) || opts.force)){ x.actual = String(hist[1]); n++; }
+  // 1-week forecast: activities not finished that start or carry on in the 7 days after the period
+  const nx0 = addDays(x.to, 1), nx1 = addDays(x.to, 7);
+  const fc = progLeaves(g).filter(t => t.pc < 100 && t.s <= nx1 && t.f >= nx0 && (t.pc === 0 || t.s >= addDays(x.to, -14))).sort((a, b) => a.s.localeCompare(b.s) || a.name.localeCompare(b.name));
+  if(fc.length){ x.lookahead = fc.map(t => ({desc: t.name, start: axis ? progDMY(t.s) : t.s})); n++; }
+  // progress summary: status of activities with the same name
+  const key = v => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(), byName = {}; progLeaves(g).forEach(t => byName[key(t.name)] = t);
+  const fd = v => axis ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(2, 4)}` : v;
+  (x.mainWorks || []).forEach(r => { const t = r && byName[key(r.desc)]; if(!t) return;
+    if(t.pc >= 100 && !/complet/i.test(r.status || '')){ r.status = 'Completed'; if(isEmpty(r.finish)) r.finish = fd(t.f); if(isEmpty(r.start)) r.start = fd(t.s); n++; }
+    else if(t.pc > 0 && t.pc < 100 && isEmpty(r.status)){ r.status = 'In progress'; if(isEmpty(r.start)) r.start = fd(t.s); n++; } });
+  // generic report: work programme table (weightage by duration, actual % from MS Project)
+  if(!axis && T.fields.some(f => f.k === 'wp')){ const L = progLeaves(g), W = L.reduce((a, b) => a + (b.dur || 1), 0);
+    x.wp = L.map(t => ({act: t.name, start: t.s, finish: t.f, weight: String(Math.round((t.dur || 1) / W * 1000) / 10), actp: String(t.pc)})); n++; }
+  if(axis) syncAxisScurve(d);
+  return n;
+}
 /* ---------- client S-curve (Wisma Kemajuan): cut-off dates = project start, every Sunday, 1st and last day of each month, completion.
    Schedule % comes from the programme points already in the table (straight line between them); actual % of the report's cut-off row = "Actual progress". ---------- */
 function scDate(t, prev, next){   // "dd/mm/yyyy" → ISO; fixes slips like 31/11 (→ 31/10) or 27/12/2027 between 2026 dates
@@ -4019,10 +4100,13 @@ function syncAxisScurve(d){
   // read the existing points (order of the table) with their real dates
   const raw = rows.map(r => scDate(r.date)), pts = [];
   rows.forEach((r, i) => { const prev = raw.slice(0, i).filter(Boolean).pop(), next = raw.slice(i + 1).find(Boolean); const iso = scDate(r.date, prev, next); if(iso) pts.push({iso, sched: r.sched, actual: r.actual}); });
-  const start = p.start || (pts[0] && pts[0].iso), end = p.end || (pts.length && pts[pts.length - 1].iso); if(!start || !end || start >= end) return false;
-  const S0 = pts.filter(q => !isEmpty(q.sched)).sort((a, b) => a.iso.localeCompare(b.iso)); if(S0.length < 2) return false;
+  const pg = p.programme && progLeaves(p.programme).length ? p.programme : null;
+  const start = p.start || (pg && pg.tasks.reduce((m, t) => !m || t.s < m ? t.s : m, '')) || (pts[0] && pts[0].iso), end = p.end || (pg && pg.tasks.reduce((m, t) => t.f > m ? t.f : m, '')) || (pts.length && pts[pts.length - 1].iso); if(!start || !end || start >= end) return false;
+  const S0 = pts.filter(q => !isEmpty(q.sched)).sort((a, b) => a.iso.localeCompare(b.iso)); if(S0.length < 2 && !(p.programme && progLeaves(p.programme).length)) return false;
   const days = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
-  const schedAt = t => { const ex = S0.find(q => q.iso === t); if(ex) return String(numv(ex.sched));
+  const prog = p.programme && progLeaves(p.programme).length ? p.programme : null;
+  const schedAt = t => { if(prog){ const v = progPlanAt(prog, t); if(v != null) return String(Math.round(v)); }
+    const ex = S0.find(q => q.iso === t); if(ex) return String(numv(ex.sched));
     let a = null, b = null; S0.forEach(q => { if(q.iso <= t) a = q; if(q.iso >= t && !b) b = q; });
     if(!a) return String(numv(b.sched)); if(!b) return String(numv(a.sched));
     return String(Math.round(numv(a.sched) + (numv(b.sched) - numv(a.sched)) * days(a.iso, t) / Math.max(1, days(a.iso, b.iso)))); };
@@ -4102,7 +4186,8 @@ function newDraft(pid, type){
         if(T.coverStyle === 'axis'){ data.actual = ''; syncAxisScurve({projectId: pid, data}); } }
       if(Array.isArray(L.issues) && L.issues.some(r => r && (r.issue || r.desc))) data.issues = clone(L.issues);
       if(Array.isArray(L.lookahead) && L.lookahead.some(r => r && r.desc)) data.lookahead = clone(L.lookahead);
-      if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; } }
+      if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; }
+    if((projById(pid) || {}).programme){ const dd = {projectId: pid, type: 'PR', data, fmt: fmt0}; if(T.coverStyle === 'axis' && !(data.scurve || []).some(r => r && r.date)) data.scurve = [{}]; applyProgramme(dd); } }
   if(type === 'HRC'){ const p = projById(pid) || {}; if(!data.site) data.site = [p.name, p.location].filter(Boolean).join(', ') || ''; if(!data.location) data.location = p.location || ''; if(data._from) data.revNo = String((parseInt(data.revNo) || 0) + 1); hrcMigrate(data); }
   if(type === 'EAIA'){ const p = projById(pid) || {}; if(!data.job) data.job = 'Demolition works — ' + (p.name || ''); if(!data.location) data.location = p.location || ''; }
   if(type === 'ENM' || type === 'EMR' || type === 'EAIA' || type === 'ERO' || type === 'HRC') T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
@@ -4790,7 +4875,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z77';
+const APP_VER = 'Z78';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6261,6 +6346,9 @@ document.addEventListener('click', async e => {
     case 'gsignin': googleSignIn(); break;
     case 'authmode': S.authMode = el.dataset.m; render(); break;
     case 'chkupd': manualUpdate(el); break;
+    case 'programme': programmeForm(el.dataset.p); break;
+    case 'pgsave': programmeSave(el.dataset.p, el); break;
+    case 'pgapply': { if(!S.draft) break; const n = applyProgramme(S.draft, {force: true}); S.dirty = true; render(); toast(n ? 'Updated from the work programme — please check' : 'Nothing to update from the work programme', !n); break; }
     case 'viewas': if(el.dataset.r === 'sub') viewAsSubForm(); else setViewAs(el.dataset.r ? {role: el.dataset.r} : null); break;
     case 'viewassub': { const ps = [...document.querySelectorAll('[data-vap]:checked')].map(x => x.dataset.vap); if(!ps.length){ toast('Tick at least one project.', true); break; }
       const co = ($('#vaCo')?.value || '').trim() || 'Demo Sub-contractor'; closeModal(); setViewAs({role: 'sub', projects: ps, company: co}); break; }
