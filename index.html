@@ -2582,7 +2582,7 @@ function projectView(id, tab){
   <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
   ${S.canWrite && !intern() ? `<button class="btn" data-act="scforms" data-p="${esc(id)}">📄 Subcon forms</button><label class="btn" style="margin:0" title="Upload a Word report sent back by the sub-contractor (or one of your existing reports) — the app makes it a Sadhana document">⇪ Upload subcon report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>` : ''}
   ${S.canWrite && !intern() && !S.isSub && PROJECT_PRESETS.some(x => x.test(p)) ? `<label class="btn" style="margin:0" title="Add progress reports already submitted to the client (their Word files) so the next one carries on from them">📥 Import progress reports (Word)<input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden data-axpr="${esc(id)}"></label>` : ''}
-  ${S.canWrite && !intern() && !S.isSub ? `<button class="btn" data-act="programme" data-p="${esc(id)}" title="MS Project work programme (saved as XML) — schedule % for the S-curve, actual %, forecast">📈 Work programme${p.programme ? ' · ' + esc(String(progActual(p.programme))) + '%' : ''}</button>` : ''}
+  ${S.canWrite && !intern() && !S.isSub ? `<button class="btn" data-act="programme" data-p="${esc(id)}" title="MS Project work programme (.mpp) — schedule % for the S-curve, actual %, forecast">📈 Work programme${p.programme ? ' · ' + esc(String(progActual(p.programme))) + '%' : ''}</button>` : ''}
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
@@ -3532,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Fix: new progress report at Wisma Kemajuan opens again</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Work programme: upload the MS Project .mpp file directly</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3999,7 +3999,64 @@ function docView(id){
 
 /* ---------- EDITOR ---------- */
 /* ---------- 📈 work programme from MS Project (saved as XML): schedule % for the S-curve, actual %, forecast, progress report autofill ---------- */
-// MS Project .mpp can't be read in a browser — in MS Project: File › Save As › "XML Format (*.xml)", then import that file.
+/* ---------- MS Project .mpp (2010 and newer) read in the browser: compound file → task table ---------- */
+function cfbOpen(buf){
+  const v = new DataView(buf), u8 = new Uint8Array(buf);
+  if(v.getUint32(0, true) !== 0xE011CFD0 || v.getUint32(4, true) !== 0xE11AB1A1) throw new Error('not an MS Project file');
+  const ss = 1 << v.getUint16(30, true), mss = 1 << v.getUint16(32, true), nFat = v.getUint32(44, true), dir0 = v.getUint32(48, true), miniCut = v.getUint32(56, true), mf0 = v.getUint32(60, true), difat0 = v.getUint32(68, true);
+  const off = s => (s + 1) * ss;
+  const fatSecs = []; for(let i = 0; i < 109 && fatSecs.length < nFat; i++){ const s = v.getUint32(76 + i * 4, true); if(s < 0xFFFFFFFA) fatSecs.push(s); }
+  for(let d = difat0, guard = 0; d < 0xFFFFFFFA && fatSecs.length < nFat && guard++ < 10000; ){ const per = ss / 4 - 1; for(let i = 0; i < per && fatSecs.length < nFat; i++){ const s = v.getUint32(off(d) + i * 4, true); if(s < 0xFFFFFFFA) fatSecs.push(s); } d = v.getUint32(off(d) + per * 4, true); }
+  const fat = new Uint32Array(fatSecs.length * ss / 4); fatSecs.forEach((s, i) => { for(let k = 0; k < ss / 4; k++) fat[i * ss / 4 + k] = v.getUint32(off(s) + k * 4, true); });
+  const chain = (s, tbl) => { const out = []; let g = 0; while(s < 0xFFFFFFFA && g++ < 1e6){ out.push(s); s = tbl[s]; } return out; };
+  const readBig = (s, size) => { const out = new Uint8Array(size); let p = 0; for(const c of chain(s, fat)){ const n = Math.min(ss, size - p); if(n <= 0) break; out.set(u8.subarray(off(c), off(c) + n), p); p += n; } return out; };
+  const dirBytes = readBig(dir0, chain(dir0, fat).length * ss), dv = new DataView(dirBytes.buffer);
+  const ents = []; for(let i = 0; i * 128 < dirBytes.length; i++){ const o = i * 128, nl = dv.getUint16(o + 64, true); let name = ''; for(let k = 0; k < Math.max(0, nl / 2 - 1); k++) name += String.fromCharCode(dv.getUint16(o + k * 2, true));
+    ents.push({name, type: dirBytes[o + 66], left: dv.getUint32(o + 68, true), right: dv.getUint32(o + 72, true), child: dv.getUint32(o + 76, true), start: dv.getUint32(o + 116, true), size: dv.getUint32(o + 120, true)}); }
+  const root = ents[0], mini = root.start < 0xFFFFFFFA ? readBig(root.start, root.size) : new Uint8Array(0);
+  const mfat = mf0 < 0xFFFFFFFA ? new Uint32Array(readBig(mf0, chain(mf0, fat).length * ss).buffer) : new Uint32Array(0);
+  const read = e => { if(e.size < miniCut){ const out = new Uint8Array(e.size); let p = 0; for(const c of chain(e.start, mfat)){ const n = Math.min(mss, e.size - p); if(n <= 0) break; out.set(mini.subarray(c * mss, c * mss + n), p); p += n; } return out; } return readBig(e.start, e.size); };
+  const kids = e => { const out = [], walk = i => { if(i >= ents.length || i === 0xFFFFFFFF) return; const c = ents[i]; walk(c.left); out.push(c); walk(c.right); }; walk(e.child); return out; };
+  const find = path => { let e = root; for(const nm of path.split('/')){ e = kids(e).find(k => k.name === nm); if(!e) return null; } return e; };
+  return {stream: path => { const e = find(path); return e && e.type === 2 ? read(e) : null; }};
+}
+function parseMPP(buf){
+  const cf = cfbOpen(buf), D = '   114/';
+  const S = n => cf.stream(D + n);
+  if(!S('Props')) throw new Error('this .mpp is from an old MS Project version — save it in MS Project 2010 or newer, or as XML');
+  const dv = b => new DataView(b.buffer, b.byteOffset, b.byteLength), i32 = (b, o) => dv(b).getInt32(o, true), u16 = (b, o) => dv(b).getUint16(o, true);
+  // project properties → task field map (where each field sits in the fixed data)
+  const pb = S('Props'), props = {}; { const hc = u16(pb, 12); let p = 16, n = 0; while(n < hc && pb.length - p >= 12){ const a1 = i32(pb, p), a2 = i32(pb, p + 4); p += 12; if(a1 < 1 || pb.length - p < a1) break; props[a2] = pb.subarray(p, p + a1); p += a1 + (a1 % 2); n++; } }
+  const fmap = props[131092] || props[50331668]; if(!fmap) throw new Error('could not find the task list in this file');
+  const F = {}, mx = [0, 0]; { let blk = 0, last = 0; for(let i = 0; i + 28 <= fmap.length; i += 28){ const off = u16(fmap, i + 4), typ = i32(fmap, i + 12) & 0xFFFF, cat = u16(fmap, i + 20);
+    if(cat === 11 || cat === 100 || off === 65535) continue; if(off < last) blk++; last = off; const b = Math.min(blk, 1); mx[b] = Math.max(mx[b], off + 8); F[typ] = [b, off]; } }
+  const T = n => S('TBkndTask/' + n), fm = T('FixedMeta'), fd = T('FixedData'), f2m = T('Fixed2Meta'), f2d = T('Fixed2Data'), vm = T('VarMeta'), vd = T('Var2Data');
+  if(!fm || !fd || !vm || !vd) throw new Error('could not find the task list in this file');
+  const metaItems = (b, sz) => { const n = Math.floor((b.length - 16) / sz), out = []; for(let i = 0; i < n; i++) out.push(b.subarray(16 + i * sz, 16 + (i + 1) * sz)); return out; };
+  const fdata = (M, buf, maxsize) => M.map((m, i) => { const off = i32(m, 4); if(off < 0 || off > buf.length) return null; let size = i + 1 === M.length ? buf.length - off : i32(M[i + 1], 4) - off; const avail = buf.length - off;
+    if(size < 0 || size > avail) size = maxsize ? Math.min(maxsize, avail) : avail; if(maxsize && size > maxsize) size = maxsize; return size > 0 ? buf.subarray(off, off + size) : null; });
+  const M1 = metaItems(fm, 47), D1 = fdata(M1, fd, mx[0]);
+  let D2 = []; if(f2m && f2d){ const av = f2m.length - 16; let isz = 92; for(const t of [92, 93, 94, 95, 96]) if(av % t === 0 && av / t === D1.length){ isz = t; break; } D2 = fdata(metaItems(f2m, isz), f2d, 0); }
+  const vt = {}; { const cnt = i32(vm, 8); let p = 24; for(let k = 0; k < cnt && p + 12 <= vm.length; k++, p += 12){ const uid = i32(vm, p), off = i32(vm, p + 4), typ = u16(vm, p + 8); (vt[uid] = vt[uid] || {})[typ] = off; } }
+  const name = uid => { const off = (vt[uid] || {})[14]; if(off == null || off + 4 > vd.length) return ''; const sz = i32(vd, off), b = vd.subarray(off + 4, off + 4 + sz); let s = ''; for(let i = 0; i + 1 < b.length; i += 2){ const c = u16(b, i); if(!c) break; s += String.fromCharCode(c); } return s; };
+  const ts = (b, o) => { const days = u16(b, o + 2); if(days <= 1 || days === 65535) return ''; const z = new Date(Date.UTC(1983, 11, 31) + days * 864e5); return z.toISOString().slice(0, 10); };
+  const fx = (d, d2, k, fn) => { const L = F[k]; if(!L) return null; const src = L[0] === 0 ? d : d2; return src && L[1] + 4 <= src.length ? fn(src, L[1]) : null; };
+  const seen = {}, out = [];
+  for(let loop = D1.length - 1; loop > 2; loop--){ const d = D1[loop], d2 = D2[loop] || null; if(!d) continue; const flags = i32(M1[loop], 0);
+    if((flags & 2) || d.length === 16 || (mx[0] && Math.floor(d.length * 100 / mx[0]) <= 75)) continue;
+    const uid = fx(d, d2, 86, i32); if(uid == null || seen[uid]) continue; seen[uid] = 1;
+    const nm = name(uid); if(!nm) continue;
+    out.push({id: fx(d, d2, 23, i32), lvl: fx(d, d2, 249, u16) || 0, name: nm.trim(), dur: Math.round((fx(d, d2, 29, i32) || 0) / 600 / 8 * 100) / 100, pc: fx(d, d2, 32, u16) || 0,
+      s: fx(d, d2, 1283, ts) || fx(d, d2, 35, ts) || '', f: fx(d, d2, 1284, ts) || fx(d, d2, 36, ts) || ''}); }
+  out.sort((a, b) => a.id - b.id);
+  out.forEach((t, i) => { t.sum = !!(out[i + 1] && out[i + 1].lvl > t.lvl); });
+  const title = (out.find(t => t.lvl === 0) || {}).name || '';
+  const tasks = out.filter(t => t.lvl >= 1 && t.s && t.f).map(({id, ...t}) => t);
+  if(!tasks.length || tasks.some(t => t.pc > 100 || t.lvl > 30)) throw new Error('could not read the tasks in this .mpp — save it as XML in MS Project and import that');
+  return {title, statusDate: '', tasks};
+}
+
+// MS Project saved as XML (also accepted)
 function parseMSPDI(text){
   const dom = new DOMParser().parseFromString(text, 'application/xml');
   if(dom.getElementsByTagName('parsererror').length) throw new Error('not a readable XML file');
@@ -4032,20 +4089,19 @@ function programmeForm(pid){
     ${g ? `<div class="card pad" style="margin-bottom:12px"><b>${esc(g.file || g.title || 'Programme')}</b><div class="small muted">${progLeaves(g).length} activities · ${esc(fmtDate(g.tasks[0]?.s))} – ${esc(fmtDate(g.tasks.reduce((m, t) => t.f > m ? t.f : m, '')))} · progress as at ${esc(fmtDate(g.asAt))}: <b>${esc(String(progActual(g)))}%</b> actual, ${esc(String(Math.round(progPlanAt(g, g.asAt))))}% scheduled</div>
       ${hist.length > 1 ? `<div class="small muted" style="margin-top:6px">Actual % by date: ${hist.map(([d, v]) => esc(progDMY(d)) + ' ' + esc(String(v)) + '%').join(' · ')}</div>` : ''}</div>` : '<p class="small muted" style="margin-top:0">No work programme yet.</p>'}
     <p class="small" style="margin:0 0 8px">Every progress report then gets the <b>schedule %</b> for each S-curve date from the programme, the <b>actual %</b> (% complete in MS Project) for its period, the <b>1-week forecast</b> and the status of activities that match the progress summary.</p>
-    <div class="fld"><label>MS Project file saved as XML <em>*</em></label><input type="file" id="pgFile" accept=".xml,text/xml,application/xml" multiple>
-      <div class="hint">In MS Project: <b>File › Save As › "XML Format (*.xml)"</b>. An .mpp file can't be read on a phone or in a browser. Update the % complete in MS Project each week and import it again — choose several files at once to add earlier weeks.</div></div>
+    <div class="fld"><label>MS Project file (.mpp) <em>*</em></label><input type="file" id="pgFile" accept=".mpp,.xml,application/vnd.ms-project,text/xml,application/xml" multiple>
+      <div class="hint">The work programme file as it is (.mpp, MS Project 2010 or newer). Update the % complete in MS Project each week and upload it again — choose several files at once to add earlier weeks.</div></div>
     <div class="fld"><label>Progress as at</label><input type="date" id="pgAsAt"><div class="hint">Leave empty to take it from the file name (e.g. WP_Axis_151126 → 15/11/2026).</div></div>
     <div id="pgMsg" class="small muted"></div>
     <div class="row" style="margin-top:10px"><div class="sp"></div><button class="btn pri" data-act="pgsave" data-p="${esc(pid)}">Import</button></div></div></div>`);
 }
 async function programmeSave(pid, btn){
   const p = projById(pid); if(!p) return; const files = [...($('#pgFile')?.files || [])], asAt0 = $('#pgAsAt')?.value || '', msg = $('#pgMsg');
-  if(!files.length){ toast('Choose the MS Project XML file.', true); return; }
-  if(files.some(f => /\.mpp$/i.test(f.name))){ toast('That is an .mpp file — in MS Project use File › Save As › XML Format, then choose the .xml file.', true); return; }
+  if(!files.length){ toast('Choose the MS Project file (.mpp).', true); return; }
   btn.disabled = true;
   try {
     const got = [];
-    for(const f of files){ const g = parseMSPDI(await f.text()); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); g.asAt = files.length === 1 && asAt0 ? asAt0 : progAsAt(g.file, g); got.push(g); }
+    for(const f of files){ const g = /\.xml$/i.test(f.name) ? parseMSPDI(await f.text()) : parseMPP(await f.arrayBuffer()); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); g.asAt = files.length === 1 && asAt0 ? asAt0 : progAsAt(g.file, g); got.push(g); }
     got.sort((a, b) => a.asAt.localeCompare(b.asAt));
     const hist = {...(p.progHist || {})}; got.forEach(g => hist[g.asAt] = progActual(g));
     const last = got[got.length - 1], keep = !p.programme || last.asAt >= (p.programme.asAt || '');
@@ -4875,7 +4931,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z79';
+const APP_VER = 'Z80';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
