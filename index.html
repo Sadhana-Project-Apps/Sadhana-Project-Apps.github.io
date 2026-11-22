@@ -3528,7 +3528,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Wisma Kemajuan: import past progress reports (Word) — the next one carries on</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Wisma Kemajuan S-curve: schedule fills itself, type only the actual %</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3994,6 +3994,45 @@ function docView(id){
 }
 
 /* ---------- EDITOR ---------- */
+/* ---------- client S-curve (Wisma Kemajuan): cut-off dates = project start, every Sunday, 1st and last day of each month, completion.
+   Schedule % comes from the programme points already in the table (straight line between them); actual % of the report's cut-off row = "Actual progress". ---------- */
+function scDate(t, prev, next){   // "dd/mm/yyyy" → ISO; fixes slips like 31/11 (→ 31/10) or 27/12/2027 between 2026 dates
+  const m = String(t || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(!m) return '';
+  let d = +m[1], mo = +m[2], y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+  const ok = (y, mo, d) => { const z = new Date(y, mo - 1, d); return z.getFullYear() === y && z.getMonth() === mo - 1 && z.getDate() === d; };
+  const iso = (y, mo, d) => `${y}-${pad2(mo)}-${pad2(d)}`;
+  if(!ok(y, mo, d)){ if(mo > 1 && ok(y, mo - 1, d)) mo--; else return ''; }
+  let v = iso(y, mo, d);
+  if(prev && next && (v < prev || v > next)){ for(const yy of [y - 1, y + 1]) if(ok(yy, mo, d)){ const w = iso(yy, mo, d); if(w >= prev && w <= next){ v = w; break; } } }
+  return v;
+}
+function scCutDates(start, end){
+  const out = new Set([start, end]); let t = start;
+  while(t <= end){ const z = new Date(t + 'T00:00:00'); if(z.getDay() === 0 || z.getDate() === 1 || addDays(t, 1).slice(8) === '01') out.add(t); t = addDays(t, 1); }
+  return [...out].filter(x => x >= start && x <= end).sort();
+}
+function syncAxisScurve(d){
+  const x = d.data, p = projById(d.projectId) || {}; if(!Array.isArray(x.scurve)) return false;
+  const rows = x.scurve.filter(r => r && !isEmpty(r.date));
+  // read the existing points (order of the table) with their real dates
+  const raw = rows.map(r => scDate(r.date)), pts = [];
+  rows.forEach((r, i) => { const prev = raw.slice(0, i).filter(Boolean).pop(), next = raw.slice(i + 1).find(Boolean); const iso = scDate(r.date, prev, next); if(iso) pts.push({iso, sched: r.sched, actual: r.actual}); });
+  const start = p.start || (pts[0] && pts[0].iso), end = p.end || (pts.length && pts[pts.length - 1].iso); if(!start || !end || start >= end) return false;
+  const S0 = pts.filter(q => !isEmpty(q.sched)).sort((a, b) => a.iso.localeCompare(b.iso)); if(S0.length < 2) return false;
+  const days = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
+  const schedAt = t => { const ex = S0.find(q => q.iso === t); if(ex) return String(numv(ex.sched));
+    let a = null, b = null; S0.forEach(q => { if(q.iso <= t) a = q; if(q.iso >= t && !b) b = q; });
+    if(!a) return String(numv(b.sched)); if(!b) return String(numv(a.sched));
+    return String(Math.round(numv(a.sched) + (numv(b.sched) - numv(a.sched)) * days(a.iso, t) / Math.max(1, days(a.iso, b.iso)))); };
+  const act = {}; pts.forEach(q => { if(!isEmpty(q.actual)) act[q.iso] = String(q.actual); });
+  const cut = scCutDates(start, end), rowAt = x.to ? cut.find(t => t >= x.to) : null;
+  if(x._scRow && x._scRow !== rowAt && act[x._scRow] === String(x.actual)) delete act[x._scRow];
+  if(rowAt && !isEmpty(x.actual)) act[rowAt] = String(x.actual); x._scRow = rowAt || '';
+  const dm = t => `${pad2(+t.slice(8))}/${t.slice(5, 7)}/${t.slice(0, 4)}`;
+  x.scurve = cut.map(t => ({date: dm(t), sched: schedAt(t), actual: act[t] || ''}));
+  if(rowAt) x.planned = schedAt(rowAt);
+  return true;
+}
 function newDraft(pid, type){
   const fmt0 = projFmt(pid, type), T = buildType(type, fmt0), data = {};
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
@@ -4057,7 +4096,8 @@ function newDraft(pid, type){
       if(Array.isArray(L.scurve) && L.scurve.some(r => r && r.date)){ data.scurve = clone(L.scurve);
         const iso = t => { const m = String(t || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(+m[2])}-${pad2(+m[1])}` : ''; };
         const r = data.scurve.filter(r => r && iso(r.date) >= data.to && !isEmpty(r.sched)).sort((a, b) => iso(a.date).localeCompare(iso(b.date)))[0];
-        if(r && isEmpty(data.planned)) data.planned = String(r.sched); }
+        if(r && isEmpty(data.planned)) data.planned = String(r.sched);
+        if(T.coverStyle === 'axis'){ data.actual = ''; syncAxisScurve({projectId: pid, data}); } }
       if(Array.isArray(L.issues) && L.issues.some(r => r && (r.issue || r.desc))) data.issues = clone(L.issues);
       if(Array.isArray(L.lookahead) && L.lookahead.some(r => r && r.desc)) data.lookahead = clone(L.lookahead);
       if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; } }
@@ -4744,7 +4784,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z74';
+const APP_VER = 'Z75';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6472,6 +6512,8 @@ document.addEventListener('input', e => {
     // daily report: weather "No work (weather)" for the whole day (AM and PM) = No work, reason rain / bad weather
     if(S.draft.type === 'DSR' && (t.dataset.f === 'weatherAM' || t.dataset.f === 'weatherPM')){ const x = S.draft.data;
       if(x.weatherAM === 'No work (weather)' && x.weatherPM === 'No work (weather)' && x.status !== 'No work'){ x.status = 'No work'; if(!x.noWorkWhy) x.noWorkWhy = 'Rain / bad weather'; toast('Set to "No work" — no photos needed. Write the details of no work.'); } }
+    if(S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && ['actual', 'to', 'from'].includes(t.dataset.f) && syncAxisScurve(S.draft)){
+      rerenderEditorField('scurve'); const pe = document.querySelector('[data-f="planned"]'); if(pe && pe !== t) pe.value = S.draft.data.planned || ''; }
     refreshAutos();
     // a choice that shows / hides other parts of the form (e.g. "No work", "Quantity only", SST): redraw the form in place
     { const wf = TT(S.draft).fields.filter(f => f.when), sig = wf.map(f => shown(f, S.draft.data) ? 1 : 0).join('');
