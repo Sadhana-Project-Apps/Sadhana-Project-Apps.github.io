@@ -3532,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manhours: whole weeks Mon–Sun, month change and fortnightly reports counted</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manhours: TOTAL YTD column shows this week only</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4936,7 +4936,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z84';
+const APP_VER = 'Z85';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5826,10 +5826,10 @@ async function axisPR(d){
       body: [[lt, b('Lost Time Injury (LTI)'), ...Array.from({length: 6}, (_, w) => ({content: wv(0, w) || '0', styles: {halign: 'center'}})), g(big(lti))],
         [rc, b('Incidents Record'), ...Array.from({length: 6}, (_, w) => ({content: wv(1, w) || '0', styles: {halign: 'center'}})), g(big(inc))],
         [{content: '', rowSpan: 7}, {content: 'MANHOURS:', colSpan: 8, styles: {fontStyle: 'bold', halign: 'center'}}],
-        [b('Total Manhours Weekly'), ...Array.from({length: 6}, (_, w) => ({content: wv(2, w), styles: {halign: 'center'}})), g(big(mhCur))],
+        [b('Total Manhours Weekly'), ...Array.from({length: 6}, (_, w) => ({content: wv(2, w), styles: {halign: 'center'}})), g(big(numv(wv(2, cur))))],
         [{content: 'B/F from Previous\nManhours', styles: {fontStyle: 'bold', minCellHeight: 15.5}}, blank6, {content: big(bfMh), styles: {halign: 'center', valign: 'middle'}}],
         [b('Total Manhours YTD ' + year), blank6, o(big(bfMh + mhCur))],
-        [b('Safe Workdays'), ...Array.from({length: 6}, (_, w) => ({content: wv(3, w), styles: {halign: 'center'}})), g(big(sfCur))],
+        [b('Safe Workdays'), ...Array.from({length: 6}, (_, w) => ({content: wv(3, w), styles: {halign: 'center'}})), g(big(numv(wv(3, cur))))],
         [{content: 'B/F from Previous Total\nSafe Workdays', styles: {fontStyle: 'bold'}}, blank6, {content: big(bfSf), styles: {halign: 'center', valign: 'middle'}}],
         [b('Total Safe Workdays'), blank6, o(big(bfSf + sfCur))]],
       columnStyles: {0: {cellWidth: 52.6}, 1: {cellWidth: 52.6}, 2: {cellWidth: 14.3}, 3: {cellWidth: 14.2}, 4: {cellWidth: 14.6}, 5: {cellWidth: 15}, 6: {cellWidth: 15.3}, 7: {cellWidth: 14.3}, 8: {cellWidth: 36.3}},
@@ -6054,10 +6054,10 @@ async function axisDocx(d){
       R([C(lt, w[0], o), C('Lost Time Injury (LTI)', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(0, i) || '0', x, {...o, align: ct})), gC(String(sum(0)), w[8])]),
       R([C(rc, w[0], o), C('Incidents Record', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(1, i) || '0', x, {...o, align: ct})), gC(String(sum(1)), w[8])]),
       R([C('', w[0], {rs: 7}), C('MANHOURS:', w[1] + wk.reduce((a, b) => a + b, 0) + w[8], {span: 8, bold: true, align: ct})]),
-      R([C('Total Manhours Weekly', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(2, i), x, {...o, align: ct})), gC(String(mhCur), w[8])]),
+      R([C('Total Manhours Weekly', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(2, i), x, {...o, align: ct})), gC(String(numv(wv(2, cur))), w[8])]),
       R([C('B/F from Previous\nManhours', w[1], {...o, bold: true}), blank, C(String(bfMh), w[8], {align: ct})], {h: 13}),
       R([C('Total Manhours YTD ' + year, w[1], {...o, bold: true}), blank, oC(String(bfMh + mhCur), w[8])]),
-      R([C('Safe Workdays', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(3, i), x, {...o, align: ct})), gC(String(sfCur), w[8])]),
+      R([C('Safe Workdays', w[1], {...o, bold: true}), ...wk.map((x, i) => C(wv(3, i), x, {...o, align: ct})), gC(String(numv(wv(3, cur))), w[8])]),
       R([C('B/F from Previous Total\nSafe Workdays', w[1], {...o, bold: true}), blank, C(String(bfSf), w[8], {align: ct})]),
       R([C('Total Safe Workdays', w[1], {...o, bold: true}), blank, oC(String(bfSf + sfCur), w[8])])])); }
 
