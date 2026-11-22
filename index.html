@@ -811,6 +811,8 @@ const TYPES = {
     dateField: 'to',
     fields: [
       {sec:'Reporting period', pdf:false},
+      {k:'_word', l:'', t:'draftbtn', act:'prword', btn:'📄 Already prepared in Word? Upload it to fill this report', pdf:false},
+      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📈 Upload the MS Project file (.mpp) — schedule %, actual %, forecast', pdf:false},
       {k:'period', l:'Report type', t:'select', req:1, o:['Weekly','Fortnightly','Monthly'], w:'half', def:'Weekly', pdf:false},
       {k:'reportNo', l:'Report no.', t:'text', w:'half', ph:'e.g. 1', pdf:false},
       {k:'from', l:'Period from', t:'date', req:1, w:'half', pdf:false},
@@ -3532,7 +3534,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manhours: TOTAL YTD column shows this week only</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Progress report: upload a Word report or .mpp inside the report to fill it</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4936,7 +4938,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z85';
+const APP_VER = 'Z86';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6435,6 +6437,8 @@ document.addEventListener('click', async e => {
     case 'chkupd': manualUpdate(el); break;
     case 'programme': programmeForm(el.dataset.p); break;
     case 'pgsave': programmeSave(el.dataset.p, el); break;
+    case 'prword': prPick('.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', prFromWord); break;
+    case 'prmpp': prPick('.mpp,.xml,application/vnd.ms-project,text/xml', prFromMPP); break;
     case 'pgapply': { if(!S.draft) break; const n = applyProgramme(S.draft, {force: true}); S.dirty = true; render(); toast(n ? 'Updated from the work programme — please check' : 'Nothing to update from the work programme', !n); break; }
     case 'viewas': if(el.dataset.r === 'sub') viewAsSubForm(); else setViewAs(el.dataset.r ? {role: el.dataset.r} : null); break;
     case 'viewassub': { const ps = [...document.querySelectorAll('[data-vap]:checked')].map(x => x.dataset.vap); if(!ps.length){ toast('Tick at least one project.', true); break; }
@@ -7433,6 +7437,48 @@ function axisImportToPR(pid, o, file){
   delete x.mhPeriod; delete x.sfPeriod;   // its manhours are the ones in the submitted report
   x._import = {file: file.name, writer: o.writer || '', designation: o.designation || '', at: new Date().toISOString(), by: S.me || null};
   return d;
+}
+// ---------- inside a progress report: fill it from a report already prepared in Word, or from the MS Project file ----------
+function prPick(accept, cb){ const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = false; i.onchange = () => { const f = i.files && i.files[0]; if(f) cb(f); }; i.click(); }
+async function prFromWord(file){
+  const d = S.draft; if(!d || d.type !== 'PR') return;
+  let o; try { toast('Reading ' + file.name + '…'); o = await parseAxisPRDocx(file); } catch(e){ toast('Could not read that Word file: ' + (e.message || 'unknown format'), true); return; }
+  const x = d.data, T = TT(d), axis = T.coverStyle === 'axis';
+  Object.assign(x, {reportNo: o.reportNo || x.reportNo, from: o.from || x.from, to: o.to || x.to});
+  if(o.from) x.period = o.bi ? 'Fortnightly' : (x.period || 'Weekly'); x.cutoff = x.to;
+  if(!isEmpty(o.planned)) x.planned = o.planned; if(!isEmpty(o.actual)) x.actual = o.actual;
+  if(o.scurve.length) x.scurve = o.scurve;
+  ['mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'issues'].forEach(k => { if(o[k].length) x[k] = o[k]; });
+  if(o.mp || o.mc){ const m = x.to.slice(0, 7), last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate(); x.gridFrom = m + '-01'; x.gridTo = m + '-' + pad2(last);
+    const put = (key, rows) => { if(!rows) return; const have = (x[key] || []).filter(r => r && r.name).map(r => { const z = {name: r.name}; return z; });
+      rows.forEach(r => { const z = have.find(h => h.name.toLowerCase() === r.name.toLowerCase()); if(z) Object.assign(z, r, {name: z.name}); else have.push({...r, name: r.name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bAnd\b/g, 'and')}); });
+      x[key] = have; };
+    put('manpower', o.mp); put('machinery', o.mc); }
+  if(o.hse){ x.hseW = HSEW_ROWS.map((item, i) => { const r = {item}; (o.hse.w[i] || []).forEach((v, w) => { if(!isEmpty(v)) r['w' + (w + 1)] = v; }); return r; }); if(!isEmpty(o.hse.bf[0])) x.bfMh = o.hse.bf[0]; if(!isEmpty(o.hse.bf[1])) x.bfSafe = o.hse.bf[1]; }
+  // pictures: cover, key plan, progress photos
+  const up = async p => { const b = await o.img(p); if(!b) return null; try { return (await S.assets.upload(await compress(b))).id; } catch(e){ return null; } };
+  const cv = await up(o.cover); if(cv) x.coverPhoto = [{id: cv}];
+  const pl = await up(o.plan); if(pl) x.byLevelPlan = [{id: pl}];
+  if(o.photos.length){ const ph = []; for(let i = 0; i < o.photos.length; i++){ if(i % 3 === 0) toast(`Photos ${i + 1}–${Math.min(i + 3, o.photos.length)} of ${o.photos.length}…`); const id = await up(o.photos[i].path); if(id) ph.push({id, caption: o.photos[i].caption || ''}); } x.photosAfter = ph; }
+  if(axis){ if(o.mp) axisHseFromGrid(x); syncAxisScurve(d); }
+  x._fromWord = {file: file.name.replace(/^[0-9a-f]{8}-/i, ''), at: new Date().toISOString(), by: S.me || null};
+  S.dirty = true; render();
+  toast(`Filled from ${x._fromWord.file} — report No.${x.reportNo || '?'}, ${o.photos.length} photo${o.photos.length === 1 ? '' : 's'}. Check it, then save.`);
+}
+async function prFromMPP(file){
+  const d = S.draft; if(!d || d.type !== 'PR') return;
+  let g; try { g = /\.xml$/i.test(file.name) ? parseMSPDI(await file.text()) : parseMPP(await file.arrayBuffer()); } catch(e){ toast(e.message || 'Could not read that MS Project file', true); return; }
+  g.file = file.name.replace(/^[0-9a-f]{8}-/i, ''); const nm = progAsAt(g.file, g); g.asAt = /(\d{6})/.test(g.file) ? nm : (d.data.to || nm);
+  const p = projById(d.projectId) || {}, hist = {...(p.progHist || {}), [g.asAt]: progActual(g)};
+  // staff keep it with the project (next reports use it too); a sub-contractor's upload fills only this report
+  let saved = false;
+  if(!S.isSub){ try { const upd = {progHist: hist, ...(!p.programme || g.asAt >= (p.programme.asAt || '') ? {programme: {...g, importedAt: new Date().toISOString(), by: S.me || null}} : {})}; await S.db.doc('projects/' + d.projectId).update(upd); Object.assign(p, upd); saved = true; } catch(e){ console.warn(e); } }
+  const keep = {programme: p.programme, progHist: p.progHist};
+  if(!saved){ p.programme = g; p.progHist = hist; }
+  const n = applyProgramme(d, {force: true});
+  if(!saved){ p.programme = keep.programme; p.progHist = keep.progHist; }
+  S.dirty = true; render();
+  toast(`${g.file}: ${progActual(g)}% complete as at ${fmtDate(g.asAt)} — ${n ? 'schedule %, actual %, forecast updated' : 'nothing to update for this period'}${saved ? '; kept for the next reports too' : ''}.`, !n);
 }
 async function importAxisPRs(pid, files){
   const p = projById(pid); if(!p) return;
