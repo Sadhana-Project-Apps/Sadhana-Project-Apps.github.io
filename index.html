@@ -1827,7 +1827,7 @@ const PROJECT_PRESETS = [{
   PR: {coverStyle: 'axis', endLine: '--- END OF WEEKLY PROGRESS REPORT ---', gridMonth: 1,
     sigs: [{role: 'Prepared by', hint: 'Site Engineer'}],
     show: ['sec:Design & Analysis – Progress by Level', 'byLevel', 'byLevelPlan', 'hseW', 'bfMh', 'bfSafe'],
-    hide: ['sec:Weather Report', 'photosBefore', 'remarks', 'sec:Work Programme', 'hse'],
+    hide: ['sec:Weather Report', 'photosBefore', 'remarks', 'sec:Work Programme', 'hse', 'wp', 'cutoff', '_gen', 'timeElapsed'],
     pdfHide: ['wp', 'cutoff', 'timeElapsed'],
     labels: {'sec:Progress Summary – Main Works': 'Progress Summary', 'sec:Progress Summary – Other Works': 'Progress Summary (Others)', 'sec:Look-Ahead (Next Period)': '1 Week Forecast',
       'sec:Major Issues Affecting Progress': 'Schedule of Major Issues that Might Affect the Progress of Work', 'sec:Plant & Machinery at Site': 'Machinery at Site', 'sec:Safety Statistics & Manhours': 'Manhours',
@@ -3532,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Work programme: upload the MS Project .mpp file directly</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Progress report: same cover photo, actual % fills both places</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4150,6 +4150,7 @@ function scCutDates(start, end){
   while(t <= end){ const z = new Date(t + 'T00:00:00'); if(z.getDay() === 0 || z.getDate() === 1 || addDays(t, 1).slice(8) === '01') out.add(t); t = addDays(t, 1); }
   return [...out].filter(x => x >= start && x <= end).sort();
 }
+function scCutRow(x){ const rows = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso && x.to && o.iso >= x.to).sort((a, b) => a.iso.localeCompare(b.iso)); return rows[0] || null; }
 function syncAxisScurve(d){
   const x = d.data, p = projById(d.projectId) || {}; if(!Array.isArray(x.scurve)) return false;
   const rows = x.scurve.filter(r => r && !isEmpty(r.date));
@@ -4241,6 +4242,7 @@ function newDraft(pid, type){
         if(r && isEmpty(data.planned)) data.planned = String(r.sched);
         if(T.coverStyle === 'axis'){ data.actual = ''; syncAxisScurve({projectId: pid, data}); } }
       if(Array.isArray(L.issues) && L.issues.some(r => r && (r.issue || r.desc))) data.issues = clone(L.issues);
+      if(T.coverStyle === 'axis' && Array.isArray(L.coverPhoto) && L.coverPhoto.length) data.coverPhoto = clone(L.coverPhoto);
       if(Array.isArray(L.lookahead) && L.lookahead.some(r => r && r.desc)) data.lookahead = clone(L.lookahead);
       if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; }
     if((projById(pid) || {}).programme){ const dd = {projectId: pid, type: 'PR', data, fmt: fmt0}; if(T.coverStyle === 'axis' && !(data.scurve || []).some(r => r && r.date)) data.scurve = [{}]; applyProgramme(dd); } }
@@ -4931,7 +4933,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z80';
+const APP_VER = 'Z81';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6662,7 +6664,7 @@ document.addEventListener('input', e => {
     // daily report: weather "No work (weather)" for the whole day (AM and PM) = No work, reason rain / bad weather
     if(S.draft.type === 'DSR' && (t.dataset.f === 'weatherAM' || t.dataset.f === 'weatherPM')){ const x = S.draft.data;
       if(x.weatherAM === 'No work (weather)' && x.weatherPM === 'No work (weather)' && x.status !== 'No work'){ x.status = 'No work'; if(!x.noWorkWhy) x.noWorkWhy = 'Rain / bad weather'; toast('Set to "No work" — no photos needed. Write the details of no work.'); } }
-    if(S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && ['actual', 'to', 'from'].includes(t.dataset.f) && syncAxisScurve(S.draft)){
+    if(S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && ['actual', 'to', 'from'].includes(t.dataset.f) && (syncAxisScurve(S.draft) || (t.dataset.f === 'actual' && (() => { const c = scCutRow(S.draft.data); if(c) c.r.actual = t.value; return !!c; })()))){
       rerenderEditorField('scurve'); const pe = document.querySelector('[data-f="planned"]'); if(pe && pe !== t) pe.value = S.draft.data.planned || ''; }
     refreshAutos();
     // a choice that shows / hides other parts of the form (e.g. "No work", "Quantity only", SST): redraw the form in place
@@ -6673,6 +6675,8 @@ document.addEventListener('input', e => {
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
     if(t.dataset.col === 'name' && t.getAttribute('list')) pplAutofill(t, rows[i]);
+    if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis'){ const c = scCutRow(S.draft.data);
+      if(c && c.i === i){ S.draft.data.actual = t.value; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = t.value; } }
     refreshAutos(); }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
 });
