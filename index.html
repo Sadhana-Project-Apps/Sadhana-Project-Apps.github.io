@@ -3532,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manhours fill themselves from the manpower at site</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manpower & machinery: one column per day of the report</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4935,7 +4935,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z82';
+const APP_VER = 'Z83';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5776,25 +5776,27 @@ async function axisPR(d){
       body: rows.map((r, i) => [String(i + 1), pt(r.issue || ''), pt(r.desc || ''), pt(r.by || ''), pt(r.status || '')]),
       styles: {...base().styles, minCellHeight: 9.7, valign: 'top'}, columnStyles: {0: {cellWidth: 10.4, halign: 'center'}, 1: {cellWidth: 47.3}, 2: {cellWidth: 39.3}, 3: {cellWidth: 25.4, halign: 'center'}, 4: {cellWidth: 45.2}}}); }
 
-  /* 10 — 8. manpower, 9. machinery (landscape, whole month) */
-  newPage('landscape'); mark('manpower'); mark('machinery');
-  { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', upTo = +toIso.slice(8, 10);
-    const val = (r, day, all) => { const iso = toIso.slice(0, 7) + '-' + pad2(day), i = dayDiff(g0, iso); const v = i >= 0 ? r['d' + i] : ''; return day > upTo && !all ? '' : String(numv(v)); };
+  /* 10 — 8. manpower, 9. machinery: one column per day of the report period + TOTAL (portrait) */
+  newPage(); mark('manpower'); mark('machinery');
+  { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', fromIso = data.from || toIso;
+    const days = []; for(let t = fromIso; t <= toIso && days.length < 14; t = addDays(t, 1)) days.push(t);
+    const val = (r, iso) => { const i = dayDiff(g0, iso), v = i >= 0 && i < 31 ? r['d' + i] : ''; return numv(v) ? String(numv(v)) : ''; };
+    const nameW = 48, totW = 16, dayW = Math.min(15.5, (W() - 2 * M - nameW - totW) / Math.max(1, days.length));
     const grid = (no, label, colLabel, key, y) => {
-      heading(no, label + ' AT SITE (' + monTxt + ')', 13, y);
+      heading(no, label + ' AT SITE', 13, y);
       const rows = (data[key] || []).filter(r => r && !isEmpty(r.name));
-      const all = key === 'machinery', tot = Array.from({length: 31}, (_, i) => rows.reduce((a, r) => a + numv(val(r, i + 1)), 0));
-      const sty = {font: 'helvetica', fontSize: 5.1, textColor: 0, lineColor: 0, lineWidth: 0.15, cellPadding: {top: 0.05, bottom: 0.05, left: 0.3, right: 0.3}, halign: 'center', valign: 'middle', minCellHeight: 2.5};
-      doc.autoTable({theme: 'grid', margin: {left: M, right: M}, startY: y + 8.1, styles: sty,
-        head: [[{content: monTxt.slice(0, 3) + ' (1/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ' - ' + lastDay + '/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ')', colSpan: 32, styles: {fillColor: AX.G, fontStyle: 'bold'}}],
-          [{content: colLabel, styles: {fontStyle: 'bolditalic'}}, ...Array.from({length: 31}, (_, i) => ({content: String(i + 1), styles: {fontStyle: 'bold'}}))]],
-        headStyles: {fillColor: [255, 255, 255], textColor: 0, lineWidth: 0.15, lineColor: 0},
-        body: [...rows.map(r => [name(r.name), ...Array.from({length: 31}, (_, i) => val(r, i + 1, all))]),
-          [{content: 'TOTAL', styles: {halign: 'right', fontStyle: 'bold', fillColor: AX.YT}}, ...tot.map(v => ({content: String(v), styles: {fontStyle: 'bold', fillColor: AX.YT}}))]],
-        columnStyles: {0: {cellWidth: 30.5}, ...Object.fromEntries(Array.from({length: 31}, (_, i) => [i + 1, {cellWidth: 6.39}]))}});
+      const dayTot = days.map(iso => rows.reduce((a, r) => a + numv(val(r, iso)), 0)), rowTot = r => days.reduce((a, iso) => a + numv(val(r, iso)), 0);
+      const sty = {font: 'helvetica', fontSize: 8, textColor: 0, lineColor: [160, 160, 160], lineWidth: 0.2, cellPadding: {top: 1.6, bottom: 1.6, left: 1.5, right: 1.5}, halign: 'center', valign: 'middle', minCellHeight: 7};
+      const B = (c, x = {}) => ({content: c, styles: {fontStyle: 'bold', ...x}});
+      doc.autoTable({theme: 'grid', margin: {left: M, right: M}, startY: y + 8.1, styles: sty, tableWidth: nameW + totW + dayW * days.length,
+        head: [[B(colLabel), ...days.map(iso => B(iso.slice(8, 10) + '/' + iso.slice(5, 7))), B('TOTAL')]],
+        headStyles: {fillColor: AX.G, textColor: 0, lineWidth: 0.2, lineColor: [160, 160, 160], halign: 'center', valign: 'middle'},
+        body: [...rows.map(r => [{content: pt(r.name), styles: {halign: 'left'}}, ...days.map(iso => val(r, iso)), B(String(rowTot(r)))]),
+          [B('TOTAL', {halign: 'left', fillColor: AX.YT}), ...dayTot.map(v => B(String(v), {fillColor: AX.YT})), B(String(dayTot.reduce((a, b) => a + b, 0)), {fillColor: AX.YT})]],
+        columnStyles: {0: {cellWidth: nameW, halign: 'left'}, ...Object.fromEntries(days.map((_, i) => [i + 1, {cellWidth: dayW}])), [days.length + 1]: {cellWidth: totW}}});
       return doc.lastAutoTable.finalY; };
     const e1 = grid(8, 'MANPOWER', 'PERSONNEL', 'manpower', 50);
-    grid(9, 'MACHINERY', 'MACHINERY', 'machinery', Math.max(84.6, e1 + 12)); }
+    grid(9, 'MACHINERY', 'MACHINERY', 'machinery', e1 + 12); }
 
   /* 11 — 10. manhours (landscape) */
   newPage('landscape'); mark('manhours'); heading(10, 'MANHOURS');
@@ -6016,16 +6018,18 @@ async function axisDocx(d){
     A.push(TB(w, [R(['NO', 'ISSUES', 'DESCRIPTION', 'ACTION BY', 'STATUS'].map((h, i) => C(h, w[i], {bold: true, fill: G, align: AlignmentType.CENTER, top: 1})), {head: true, h: 9.7}),
       ...rows.map((r, i) => R([C(String(i + 1), w[0], {align: AlignmentType.CENTER, top: 1}), C(r.issue || '', w[1], {top: 1}), C(r.desc || '', w[2], {top: 1}), C(r.by || '', w[3], {align: AlignmentType.CENTER, top: 1}), C(r.status || '', w[4], {top: 1})], {h: 9.7}))])); }
 
-  /* 8, 9 — landscape: manpower / machinery */
-  { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', upTo = +toIso.slice(8, 10);
-    const val = (r, day, all) => { const iso = toIso.slice(0, 7) + '-' + pad2(day), i = dayDiff(g0, iso); const v = i >= 0 ? r['d' + i] : ''; return day > upTo && !all ? '' : String(numv(v)); };
-    const grid = (key, colLabel) => { const all = key === 'machinery', rows = (data[key] || []).filter(r => r && !isEmpty(r.name)), w = [30.5, ...Array(31).fill(6.39)], o = {size: 10, align: AlignmentType.CENTER, pad: 10};
-      const tot = Array.from({length: 31}, (_, i) => rows.reduce((a, r) => a + numv(val(r, i + 1, all)), 0));
-      return TB(w, [R([C(monTxt.slice(0, 3) + ' (1/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ' - ' + lastDay + '/' + (mon.getMonth() + 1) + '/' + mon.getFullYear() + ')', 228.6, {...o, span: 32, bold: true, fill: G})]),
-        R([C(colLabel, w[0], {...o, bold: true, it: true}), ...Array.from({length: 31}, (_, i) => C(String(i + 1), w[1], {...o, bold: true}))]),
-        ...rows.map(r => R([C(name(r.name), w[0], o), ...Array.from({length: 31}, (_, i) => C(val(r, i + 1, all), w[1], o))])),
-        R([C('TOTAL', w[0], {...o, bold: true, fill: YT, align: AlignmentType.RIGHT}), ...tot.map(v => C(String(v), w[1], {...o, bold: true, fill: YT}))])]); };
-    L.push(HD(8, 'MANPOWER AT SITE (' + monTxt + ')', 26), grid('manpower', 'PERSONNEL'), P('', {after: 300}), HD(9, 'MACHINERY AT SITE (' + monTxt + ')', 26), grid('machinery', 'MACHINERY')); }
+  /* 8, 9 — manpower / machinery: one column per day of the report period + TOTAL */
+  { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', fromIso = data.from || toIso;
+    const days = []; for(let t = fromIso; t <= toIso && days.length < 14; t = addDays(t, 1)) days.push(t);
+    const val = (r, iso) => { const i = dayDiff(g0, iso), v = i >= 0 && i < 31 ? r['d' + i] : ''; return numv(v) ? String(numv(v)) : ''; };
+    const nameW = 48, totW = 16, dayW = Math.min(15.5, (165.1 - nameW - totW) / Math.max(1, days.length)), w = [nameW, ...days.map(() => dayW), totW];
+    const o = {size: 16, align: AlignmentType.CENTER, pad: 60}, ob = {...o, bold: true};
+    const grid = (key, colLabel) => { const rows = (data[key] || []).filter(r => r && !isEmpty(r.name));
+      const dayTot = days.map(iso => rows.reduce((a, r) => a + numv(val(r, iso)), 0)), rowTot = r => days.reduce((a, iso) => a + numv(val(r, iso)), 0);
+      return TB(w, [R([C(colLabel, w[0], {...ob, fill: G}), ...days.map((iso, k) => C(iso.slice(8, 10) + '/' + iso.slice(5, 7), w[k + 1], {...ob, fill: G})), C('TOTAL', totW, {...ob, fill: G})], {head: true, h: 7}),
+        ...rows.map(r => R([C(r.name, w[0], {...o, align: AlignmentType.LEFT}), ...days.map((iso, k) => C(val(r, iso), w[k + 1], o)), C(String(rowTot(r)), totW, ob)], {h: 7})),
+        R([C('TOTAL', w[0], {...ob, fill: YT, align: AlignmentType.LEFT}), ...dayTot.map((v, k) => C(String(v), w[k + 1], {...ob, fill: YT})), C(String(dayTot.reduce((a, b) => a + b, 0)), totW, {...ob, fill: YT})], {h: 7})]); };
+    A.push(HD(8, 'MANPOWER AT SITE', 26, 1), grid('manpower', 'PERSONNEL'), P('', {after: 300}), HD(9, 'MACHINERY AT SITE', 26), grid('machinery', 'MACHINERY')); }
 
   /* 10 — manhours */
   L.push(HD(10, 'MANHOURS', 22, 1));
