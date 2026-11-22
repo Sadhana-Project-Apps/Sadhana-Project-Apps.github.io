@@ -849,10 +849,10 @@ const TYPES = {
       {sec:'Weather Report'},
       {k:'weather', l:'Weather', t:'table', sub:false, sumCols:['rain'], cols:[{k:'date',l:'Date',center:1,pw:26},{k:'am',l:'Morning',center:1},{k:'pm',l:'Afternoon',center:1},{k:'rain',l:'Rain hours',n:1,w:80,pw:24},{k:'remarks',l:'Remarks'}], def: () => []},
       {sec:'Manpower at Site'},
-      {k:'manpower', l:'Manpower', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:31, cols:[{k:'name',l:'Personnel',pw:42}, ...DAY_COLS(31)],
+      {k:'manpower', l:'Manpower', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:38, cols:[{k:'name',l:'Personnel',pw:42}, ...DAY_COLS(38)],
         def: () => MANPOWER_LIST.map(name => ({name}))},
       {sec:'Plant & Machinery at Site'},
-      {k:'machinery', l:'Machinery', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:31, cols:[{k:'name',l:'Machinery',pw:42}, ...DAY_COLS(31)],
+      {k:'machinery', l:'Machinery', t:'table', sub:false, keepRows:1, rowTotal:1, colTotal:1, maxDays:38, cols:[{k:'name',l:'Machinery',pw:42}, ...DAY_COLS(38)],
         def: () => MACHINERY_LIST.map(name => ({name}))},
       {sec:'Safety Statistics & Manhours'},
       {k:'hse', l:'HSE statistics', t:'table', sub:false, keepRows:1, hint:'Previous total comes from the last progress report; total to date is added up automatically.', cols:[{k:'item',l:'HSE statistic'},{k:'prev',l:'Previous total',n:1,w:90,pw:26},{k:'week',l:'This period',n:1,w:90,pw:26},{k:'todate',l:'Total to date',n:1,w:100,pw:26,calc: r => (isEmpty(r.prev) && isEmpty(r.week)) ? '' : String(+(numv(r.prev) + numv(r.week)).toFixed(2))}],
@@ -3532,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manpower & machinery: one column per day of the report</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manhours: whole weeks Mon–Sun, month change and fortnightly reports counted</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4186,7 +4186,8 @@ function newDraft(pid, type){
     if(last && Array.isArray(last.data?.hse) && Array.isArray(data.hse)) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
     if(last && last.data?.hseW && data.hseW){ const lw = axWeek(last.data.to || last.data.from || today()), row = i => numv((last.data.hseW[i] || {})['w' + (lw + 1)]);
-      data.bfMh = String(numv(last.data.bfMh) + row(2)); data.bfSafe = String(numv(last.data.bfSafe) + row(3)); }
+      const pm = isEmpty(last.data.mhPeriod) ? row(2) : numv(last.data.mhPeriod), ps = isEmpty(last.data.sfPeriod) ? row(3) : numv(last.data.sfPeriod);
+      data.bfMh = String(numv(last.data.bfMh) + pm); data.bfSafe = String(numv(last.data.bfSafe) + ps); }
     // the work programme carries over; actual % is refreshed when the S-curve is generated
     const lwp = (last?.data?.wp || []).filter(r => r && String(r.act || '').trim());
     if(lwp.length) data.wp = lwp.map(r => ({act: r.act, start: r.start, finish: r.finish, weight: r.weight, 'actp': r['actp'] || '', _auto: r._auto || ''})); }
@@ -4211,7 +4212,7 @@ function newDraft(pid, type){
     const carry = last ? last.data.works.filter(r => r && r.work && numv(r.pct) < 100).map(r => ({work: r.work, pct: r.pct || ''})) : [];
     if(carry.length) data.works = carry;
   }
-  if(type === 'PR' && T.gridMonth) data.gridFrom = '1';
+  if(type === 'PR' && T.gridMonth) data.gridFrom = '1';   // set to a date once the period is known (below)
   if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); }
     // the next period follows the last report: same length (e.g. Mon–Sat), a Sunday start moves to Monday
     const lp = lastPRof();
@@ -4243,7 +4244,7 @@ function newDraft(pid, type){
         if(T.coverStyle === 'axis'){ data.actual = ''; syncAxisScurve({projectId: pid, data}); } }
       if(Array.isArray(L.issues) && L.issues.some(r => r && (r.issue || r.desc))) data.issues = clone(L.issues);
       if(T.coverStyle === 'axis' && Array.isArray(L.coverPhoto) && L.coverPhoto.length) data.coverPhoto = clone(L.coverPhoto);
-      if(T.coverStyle === 'axis' && data.gridFrom && /^\d{4}-/.test(data.gridFrom)) axisHseFromGrid(data);
+      if(T.coverStyle === 'axis'){ if(!/^\d{4}-/.test(String(data.gridFrom || ''))) data.gridFrom = axGridFrom(data); axisHseFromGrid(data); }
       if(Array.isArray(L.lookahead) && L.lookahead.some(r => r && r.desc)) data.lookahead = clone(L.lookahead);
       if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; }
     if((projById(pid) || {}).programme){ const dd = {projectId: pid, type: 'PR', data, fmt: fmt0}; if(T.coverStyle === 'axis' && !(data.scurve || []).some(r => r && r.date)) data.scurve = [{}]; applyProgramme(dd); } }
@@ -4570,9 +4571,9 @@ function fillFromDailyReports(){
   if(!data.from || !data.to){ toast('Set "Period from" and "Period to" first.', true); return; }
   const T0 = TT(d);
   // client format: manpower / machinery grid covers the whole calendar month of "Period to"
-  if(T0.gridMonth){ const m = data.to.slice(0, 7), last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate(); data.gridFrom = m + '-01'; data.gridTo = m + '-' + String(last).padStart(2, '0'); }
+  if(T0.gridMonth){ const m = data.to.slice(0, 7), last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate(); data.gridFrom = axGridFrom(data); data.gridTo = m + '-' + String(last).padStart(2, '0'); }
   else { delete data.gridFrom; delete data.gridTo; }
-  const allDsr = S.docs.filter(x => x.projectId === d.projectId && x.type === 'DSR' && !x.deleted && x.data?.date && x.data.date <= data.to).sort((a, b) => a.data.date.localeCompare(b.data.date));
+  const allDsr = S.docs.filter(x => x.projectId === d.projectId && x.type === 'DSR' && !x.deleted && x.data?.date && x.data.date <= (T0.gridMonth ? weekEnd(data.to) : data.to)).sort((a, b) => a.data.date.localeCompare(b.data.date));
   const dsr = allDsr.filter(x => x.data.date >= data.from);
   const gridDsr = allDsr.filter(x => x.data.date >= gridStart(data));
   if(!dsr.length && !gridDsr.length){ toast('No daily reports found for this period.', true); return; }
@@ -4935,7 +4936,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z83';
+const APP_VER = 'Z84';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5226,7 +5227,10 @@ const docName = (T, data) => T.nameFn ? swapTypeName(T.code || TYPE_KEYS.find(k 
 function dayLabel(from, i){ if(!from) return 'Day '+(i+1); const d = new Date(from+'T00:00:00'); d.setDate(d.getDate()+i); return pad2(d.getDate())+'/'+pad2(d.getMonth()+1); }
 // the day grid normally starts at "Period from"; a whole-month grid (client format) is kept in gridFrom / gridTo
 // (always the month of "Period to", so changing the period moves the grid with it)
-const gridStart = data => data.gridFrom ? String(data.to || data.gridFrom).slice(0, 7) + '-01' : data.from;
+// a client-format report whose period starts in the previous month keeps those days too (gridFrom = Period from)
+const gridStart = data => { if(!data.gridFrom) return data.from; const m0 = String(data.to || data.gridFrom).slice(0, 7) + '-01'; return /^\d{4}-\d{2}-\d{2}$/.test(data.gridFrom) && data.gridFrom < m0 && data.gridFrom >= addDays(m0, -7) ? data.gridFrom : m0; };
+const axGridFrom = x => { const m0 = String(x.to || '').slice(0, 7) + '-01'; return x.from && x.from < m0 ? x.from : m0; };
+const weekEnd = iso => addDays(iso, (7 - new Date(iso + 'T00:00:00').getDay()) % 7);
 const gridEnd = data => { if(!data.gridFrom) return data.to; const m = String(data.to || data.gridFrom).slice(0, 7); return m + '-' + pad2(new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate()); };
 function periodDays(data, max = 7){ const a = gridStart(data), b = gridEnd(data); if(!a || !b) return max; const n = Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000) + 1; return Math.max(1, Math.min(max, n)); }
 async function letterheadData(){
@@ -5632,9 +5636,13 @@ const HSEW_ROWS = ['Lost Time Injury (LTI)', 'Incidents Record', 'Total Manhours
 // client format: manhours from the "Manpower at site" grid — each week (Mon–Sun, week 1 = from the 1st) = all manpower × 8 h; safe workdays = days with manpower
 function axisHseFromGrid(x){
   if(!x || !x.to || !x.gridFrom) return false;
-  const rows = (x.manpower || []).filter(r => r && !isEmpty(r.name)), g0 = gridStart(x), last = gridEnd(x), cur = axWeek(x.to), tot = [];
-  for(let i = 0; i < 31; i++){ const t = addDays(g0, i); if(t > last) break; tot.push({t, s: rows.reduce((a, r) => a + numv(r['d' + i]), 0)}); }
-  if(!tot.some(o => o.s)) return false;
+  const rows = (x.manpower || []).filter(r => r && !isEmpty(r.name)), g0 = gridStart(x), last = gridEnd(x), cur = axWeek(x.to), m0 = x.to.slice(0, 7) + '-01', all = [];
+  for(let i = 0; i < 38; i++){ const t = addDays(g0, i); if(t > last) break; all.push({t, s: rows.reduce((a, r) => a + numv(r['d' + i]), 0)}); }
+  if(!all.some(o => o.s)) return false;
+  // this report's own manhours: every day from "Period from" to the Sunday that ends its last week (added to B/F for the YTD)
+  const per = all.filter(o => o.t >= (x.from || m0) && o.t <= weekEnd(x.to));
+  x.mhPeriod = String(per.reduce((a, o) => a + o.s, 0) * 8); x.sfPeriod = String(per.filter(o => o.s > 0).length);
+  const tot = all.filter(o => o.t >= m0);
   if(!Array.isArray(x.hseW)) x.hseW = [];
   HSEW_ROWS.forEach((item, i) => { if(!x.hseW[i]) x.hseW[i] = {item}; });
   for(let w = 0; w < 6; w++){ const k = 'w' + (w + 1);
@@ -5779,8 +5787,8 @@ async function axisPR(d){
   /* 10 — 8. manpower, 9. machinery: one column per day of the report period + TOTAL (portrait) */
   newPage(); mark('manpower'); mark('machinery');
   { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', fromIso = data.from || toIso;
-    const days = []; for(let t = fromIso; t <= toIso && days.length < 14; t = addDays(t, 1)) days.push(t);
-    const val = (r, iso) => { const i = dayDiff(g0, iso), v = i >= 0 && i < 31 ? r['d' + i] : ''; return numv(v) ? String(numv(v)) : ''; };
+    const days = []; for(let t = fromIso; t <= weekEnd(toIso) && days.length < 14; t = addDays(t, 1)) days.push(t);
+    const val = (r, iso) => { const i = dayDiff(g0, iso), v = i >= 0 && i < 38 ? r['d' + i] : ''; return numv(v) ? String(numv(v)) : ''; };
     const nameW = 48, totW = 16, dayW = Math.min(15.5, (W() - 2 * M - nameW - totW) / Math.max(1, days.length));
     const grid = (no, label, colLabel, key, y) => {
       heading(no, label + ' AT SITE', 13, y);
@@ -5803,7 +5811,7 @@ async function axisPR(d){
   { doc.setLineHeightFactor(1.3); const hw = data.hseW || [], row = i => hw[i] || {}, cur = axWeek(toIso);
     const wv = (i, w) => { const v = row(i)['w' + (w + 1)]; return isEmpty(v) ? '' : String(numv(v)); };
     const lti = Array.from({length: 6}, (_, w) => numv(wv(0, w))).reduce((a, b) => a + b, 0), inc = Array.from({length: 6}, (_, w) => numv(wv(1, w))).reduce((a, b) => a + b, 0);
-    const mhCur = numv(wv(2, cur)), sfCur = numv(wv(3, cur)), bfMh = numv(data.bfMh), bfSf = numv(data.bfSafe);
+    const mhCur = isEmpty(data.mhPeriod) ? numv(wv(2, cur)) : numv(data.mhPeriod), sfCur = isEmpty(data.sfPeriod) ? numv(wv(3, cur)) : numv(data.sfPeriod), bfMh = numv(data.bfMh), bfSf = numv(data.bfSafe);
     const big = v => String(Math.round(v * 100) / 100);
     const wk = Array.from({length: 6}, (_, w) => ({content: String(w + 1) + '\u0001' + axOrd(w + 1) + '\nweek', styles: {fillColor: AX.YT, fontStyle: 'bold', halign: 'center'}}));
     const g = s => ({content: s, styles: {textColor: AX.GRN, halign: 'center'}}), o = s => ({content: s, styles: {textColor: AX.ORT, fontStyle: 'bold', halign: 'center'}}), b = s => ({content: s, styles: {fontStyle: 'bold'}});
@@ -6020,8 +6028,8 @@ async function axisDocx(d){
 
   /* 8, 9 — manpower / machinery: one column per day of the report period + TOTAL */
   { const g0 = gridStart(data) || toIso.slice(0, 7) + '-01', fromIso = data.from || toIso;
-    const days = []; for(let t = fromIso; t <= toIso && days.length < 14; t = addDays(t, 1)) days.push(t);
-    const val = (r, iso) => { const i = dayDiff(g0, iso), v = i >= 0 && i < 31 ? r['d' + i] : ''; return numv(v) ? String(numv(v)) : ''; };
+    const days = []; for(let t = fromIso; t <= weekEnd(toIso) && days.length < 14; t = addDays(t, 1)) days.push(t);
+    const val = (r, iso) => { const i = dayDiff(g0, iso), v = i >= 0 && i < 38 ? r['d' + i] : ''; return numv(v) ? String(numv(v)) : ''; };
     const nameW = 48, totW = 16, dayW = Math.min(15.5, (165.1 - nameW - totW) / Math.max(1, days.length)), w = [nameW, ...days.map(() => dayW), totW];
     const o = {size: 16, align: AlignmentType.CENTER, pad: 60}, ob = {...o, bold: true};
     const grid = (key, colLabel) => { const rows = (data[key] || []).filter(r => r && !isEmpty(r.name));
@@ -6034,7 +6042,7 @@ async function axisDocx(d){
   /* 10 — manhours */
   L.push(HD(10, 'MANHOURS', 22, 1));
   { const hw = data.hseW || [], row = i => hw[i] || {}, cur = axWeek(toIso), wv = (i, w) => { const v = row(i)['w' + (w + 1)]; return isEmpty(v) ? '' : String(numv(v)); };
-    const sum = i => Array.from({length: 6}, (_, w) => numv(wv(i, w))).reduce((a, b) => a + b, 0), mhCur = numv(wv(2, cur)), sfCur = numv(wv(3, cur)), bfMh = numv(data.bfMh), bfSf = numv(data.bfSafe);
+    const sum = i => Array.from({length: 6}, (_, w) => numv(wv(i, w))).reduce((a, b) => a + b, 0), mhCur = isEmpty(data.mhPeriod) ? numv(wv(2, cur)) : numv(data.mhPeriod), sfCur = isEmpty(data.sfPeriod) ? numv(wv(3, cur)) : numv(data.sfPeriod), bfMh = numv(data.bfMh), bfSf = numv(data.bfSafe);
     const w = [52.6, 52.6, 14.3, 14.2, 14.6, 15, 15.3, 14.3, 36.3], wk = w.slice(2, 8), ct = AlignmentType.CENTER, o = {line: 264, top: 1};
     const gC = (s, wd) => C(s, wd, {...o, align: ct, color: '00B050'}), oC = (s, wd) => C(s, wd, {...o, align: ct, color: 'ED7D31', bold: true});
     const weekHead = (n, wd) => C(new Paragraph({alignment: ct, spacing: {line: 300}, children: [t(String(n), {bold: true}), t(axOrd(n), {bold: true, sup: true}), new TextRun({break: 1, text: 'week', font: FONT, size: 22, bold: true})]}), wd, {fill: YT, top: 1});
@@ -7422,6 +7430,7 @@ function axisImportToPR(pid, o, file){
   putGrid('manpower', o.mp); putGrid('machinery', o.mc);
   if(o.hse){ x.hseW = HSEW_ROWS.map((item, i) => { const r = {item}; (o.hse.w[i] || []).forEach((v, w) => { if(!isEmpty(v)) r['w' + (w + 1)] = v; }); return r; });
     x.bfMh = o.hse.bf[0] || ''; x.bfSafe = o.hse.bf[1] || ''; }
+  delete x.mhPeriod; delete x.sfPeriod;   // its manhours are the ones in the submitted report
   x._import = {file: file.name, writer: o.writer || '', designation: o.designation || '', at: new Date().toISOString(), by: S.me || null};
   return d;
 }
