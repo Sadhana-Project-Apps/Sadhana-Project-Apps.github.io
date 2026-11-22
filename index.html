@@ -3532,7 +3532,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Progress report: same cover photo, actual % fills both places</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Manhours fill themselves from the manpower at site</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4243,6 +4243,7 @@ function newDraft(pid, type){
         if(T.coverStyle === 'axis'){ data.actual = ''; syncAxisScurve({projectId: pid, data}); } }
       if(Array.isArray(L.issues) && L.issues.some(r => r && (r.issue || r.desc))) data.issues = clone(L.issues);
       if(T.coverStyle === 'axis' && Array.isArray(L.coverPhoto) && L.coverPhoto.length) data.coverPhoto = clone(L.coverPhoto);
+      if(T.coverStyle === 'axis' && data.gridFrom && /^\d{4}-/.test(data.gridFrom)) axisHseFromGrid(data);
       if(Array.isArray(L.lookahead) && L.lookahead.some(r => r && r.desc)) data.lookahead = clone(L.lookahead);
       if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; }
     if((projById(pid) || {}).programme){ const dd = {projectId: pid, type: 'PR', data, fmt: fmt0}; if(T.coverStyle === 'axis' && !(data.scurve || []).some(r => r && r.date)) data.scurve = [{}]; applyProgramme(dd); } }
@@ -4600,7 +4601,8 @@ function fillFromDailyReports(){
       return {...r, start: r.start || fd(o.first), finish: o.pct >= 100 ? (r.finish || fd(o.done || o.last)) : r.finish || '', status: o.pct >= 100 ? 'Completed' : 'In progress (' + (o.pct || 0) + '%)'}; });
   }
   // client format: HSE by week of the month — manhours = pax × 8 h, safe workdays = days worked
-  if(d.type === 'PR' && Array.isArray(data.hseW)){
+  if(d.type === 'PR' && T0.coverStyle === 'axis' && axisHseFromGrid(data)){ /* manhours from the manpower grid */ }
+  else if(d.type === 'PR' && Array.isArray(data.hseW)){
     const mh = Array(6).fill(0), sf = Array(6).fill(0), cur = axWeek(data.to);
     gridDsr.forEach(x => { const w = axWeek(x.data.date); if(w > 5) return; mh[w] += (x.data.manpower || []).reduce((a, r) => a + numv(r?.qty), 0) * 8; sf[w] += 1; });
     HSEW_ROWS.forEach((item, i) => { if(!data.hseW[i]) data.hseW[i] = {item}; });
@@ -4933,7 +4935,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z81';
+const APP_VER = 'Z82';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5627,6 +5629,21 @@ const axDM = v => { const s = axIso(v); return s ? (+s.slice(8, 10)) + '/' + (+s
 const axWeek = iso => { const d = new Date(iso.slice(0, 7) + '-01T00:00:00'), off = (d.getDay() + 6) % 7; return Math.floor((+iso.slice(8, 10) - 1 + off) / 7); };
 const axIsHead = (r, k, others) => { const t = String(r?.[k] || '').trim(); if(!t) return false; if(r._g) return true; if(others.some(o => !isEmpty(r[o]))) return false; return /^\d+[.)]\s/.test(t) || (t === t.toUpperCase() && /[A-Z]{3}/.test(t)); };
 const HSEW_ROWS = ['Lost Time Injury (LTI)', 'Incidents Record', 'Total Manhours Weekly', 'Safe Workdays'];
+// client format: manhours from the "Manpower at site" grid — each week (Mon–Sun, week 1 = from the 1st) = all manpower × 8 h; safe workdays = days with manpower
+function axisHseFromGrid(x){
+  if(!x || !x.to || !x.gridFrom) return false;
+  const rows = (x.manpower || []).filter(r => r && !isEmpty(r.name)), g0 = gridStart(x), last = gridEnd(x), cur = axWeek(x.to), tot = [];
+  for(let i = 0; i < 31; i++){ const t = addDays(g0, i); if(t > last) break; tot.push({t, s: rows.reduce((a, r) => a + numv(r['d' + i]), 0)}); }
+  if(!tot.some(o => o.s)) return false;
+  if(!Array.isArray(x.hseW)) x.hseW = [];
+  HSEW_ROWS.forEach((item, i) => { if(!x.hseW[i]) x.hseW[i] = {item}; });
+  for(let w = 0; w < 6; w++){ const k = 'w' + (w + 1);
+    if(w > cur){ x.hseW[2][k] = ''; x.hseW[3][k] = ''; continue; }
+    const days = tot.filter(o => axWeek(o.t) === w);
+    x.hseW[2][k] = String(days.reduce((a, o) => a + o.s, 0) * 8); x.hseW[3][k] = String(days.filter(o => o.s > 0).length);
+    if(isEmpty(x.hseW[0][k])) x.hseW[0][k] = '0'; if(isEmpty(x.hseW[1][k])) x.hseW[1][k] = '0'; }
+  return true;
+}
 
 async function axisPR(d){
   const T = TT(d), p = projById(d.projectId) || {}, c = company(), data = withAutos(d);
@@ -6664,6 +6681,7 @@ document.addEventListener('input', e => {
     // daily report: weather "No work (weather)" for the whole day (AM and PM) = No work, reason rain / bad weather
     if(S.draft.type === 'DSR' && (t.dataset.f === 'weatherAM' || t.dataset.f === 'weatherPM')){ const x = S.draft.data;
       if(x.weatherAM === 'No work (weather)' && x.weatherPM === 'No work (weather)' && x.status !== 'No work'){ x.status = 'No work'; if(!x.noWorkWhy) x.noWorkWhy = 'Rain / bad weather'; toast('Set to "No work" — no photos needed. Write the details of no work.'); } }
+    if(S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && t.dataset.f === 'to' && axisHseFromGrid(S.draft.data)) rerenderEditorField('hseW');
     if(S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && ['actual', 'to', 'from'].includes(t.dataset.f) && (syncAxisScurve(S.draft) || (t.dataset.f === 'actual' && (() => { const c = scCutRow(S.draft.data); if(c) c.r.actual = t.value; return !!c; })()))){
       rerenderEditorField('scurve'); const pe = document.querySelector('[data-f="planned"]'); if(pe && pe !== t) pe.value = S.draft.data.planned || ''; }
     refreshAutos();
@@ -6675,6 +6693,7 @@ document.addEventListener('input', e => {
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
     if(t.dataset.col === 'name' && t.getAttribute('list')) pplAutofill(t, rows[i]);
+    if(t.dataset.tbl === 'manpower' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && axisHseFromGrid(S.draft.data)) rerenderEditorField('hseW');
     if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis'){ const c = scCutRow(S.draft.data);
       if(c && c.i === i){ S.draft.data.actual = t.value; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = t.value; } }
     refreshAutos(); }
