@@ -2579,6 +2579,7 @@ function projectView(id, tab){
   <button class="btn" data-act="dcal" data-p="${esc(id)}">🗓 Daily reports</button>
   <button class="btn" data-act="rangerpt" data-p="${esc(id)}">📅 Report by date</button>
   ${S.canWrite && !intern() ? `<button class="btn" data-act="scforms" data-p="${esc(id)}">📄 Subcon forms</button><label class="btn" style="margin:0" title="Upload a Word report sent back by the sub-contractor (or one of your existing reports) — the app makes it a Sadhana document">⇪ Upload subcon report<input type="file" accept=".docx" hidden data-subcon="${esc(id)}"></label>` : ''}
+  ${S.canWrite && !intern() && !S.isSub && PROJECT_PRESETS.some(x => x.test(p)) ? `<label class="btn" style="margin:0" title="Add progress reports already submitted to the client (their Word files) so the next one carries on from them">📥 Import progress reports (Word)<input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden data-axpr="${esc(id)}"></label>` : ''}
   <button class="btn" data-act="files" data-id="${esc(id)}">📁 Project files <i style="font-style:normal;opacity:.6">${S.files.filter(f => f.projectId === id && f.status !== 'uploading').length}</i></button>
   <button class="btn" data-act="presentproj" data-p="${esc(id)}">▶ Present</button>
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
@@ -3527,7 +3528,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 21 Nov 2026 (${APP_VER}) · 🔒 Confidential project files (LOA…) for authorised staff only</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Wisma Kemajuan: import past progress reports (Word) — the next one carries on</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3998,7 +3999,8 @@ function newDraft(pid, type){
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
   const prevOf = t => S.docs.filter(x => x.type === t && x.projectId === pid).sort((a, b) => (b.seq || 0) - (a.seq || 0));
   if(type === 'PR' || type === 'SW' || type === 'ENM'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
-  if(type === 'PR'){ const last = prevOf('PR')[0];
+  const lastPRof = () => S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0];
+  if(type === 'PR'){ const last = lastPRof() || prevOf('PR')[0];
     if(last && last.data?.hse) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
     if(last && last.data?.hseW && data.hseW){ const lw = axWeek(last.data.to || last.data.from || today()), row = i => numv((last.data.hseW[i] || {})['w' + (lw + 1)]);
@@ -4028,7 +4030,13 @@ function newDraft(pid, type){
     if(carry.length) data.works = carry;
   }
   if(type === 'PR' && T.gridMonth) data.gridFrom = '1';
-  if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); } data.to = addDays(data.from, 6); data.cutoff = data.to; data.subDate = today(); }
+  if(type === 'PR'){ if(!data.from){ const t = new Date(); t.setDate(t.getDate()-6); data.from = t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()); }
+    // the next period follows the last report: same length (e.g. Mon–Sat), a Sunday start moves to Monday
+    const lp = lastPRof();
+    if(lp && lp.data.from && lp.data.to){ const len = Math.max(0, Math.round((new Date(lp.data.to + 'T00:00:00') - new Date(lp.data.from + 'T00:00:00')) / 864e5));
+      if(new Date(data.from + 'T00:00:00').getDay() === 0) data.from = addDays(data.from, 1); data.to = addDays(data.from, len); }
+    else data.to = addDays(data.from, 6);
+    data.cutoff = data.to; data.subDate = today(); }
   T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
   if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); if(u <= n) u.setTime(n.getTime() + 8 * 3600000); data.until = iso(u); }
   // registers and monthly reports continue from the last one of this project
@@ -4040,6 +4048,19 @@ function newDraft(pid, type){
       // claims: what was claimed before becomes "previous claims"; the final claim is never carried
       if(type === 'PC'){ ['items', 'vos'].forEach(k => (data[k] || []).forEach(r => { if(r && !r._g && !isEmpty(r.amount)) r.prev = isEmpty(r.pct) ? (r.prev || '') : (numv(r.amount) * numv(r.pct) / 100).toFixed(2); })); }
       data._from = prev.number || ''; } }
+  if(type === 'PR'){ const lp = lastPRof();
+    if(lp && lp.data){ const L = lp.data, sameMonth = String(L.to || '').slice(0, 7) === String(data.to || '').slice(0, 7);
+      // same month: the weeks / days already reported stay (the daily reports refresh what they cover)
+      if(sameMonth && Array.isArray(L.hseW) && Array.isArray(data.hseW)) data.hseW = clone(L.hseW);
+      if(sameMonth && T.gridMonth){ ['manpower', 'machinery'].forEach(k => { if(Array.isArray(L[k]) && L[k].some(r => r && Object.keys(r).some(c => /^d\d+$/.test(c) && !isEmpty(r[c])))) data[k] = clone(L[k]); }); if(L.gridTo){ data.gridFrom = L.gridFrom; data.gridTo = L.gridTo; } }
+      // S-curve: the schedule carries; "scheduled to date" = the schedule at the first S-curve date on / after the new period end
+      if(Array.isArray(L.scurve) && L.scurve.some(r => r && r.date)){ data.scurve = clone(L.scurve);
+        const iso = t => { const m = String(t || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(+m[2])}-${pad2(+m[1])}` : ''; };
+        const r = data.scurve.filter(r => r && iso(r.date) >= data.to && !isEmpty(r.sched)).sort((a, b) => iso(a.date).localeCompare(iso(b.date)))[0];
+        if(r && isEmpty(data.planned)) data.planned = String(r.sched); }
+      if(Array.isArray(L.issues) && L.issues.some(r => r && (r.issue || r.desc))) data.issues = clone(L.issues);
+      if(Array.isArray(L.lookahead) && L.lookahead.some(r => r && r.desc)) data.lookahead = clone(L.lookahead);
+      if(isEmpty(data.period) || data.period === 'Weekly') data.period = L.period || data.period; } }
   if(type === 'HRC'){ const p = projById(pid) || {}; if(!data.site) data.site = [p.name, p.location].filter(Boolean).join(', ') || ''; if(!data.location) data.location = p.location || ''; if(data._from) data.revNo = String((parseInt(data.revNo) || 0) + 1); hrcMigrate(data); }
   if(type === 'EAIA'){ const p = projById(pid) || {}; if(!data.job) data.job = 'Demolition works — ' + (p.name || ''); if(!data.location) data.location = p.location || ''; }
   if(type === 'ENM' || type === 'EMR' || type === 'EAIA' || type === 'ERO' || type === 'HRC') T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
@@ -4374,7 +4395,9 @@ function fillFromDailyReports(){
   if(d.type === 'PR') data.weather = dsr.map(x => ({date: fmtDate(x.data.date), am: x.data.weatherAM || '', pm: x.data.weatherPM || '', rain: x.data.rainHours || '', remarks: ''}));
   const maxD = (TT(d).fields.find(f => f.k === 'manpower')?.maxDays) || 7;
   const merge = (key, srcKey, nameKey) => {
-    const rows = (data[key] || []).filter(r => r && !isEmpty(r.name)).map(r => { const o = {name: r.name}; for(let i = 0; i < maxD; i++) o['d' + i] = ''; return o; });
+    // days with a daily report are filled from it; other days keep what the report already has (e.g. carried from the last report)
+    const dsrDays = new Set(gridDsr.map(x => idx(x.data.date)));
+    const rows = (data[key] || []).filter(r => r && !isEmpty(r.name)).map(r => { const o = {name: r.name}; for(let i = 0; i < maxD; i++) o['d' + i] = dsrDays.has(i) ? '' : (r['d' + i] ?? ''); return o; });
     gridDsr.forEach(x => { const di = idx(x.data.date); if(di < 0 || di >= maxD) return;
       (x.data[srcKey] || []).forEach(r => { const n = r?.[nameKey]; const q = parseFloat(r?.qty); if(!n || !q) return;
         let row = rows.find(z => norm(z.name) === norm(n)); if(!row){ row = {name: n}; for(let i = 0; i < maxD; i++) row['d' + i] = ''; rows.push(row); }
@@ -4396,7 +4419,8 @@ function fillFromDailyReports(){
     const mh = Array(6).fill(0), sf = Array(6).fill(0), cur = axWeek(data.to);
     gridDsr.forEach(x => { const w = axWeek(x.data.date); if(w > 5) return; mh[w] += (x.data.manpower || []).reduce((a, r) => a + numv(r?.qty), 0) * 8; sf[w] += 1; });
     HSEW_ROWS.forEach((item, i) => { if(!data.hseW[i]) data.hseW[i] = {item}; });
-    for(let w = 0; w <= Math.min(5, cur); w++){ data.hseW[2]['w' + (w + 1)] = String(mh[w]); data.hseW[3]['w' + (w + 1)] = String(sf[w]);
+    for(let w = 0; w <= Math.min(5, cur); w++){ if(w < cur && !sf[w] && !isEmpty(data.hseW[2]['w' + (w + 1)])) continue;   // earlier week already reported, no daily reports for it
+      data.hseW[2]['w' + (w + 1)] = String(mh[w]); data.hseW[3]['w' + (w + 1)] = String(sf[w]);
       ['w' + (w + 1)].forEach(k => { if(isEmpty(data.hseW[0][k])) data.hseW[0][k] = '0'; if(isEmpty(data.hseW[1][k])) data.hseW[1][k] = '0'; }); } }
   // progress photos: kept with the daily reports (not printed there) — first days → Before, last days → After
   let nPh = 0;
@@ -4720,7 +4744,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z73';
+const APP_VER = 'Z74';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5455,8 +5479,8 @@ async function axisPR(d){
     if(cov){ try { const I = await imgCover(await photoData(cov.id), 150 / (bottom - top), 1600); doc.addImage(I.url, 'JPEG', (w - 150) / 2, top, 150, bottom - top); } catch(e){} }
     const sg = (d.signatures || [])[0];
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('PREPARED BY:', w / 2, 237.5, {align: 'center'});
-    doc.setFont('helvetica', 'normal'); doc.text(pt(sg?.name || nameOf(d.createdBy) || ''), w / 2, 242.2, {align: 'center'});
-    doc.text(pt(sg?.designation || T.sigs[0]?.hint || 'Site Engineer'), w / 2, 246.9, {align: 'center'}); }
+    doc.setFont('helvetica', 'normal'); doc.text(pt(sg?.name || data._import?.writer || nameOf(d.createdBy) || ''), w / 2, 242.2, {align: 'center'});
+    doc.text(pt(sg?.designation || data._import?.designation || T.sigs[0]?.hint || 'Site Engineer'), w / 2, 246.9, {align: 'center'}); }
 
   /* 2 — contents (filled in at the end, once the page numbers are known) */
   newPage(); const tocPage = doc.getCurrentPageInfo().pageNumber;
@@ -5709,7 +5733,7 @@ async function axisDocx(d){
     const cov = (data.coverPhoto || [])[0] || (data.photosAfter || [])[0]; const im = cov ? await img(cov.id, 150, 100, true) : null;
     if(im) A.push(new Paragraph({alignment: AlignmentType.CENTER, spacing: {before: 120, after: 0}, children: [im]}));
     const sg = (d.signatures || [])[0];
-    A.push(P([t('PREPARED BY:', {bold: true})], {align: AlignmentType.CENTER, before: 600}), P(sg?.name || nameOf(d.createdBy) || '', {align: AlignmentType.CENTER}), P(sg?.designation || T.sigs[0]?.hint || 'Site Engineer', {align: AlignmentType.CENTER})); }
+    A.push(P([t('PREPARED BY:', {bold: true})], {align: AlignmentType.CENTER, before: 600}), P(sg?.name || d.data?._import?.writer || nameOf(d.createdBy) || '', {align: AlignmentType.CENTER}), P(sg?.designation || d.data?._import?.designation || T.sigs[0]?.hint || 'Site Engineer', {align: AlignmentType.CENTER})); }
 
   /* contents */
   A.push(new Paragraph({children: [t('CONTENTS', {bold: true, u: true})], spacing: {after: 200}, pageBreakBefore: true}));
@@ -6475,6 +6499,7 @@ document.addEventListener('change', async e => {
     $('#chatPhN').textContent = (S.chatPhotos || []).length + ' photo(s) attached'; return; }
   if(e.target.id === 'fmtType'){ S.fmtType = e.target.value; S.fmtCfg = clone(projFmt(S.fmtPid, e.target.value) || {}); fmtEditorRender(); return; }
   const t = e.target;
+  if(t.dataset.axpr && t.files?.length){ const fl = [...t.files]; t.value = ''; importAxisPRs(t.dataset.axpr, fl); return; }
   if(t.dataset.olddsr && t.files?.length){ const fl = [...t.files]; t.value = ''; importOldDSR(t.dataset.olddsr, fl); return; }
   if(t.dataset.mystamp !== undefined && t.files?.length){ try { stampConfirm(await stampFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nostamp' ? 'No stamp found in that picture — stamp on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
   if(t.dataset.mysig !== undefined && t.files?.length){ try { sigConfirm(await sigFromFile(t.files[0])); } catch(err){ toast(err && err.code === 'nosig' ? 'No signature found in that picture — sign with a dark pen on white paper and try again.' : 'Could not read that picture.', true); } t.value = ''; return; }
@@ -7079,6 +7104,151 @@ function oldToDSR(pid, o, fileName){
   x.activities = notes.join('\n');
   x._import = {file: fileName, writer: o.writer, designation: o.designation, at: new Date().toISOString(), by: S.me || null};
   return d;
+}
+/* ---------- client progress reports (Axis Wisma Kemajuan format) imported from their Word files ---------- */
+// Word (.docx) → the app's PR fields: cover, S-curve, progress summary, others, forecast, progress by level, issues,
+// manpower / machinery (Excel pictures pasted as EMF — the numbers are read from the picture), HSE weeks + B/F, photos.
+function emfTexts(buf){
+  const v = new DataView(buf), out = []; let off = 0;
+  while(off + 8 <= v.byteLength){ const t = v.getUint32(off, true), sz = v.getUint32(off + 4, true); if(sz < 8 || off + sz > v.byteLength) break;
+    if(t === 84){ const e = off + 36, x = v.getInt32(e, true), y = v.getInt32(e + 4, true), n = v.getUint32(e + 8, true), so = v.getUint32(e + 12, true);
+      let s = ''; for(let i = 0; i < n; i++) s += String.fromCharCode(v.getUint16(off + so + i * 2, true)); out.push({x, y, s: s.trim()}); }
+    off += sz; }
+  return out.filter(o => o.s);
+}
+// grid picture → [{name, d0..d30}] (day columns found from the header row 1…31)
+function emfGrid(buf){
+  const tx = emfTexts(buf), rows = {}; tx.forEach(o => (rows[o.y] = rows[o.y] || []).push(o));
+  const ys = Object.keys(rows).map(Number).sort((a, b) => a - b);
+  const hy = ys.find(y => rows[y].filter(o => /^\d{1,2}$/.test(o.s)).length >= 28); if(hy == null) return null;
+  const cols = rows[hy].filter(o => /^\d{1,2}$/.test(o.s)).map(o => ({x: o.x, d: +o.s}));
+  const res = [];
+  ys.filter(y => y > hy).forEach(y => { const r = rows[y].sort((a, b) => a.x - b.x), name = r.filter(o => !/^-?\d+(\.\d+)?$/.test(o.s)).map(o => o.s).join(' ').trim();
+    if(!name || /^TOTAL$/i.test(name)) return; const row = {name};
+    r.filter(o => /^-?\d+(\.\d+)?$/.test(o.s)).forEach(o => { const c = cols.reduce((a, b) => Math.abs(b.x - o.x) < Math.abs(a.x - o.x) ? b : a); row['d' + (c.d - 1)] = o.s; });
+    res.push(row); });
+  return res;
+}
+async function parseAxisPRDocx(file){
+  const JSZip = await jszip(), zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const xml = await zip.file('word/document.xml')?.async('string'); if(!xml) throw new Error('not a Word file');
+  const relXml = await zip.file('word/_rels/document.xml.rels')?.async('string') || '';
+  const rels = {}; new DOMParser().parseFromString(relXml, 'application/xml').querySelectorAll('Relationship').forEach(r => rels[r.getAttribute('Id')] = r.getAttribute('Target'));
+  const dom = new DOMParser().parseFromString(xml, 'application/xml'), body = [...dom.getElementsByTagName('w:body')][0];
+  const kids = el => [...el.children], ln = el => el.localName;
+  const txt = el => [...el.getElementsByTagName('w:p')].map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').trim() || (ln(el) === 'p' ? [...el.getElementsByTagName('w:t')].map(t => t.textContent).join('').trim() : '');
+  const blips = el => [...el.getElementsByTagName('a:blip')].map(b => b.getAttribute('r:embed')).filter(Boolean).map(id => 'word/' + String(rels[id] || '').replace(/^\.?\//, '').replace(/^word\//, ''));
+  const rowsOf = tbl => kids(tbl).filter(e => ln(e) === 'tr').map(tr => kids(tr).filter(e => ln(e) === 'tc').map(tc => ({t: txt(tc), img: blips(tc)})));
+  const o = {scurve: [], mainWorks: [], otherWorks: [], lookahead: [], byLevel: [], issues: [], photos: [], mpImg: [], mcImg: [], hse: null};
+  let sec = '', allText = '';
+  for(const el of kids(body)){
+    if(ln(el) === 'p'){ const t = txt(el), im = blips(el); allText += t + '\n';
+      if(t){ const u = t.toUpperCase();
+        if(/^(BI-)?WEEKLY PROGRESS REPORT/.test(u) || /^DATE:/.test(u) || /^PREPARED BY/.test(u)) sec = /^PREPARED BY/.test(u) ? 'prep' : sec || 'cover';
+        else if(/^MANPOWER AT SITE/.test(u)) sec = 'mp'; else if(/^MACHINERY AT SITE/.test(u)) sec = 'mc';
+        else if(/^\*?LEGEND/.test(u)) sec = 'plan'; else if(/^(MANHOURS|PROGRESS PHOTO|S-CURVE|PROGRESS SUMMARY|CONTENTS|PROJECT DETAILS|DESIGN|SCHEDULE OF MAJOR|\d+ WEEKS? FORECAST)/.test(u)) sec = u; }
+      im.forEach(p => { if(!o.cover && (sec === 'cover' || sec === '')) o.cover = p; else if(sec === 'plan' && !o.plan) o.plan = p; else if(sec === 'mp') o.mpImg.push(p); else if(sec === 'mc') o.mcImg.push(p); });
+      continue; }
+    if(ln(el) !== 'tbl') continue;
+    const R = rowsOf(el), h = (R[0] || []).map(c => c.t.toUpperCase()), H = h.join('|');
+    if(sec === 'prep' && !o.writer){ const t = R.flat().map(c => c.t).find(Boolean) || ''; const [nm, ...ds] = t.split('\n'); o.writer = (nm || '').trim(); o.designation = ds.join(' ').trim(); continue; }
+    if(/^PROJECT\|/.test(H) && !o.proj){ o.proj = {}; R.forEach(r => { if(r.length >= 2 && r[0].t) o.proj[r[0].t.toUpperCase().replace(/\s+/g, ' ')] = r[1].t.split('\n').map(z => z.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' / '); }); continue; }
+    if(/^DATE\|SCHEDULE/.test(H)){ for(let b = 0; b * 3 < h.length; b++) R.slice(1).forEach(r => { const c = r.slice(b * 3, b * 3 + 3).map(x => x.t); if(c[0]) o.scurve.push({date: c[0], sched: c[1] || '', actual: c[2] || ''}); }); continue; }
+    if(/^NO\|DESCRIPTION\|START/.test(H)){ R.slice(1).forEach(r => { const c = r.map(x => x.t), rest = c.slice(2).filter(Boolean);
+      if(!c[1] && !c[0]) return; if(c[0] && !rest.length && c[1] === c[1].toUpperCase()) o.mainWorks.push({desc: (c[0] + ' ' + c[1]).trim()});
+      else if(c[1]) o.mainWorks.push({desc: c[1], start: c[2] || '', finish: c[3] || '', status: c[4] || ''}); }); continue; }
+    if(/^ITEM\|DESCRIPTION\|START/.test(H)){ R.slice(1).forEach(r => { const c = r.map(x => x.t); if(c[1]) o.otherWorks.push({desc: c[1], start: c[2] || '', finish: c[3] || '', status: c[4] || ''}); }); continue; }
+    if(/^ITEM\|DESCRIPTION\|EST/.test(H)){ R.slice(1).forEach(r => { const c = r.map(x => x.t); if(c[1]) o.lookahead.push({desc: c[1], start: c[2] || ''}); }); continue; }
+    if(/^ACTIVITY\|L1/.test(H)){ R.slice(1).forEach(r => { const c = r.map(x => x.t); if(r.length === 1){ if(c[0]) o.byLevel.push({act: c[0]}); return; }
+      if(c.some(Boolean)) o.byLevel.push({act: c[0] || '', l1: c[1] || '', l2: c[2] || '', l3: c[3] || '', l4: c[4] || '', l5: c[5] || '', rem: c[6] || ''}); }); continue; }
+    if(/^NO\|ISSUES/.test(H)){ R.slice(1).forEach(r => { const c = r.map(x => x.t); if(c[1] || c[2]) o.issues.push({issue: c[1] || '', desc: c[2] || '', by: c[3] || '', status: c[4] || ''}); }); continue; }
+    if(/^HSE STATISTIC/.test(H)){ const g = {w: [[], [], [], []], bf: []};
+      R.forEach(r => { const c = r.map(x => x.t), lab = c.slice(0, 2).join(' ');
+        const wk = () => c.slice(2, 8);
+        if(/Lost Time Injury/i.test(lab)) g.w[0] = wk(); else if(/Incidents Record/i.test(lab)) g.w[1] = wk();
+        else if(/Total Manhours Weekly/i.test(lab)) g.w[2] = wk(); else if(/^\s*Safe Workdays/i.test(c[1] || c[0] || '')) g.w[3] = wk();
+        else if(/B\/F/i.test(lab)) g.bf.push(c[c.length - 1]); });
+      o.hse = g; continue; }   // the last table is the month of "Period to"
+    if(sec === 'PROGRESS PHOTO'){ let cap = ''; R.forEach(r => { const ims = r.flatMap(c => c.img), t = r.map(c => c.t).filter(Boolean).join(' ');
+      if(!ims.length){ if(t) cap = t; return; } ims.forEach(p => { o.photos.push({path: p, caption: cap}); cap = ''; }); }); continue; }
+  }
+  // cover: report no., period, schedule / actual
+  const no = allText.match(/PROGRESS REPORT NO\.?\s*(\d+)/i); o.reportNo = no ? no[1] : '';
+  o.bi = /BI-WEEKLY/i.test(allText);
+  const MON = {jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12};
+  const dm = allText.match(/DATE:\s*(\d{1,2})(?:st|nd|rd|th)?\s*([A-Za-z]+)?\s*(\d{4})?\s*[–—-]\s*(\d{1,2})(?:st|nd|rd|th)?\s*([A-Za-z]+)\s*(\d{4})/i);
+  if(dm){ const m2 = MON[String(dm[5]).slice(0, 3).toLowerCase()], m1 = dm[2] ? MON[dm[2].slice(0, 3).toLowerCase()] : m2, y2 = +dm[6], y1 = dm[3] ? +dm[3] : (m1 > m2 ? y2 - 1 : y2);
+    if(m1 && m2){ o.from = `${y1}-${pad2(m1)}-${pad2(+dm[1])}`; o.to = `${y2}-${pad2(m2)}-${pad2(+dm[4])}`; } }
+  const pc = re => { const m = allText.match(re); return m ? m[1] : ''; };
+  o.planned = pc(/Schedule:\s*([\d.]+)\s*%/i); o.actual = pc(/Actual:\s*([\d.]+)\s*%/i);
+  // manpower / machinery numbers from the pasted Excel pictures (EMF); other picture types can't be read
+  const grid = async list => { for(const p of list.slice().reverse()){ if(!/\.emf$/i.test(p)) continue; const f = zip.file(p); if(!f) continue; const g = emfGrid(await f.async('arraybuffer')); if(g && g.length) return g; } return null; };
+  o.mp = await grid(o.mpImg); o.mc = await grid(o.mcImg);
+  o.img = async p => { const f = p && zip.file(p); if(!f || !/\.(jpe?g|png|gif|bmp|webp)$/i.test(p)) return null; const b = await f.async('blob'); return new Blob([b], {type: /png$/i.test(p) ? 'image/png' : 'image/jpeg'}); };
+  const ld = t => { const m = String(t || '').match(/(\d{1,2})(?:st|nd|rd|th)?\s*([A-Za-z]+)\s+(\d{4})/i); const mo = m && MON[m[2].slice(0, 3).toLowerCase()]; return mo ? `${m[3]}-${pad2(mo)}-${pad2(+m[1])}` : ''; };
+  if(o.proj) o.projInfo = {start: ld(o.proj['DATE OF START']), end: ld(o.proj['DATE OF COMPLETION']), insurance: o.proj['INSURANCE POLICY'] || ''};
+  if(!o.reportNo || !o.from) throw new Error('this does not look like a Wisma Kemajuan progress report');
+  return o;
+}
+function axisImportToPR(pid, o, file){
+  const d = newDraft(pid, 'PR'), x = d.data;
+  Object.assign(x, {period: o.bi ? 'Fortnightly' : 'Weekly', reportNo: o.reportNo, from: o.from, to: o.to, cutoff: o.to, subDate: o.to, planned: o.planned, actual: o.actual});
+  if(o.scurve.length) x.scurve = o.scurve;
+  ['mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'issues'].forEach(k => { x[k] = o[k].length ? o[k] : (k === 'issues' ? [] : x[k]); });
+  const m = o.to.slice(0, 7), last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate(); x.gridFrom = m + '-01'; x.gridTo = m + '-' + pad2(last);
+  const putGrid = (key, rows) => { if(!rows) return; const have = (x[key] || []).filter(r => r && r.name);
+    rows.forEach(r => { const name = r.name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bAnd\b/g, 'and');
+      const z = have.find(h => h.name.toLowerCase() === r.name.toLowerCase()); if(z) Object.assign(z, r, {name: z.name}); else have.push({...r, name}); });
+    x[key] = have; };
+  putGrid('manpower', o.mp); putGrid('machinery', o.mc);
+  if(o.hse){ x.hseW = HSEW_ROWS.map((item, i) => { const r = {item}; (o.hse.w[i] || []).forEach((v, w) => { if(!isEmpty(v)) r['w' + (w + 1)] = v; }); return r; });
+    x.bfMh = o.hse.bf[0] || ''; x.bfSafe = o.hse.bf[1] || ''; }
+  x._import = {file: file.name, writer: o.writer || '', designation: o.designation || '', at: new Date().toISOString(), by: S.me || null};
+  return d;
+}
+async function importAxisPRs(pid, files){
+  const p = projById(pid); if(!p) return;
+  if(!navigator.onLine){ toast('No internet — importing needs a connection.', true); return; }
+  toast(`Reading ${files.length} report${files.length === 1 ? '' : 's'}…`);
+  const ok = [], bad = [];
+  for(const f of files){ try { ok.push({f, o: await parseAxisPRDocx(f)}); } catch(e){ console.error(e); bad.push({name: f.name, why: e.message || 'could not read it'}); } }
+  ok.sort((a, b) => (+a.o.reportNo) - (+b.o.reportNo));
+  const have = new Set(S.docs.filter(d => d.type === 'PR' && d.projectId === pid && !d.deleted).map(d => String(parseInt(d.data?.reportNo) || '')));
+  const made = [], keepDraft = S.draft;
+  const prog = n => { const el = $('#aiProg'); if(el) el.textContent = n; };
+  showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>📥 Importing progress reports…</h3></div><div class="mb"><p id="aiProg" class="small muted">Starting…</p></div></div>`);
+  for(const {f, o} of ok){
+    if(have.has(String(+o.reportNo))){ bad.push({name: f.name, why: `Progress Report No.${o.reportNo} is already in the app`}); continue; }
+    try {
+      prog(`No.${o.reportNo}: photos…`);
+      const d = axisImportToPR(pid, o, f), x = d.data;
+      const up = async p => { const b = await o.img(p); if(!b) return null; try { return (await S.assets.upload(await compress(b))).id; } catch(e){ return null; } };
+      const cv = await up(o.cover); if(cv) x.coverPhoto = [{id: cv}];
+      const pl = await up(o.plan); if(pl) x.byLevelPlan = [{id: pl}];
+      const ph = []; for(let i = 0; i < o.photos.length; i++){ prog(`No.${o.reportNo}: photo ${i + 1} of ${o.photos.length}…`); const id = await up(o.photos[i].path); if(id) ph.push({id, caption: o.photos[i].caption || ''}); }
+      x.photosAfter = ph;
+      prog(`No.${o.reportNo}: saving…`);
+      S.draft = d; if(!(await saveDraft())){ bad.push({name: f.name, why: 'could not save'}); continue; }
+      const id = S.draft.id;
+      // the Word file that was submitted is kept as the record's submitted copy → the report counts as done
+      prog(`No.${o.reportNo}: keeping the original Word file…`);
+      const fid = await uploadOne(pid, f, {category: 'Submitted progress reports', folder: 'Submitted progress reports', title: `Progress Report No.${o.reportNo} (as submitted)`, refNo: S.draft.number || '', date: o.to, expiry: '', notes: 'Imported from Word', docId: id, updatedAt: new Date().toISOString(), updatedBy: S.me || null});
+      const v = {fileIds: [fid].filter(Boolean), date: o.to, note: 'Submitted outside the app — imported from the Word file', by: S.me || null, name: S.names[S.me] || '', at: new Date().toISOString(), imported: true};
+      await S.db.doc(dpath(id)).update({paper: v, updatedAt: v.at, updatedBy: S.me || null});
+      have.add(String(+o.reportNo)); made.push({id, no: o.reportNo, o});
+    } catch(e){ console.error(e); bad.push({name: f.name, why: e && e.code === 'permission-denied' ? 'no permission' : 'could not save'}); }
+  }
+  S.draft = keepDraft; S.dirty = false;
+  // project details from the latest report fill only what the project record doesn't have yet
+  const info = ok.map(z => z.o.projInfo).filter(Boolean).pop();
+  if(info && made.length){ const upd = {}; ['start', 'end', 'insurance'].forEach(k => { if(info[k] && isEmpty(p[k])) upd[k] = info[k]; });
+    if(Object.keys(upd).length){ try { await S.db.doc('projects/' + pid).update(upd); Object.assign(p, upd); } catch(e){ console.warn(e); } } }
+  showModal(`<div class="box" style="max-width:560px"><div class="mh"><h3>📥 Progress reports imported</h3></div><div class="mb">
+    ${made.length ? `<p><b>${made.length}</b> progress report${made.length === 1 ? ' is' : 's are'} now in the app, each with the Word file you submitted kept as its submitted copy. <b>+ Progress</b> now starts the next report from No.${esc(String(Math.max(...made.map(m => +m.no)) + 1))} with the S-curve, progress summary, progress by level, issues, forecast and manhour totals carried over.</p>
+    <div class="list">${made.map(m => `<div class="it" data-act="open" data-id="${esc(m.id)}" style="cursor:pointer"><span class="pill type">PR</span><div class="t"><b>Progress Report No.${esc(m.no)}</b><span>${esc(fmtDate(m.o.from))} – ${esc(fmtDate(m.o.to))} · ${m.o.photos.length} photo${m.o.photos.length === 1 ? '' : 's'}${m.o.mp ? '' : ' · manpower picture not readable — fill from daily reports if needed'}</span></div></div>`).join('')}</div>` : '<p>Nothing was imported.</p>'}
+    ${bad.length ? `<p style="margin-top:12px"><b>Not imported (${bad.length}):</b></p><ul class="small">${bad.map(b => `<li>${esc(b.name)} — ${esc(b.why)}</li>`).join('')}</ul>` : ''}
+    </div></div>`);
+  render();
 }
 async function importOldDSR(pid, files){
   const p = projById(pid); if(!p) return;
