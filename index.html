@@ -2573,6 +2573,7 @@ const ISO_MAP = {
 const isoOf = t => { const o = ((S.company && S.company.typeIso) || {})[t]; const base = ISO_MAP[t] || {};
   if(!o) return base; const r = {}; o.forEach(std => r[std] = base[std] || 'Records – ' + (TYPES[t]?.name || t)); return r; };
 function projectView(id, tab){
+  checkPRLast(id);
   const p = projById(id);
   loadProjectDocs(id);
   if(!p) return `<div class="card empty">Project not found. <button class="btn sm" data-act="nav" data-v="home">Back</button></div>`;
@@ -3545,7 +3546,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Signatures and actions waiting for you shown in red</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Sub-contractor progress reports start from the project's latest report</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4189,12 +4190,39 @@ function syncAxisScurve(d){
   if(rowAt) x.planned = schedAt(rowAt);
   return true;
 }
+/* ---------- sub-contractors start their progress report from the project's latest one ----------
+   They can't open other people's reports, so staff keep a copy of the latest report's carried parts on the project (prLast);
+   cover photo / key plan are copied into photos marked subShare so the sub-contractor's phone can show them. */
+const PR_SHARE_KEYS = ['period', 'reportNo', 'from', 'to', 'planned', 'actual', 'scurve', 'mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'byLevelPlan', 'issues', 'coverPhoto', 'hseW', 'bfMh', 'bfSafe', 'mhPeriod', 'sfPeriod', 'manpower', 'machinery', 'gridFrom', 'gridTo'];
+async function sharePRLast(d, force){
+  try {
+    if(!d || d.type !== 'PR' || S.isSub || !S.canWrite || !d.id || !d.data || !d.data.to) return;
+    const p = projById(d.projectId); if(!p) return; const cur = p.prLast || {};
+    if(!force && cur.to && (cur.to > d.data.to || (cur.to === d.data.to && cur.docId !== d.id && cur.seq > (d.seq || 0)))) return;
+    const data = {}; PR_SHARE_KEYS.forEach(k => { if(d.data[k] !== undefined) data[k] = clone(d.data[k]); });
+    const map = {...(cur.photoMap || {})};
+    const share = async list => { const out = []; for(const ph of (list || [])){ if(!ph || !ph.id) continue;
+      if(!map[ph.id]){ const s = await S.db.doc('photos/' + ph.id).get(); if(!s.exists) continue; const ref = S.db.collection('photos').doc(); await ref.set({...s.data(), by: S.me || null, subShare: true}); map[ph.id] = ref.id; }
+      out.push({...ph, id: map[ph.id]}); } return out; };
+    data.coverPhoto = await share(d.data.coverPhoto); data.byLevelPlan = await share(d.data.byLevelPlan);
+    const v = {docId: d.id, seq: d.seq || 0, to: d.data.to, data, photoMap: map, at: new Date().toISOString(), by: S.me || null};
+    await S.db.doc('projects/' + d.projectId).update({prLast: v}); p.prLast = v;
+  } catch(e){ console.warn('share PR', e); }
+}
+// staff opening a project: make sure the shared copy is the latest report
+function checkPRLast(pid){
+  if(S.isSub || !S.canWrite || (S.prLastChecked = S.prLastChecked || {})[pid]) return; const p = projById(pid); if(!p || !(p.subs || p.subCount || PROJECT_PRESETS.some(x => x.test(p)) || true)) return;
+  const prs = S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to && (x.data.mainWorks || []).some(r => r && r.desc)).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0));
+  if(!S.loaded.d) return; S.prLastChecked[pid] = 1;
+  const l = prs[0]; if(l && (!p.prLast || p.prLast.docId !== l.id && String(p.prLast.to || '') <= l.data.to)) sharePRLast(l, true);
+}
 function newDraft(pid, type){
   const fmt0 = projFmt(pid, type), T = buildType(type, fmt0), data = {};
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
-  const prevOf = t => S.docs.filter(x => x.type === t && x.projectId === pid).sort((a, b) => (b.seq || 0) - (a.seq || 0));
+  const sharedPR = () => { const pl = (projById(pid) || {}).prLast; return pl && pl.data && pl.data.to && !S.docs.some(x => x.id === pl.docId) ? {id: '_shared', type: 'PR', projectId: pid, seq: pl.seq || 0, createdAt: pl.at || '', data: pl.data} : null; };
+  const prevOf = t => { const a = S.docs.filter(x => x.type === t && x.projectId === pid); const sp = t === 'PR' && sharedPR(); if(sp && !a.some(x => (x.data?.to || '') >= sp.data.to)) a.push(sp); return a.sort((a, b) => (b.seq || 0) - (a.seq || 0)); };
   if(type === 'PR' || type === 'SW' || type === 'ENM'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
-  const lastPRof = () => { const all = S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to), full = all.filter(x => (x.data.mainWorks || []).some(r => r && r.desc)); return (full.length ? full : all).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0]; };
+  const lastPRof = () => { const all = [...S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to), ...(sharedPR() ? [sharedPR()] : [])], full = all.filter(x => (x.data.mainWorks || []).some(r => r && r.desc)); return (full.length ? full : all).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0]; };
   if(type === 'PR'){ const last = lastPRof() || prevOf('PR')[0];
     if(last && Array.isArray(last.data?.hse) && Array.isArray(data.hse)) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
@@ -4236,7 +4264,7 @@ function newDraft(pid, type){
   T.fields.forEach(f => { if(f.t === 'table' && f.cols.some(c => c.calc)) (data[f.k] || []).forEach(r => calcRow(f, r)); });
   if(type === 'PTW'){ const n = new Date(); n.setMinutes(0); const iso = x => x.getFullYear()+'-'+pad2(x.getMonth()+1)+'-'+pad2(x.getDate())+'T'+pad2(x.getHours())+':'+pad2(x.getMinutes()); data.from = iso(n); const u = new Date(n); u.setHours(18,0); if(u <= n) u.setTime(n.getTime() + 8 * 3600000); data.until = iso(u); }
   // registers and monthly reports continue from the last one of this project
-  if(TYPES[type].carry){ const prev = prevOf(type).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+  if(TYPES[type].carry){ const prev = type === 'PR' ? (lastPRof() || prevOf(type)[0]) : prevOf(type).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
     if(prev && prev.data){ TYPES[type].carry.forEach(k => { if(prev.data[k] !== undefined) data[k] = clone(prev.data[k]); });
       if(type === 'EMR'){ (data.results || []).forEach(r => { r.prev = r.cur || r.prev || ''; r.cur = ''; r.stat = ''; r.note = ''; }); (data.points || []).forEach(r => { r.date = ''; }); }
       if(type === 'ENM'){ (data.summary || []).forEach(r => { r.cur = ''; r.stat = ''; r.note = ''; }); }
@@ -4541,6 +4569,7 @@ async function saveDraft(){
   const body = {projectId:d.projectId, type:d.type, seq:d.seq, number:d.number, data, signatures:[], createdBy:d.createdBy, createdAt:d.createdAt, updatedAt:now, updatedBy:S.me||null, ...(d.fmt ? {fmt: d.fmt} : {})};
   await S.db.doc(dpath(d.id, d.type)).set(body);
   S.dirty = false;
+  if(d.type === 'PR' && !S.isSub && !S.importingPR) sharePRLast({...d, ...body, id: d.id});
   return true;
 }
 async function saveResponse(){
@@ -4949,7 +4978,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z87';
+const APP_VER = 'Z88';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -7501,7 +7530,7 @@ async function importAxisPRs(pid, files){
   const prs = S.docs.filter(d => d.type === 'PR' && d.projectId === pid && !d.deleted);
   const dupOf = o => prs.find(d => String(parseInt(d.data?.reportNo) || '') === String(+o.reportNo) && (d.data?._import || (d.data?.from && d.data.from <= o.to && d.data.to >= o.from)));
   const have = new Set();
-  const made = [], keepDraft = S.draft;
+  const made = [], keepDraft = S.draft; S.importingPR = true;
   const prog = n => { const el = $('#aiProg'); if(el) el.textContent = n; };
   showModal(`<div class="box" style="max-width:520px"><div class="mh"><h3>📥 Importing progress reports…</h3></div><div class="mb"><p id="aiProg" class="small muted">Starting…</p></div></div>`);
   for(const {f, o} of ok){
@@ -7525,7 +7554,8 @@ async function importAxisPRs(pid, files){
       have.add(String(+o.reportNo)); made.push({id, no: o.reportNo, o});
     } catch(e){ console.error(e); bad.push({name: f.name, why: e && e.code === 'permission-denied' ? 'no permission' : 'could not save'}); }
   }
-  S.draft = keepDraft; S.dirty = false;
+  S.draft = keepDraft; S.dirty = false; S.importingPR = false;
+  if(made.length){ (S.prLastChecked || {})[pid] = 0; const l = S.docs.filter(x => x.type === 'PR' && x.projectId === pid && x.data?.to).sort((a, b) => b.data.to.localeCompare(a.data.to))[0]; if(l) await sharePRLast(l, true); }
   // project details from the latest report fill only what the project record doesn't have yet
   const info = ok.map(z => z.o.projInfo).filter(Boolean).pop();
   if(info && made.length){ const upd = {}; ['start', 'end', 'insurance'].forEach(k => { if(info[k] && isEmpty(p[k])) upd[k] = info[k]; });
