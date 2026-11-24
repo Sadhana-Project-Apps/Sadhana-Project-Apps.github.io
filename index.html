@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Upload the .mpp from any phone — S-curve % filled from it</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Today's updates on drafts and published documents</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3994,6 +3994,7 @@ function docView(id){
     <aside class="side">
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
         ${st.next===0 && S.canWrite ? `<button class="btn pri" data-act="edit" data-id="${esc(d.id)}">Edit draft</button>`:''}
+        ${d.type === 'PR' && st.next === 0 && S.canWrite && !(S.isSub && d.createdBy !== S.me) ? `<button class="btn" data-act="prdocmpp" data-id="${esc(d.id)}">📂 Upload work programme (.mpp)</button>${TT(d).coverStyle === 'axis' ? `<button class="btn" data-act="prdocword" data-id="${esc(d.id)}">📄 Upload Word report</button>` : ''}` : ''}
         ${needResp && S.canWrite ? `<button class="btn ${respFilled?'':'pri'}" data-act="respond" data-id="${esc(d.id)}">${T.code==='TR' ? (isEmpty(d.data?.response) ? '📷 Add proof of receipt' : '📷 Edit proof of receipt') : (respFilled?'Edit':'Add') + ' ' + (T.code==='PTW'?'close-out':'response')}</button>`:''}
         ${st.next>0 && S.canWrite && !(S.isSub && d.type === 'PR') && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         ${d.paper && (d.paper.fileIds || []).length ? `<button class="btn pri" data-act="papershow" data-id="${esc(d.id)}">📄 Signed copy (hardcopy)</button>` : ''}
@@ -5023,7 +5024,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z94';
+const APP_VER = 'Z95';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6543,6 +6544,9 @@ document.addEventListener('click', async e => {
     case 'mpcut': { const i = $('#mpCut'); if(i){ i.value = el.dataset.v; mppPreview(); } break; }
     case 'mpgo': prMppApply(el); break;
     case 'mppick': $('#mpFile')?.click(); break;
+    case 'prdocmpp': case 'prdocword': { const g = docById(id); if(!g) break; if(nextSigIndex(g) !== 0){ toast('Signed documents are locked — use “✎ Ask to correct this report”.', true); break; }
+      S.draft = clone(g); S.respMode = false; go('edit'); if(a === 'prdocmpp') setTimeout(prMppForm, 150); else prPick('.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', prFromWord); break; }
+    case 'fixwhy': { const t = $('#fixWhy'); if(t){ t.value = el.dataset.v; t.focus(); } break; }
     case 'pgapply': { if(!S.draft) break; const n = applyProgramme(S.draft, {force: true}); S.dirty = true; render(); toast(n ? 'Updated from the work programme — please check' : 'Nothing to update from the work programme', !n); break; }
     case 'viewas': if(el.dataset.r === 'sub') viewAsSubForm(); else setViewAs(el.dataset.r ? {role: el.dataset.r} : null); break;
     case 'viewassub': { const ps = [...document.querySelectorAll('[data-vap]:checked')].map(x => x.dataset.vap); if(!ps.length){ toast('Tick at least one project.', true); break; }
@@ -6742,7 +6746,8 @@ document.addEventListener('click', async e => {
     case 'zoom': showModal(`<div class="box wide lightbox"><div class="mh"><h3 style="font-size:15px">${esc(el.dataset.cap||'Photo')}</h3><div class="sp"></div><button class="btn sm" data-act="closemodal">Close</button></div><div class="mb"><img ${photoAttr(el.dataset.zid)} alt=""></div></div>`); break;
     case 'fixreq': case 'fixself': { const self = a === 'fixself'; showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>✎ ${self ? 'Correct this report' : 'Ask to correct this report'}</h3></div><div class="mb">
         <p class="small muted" style="margin-top:0">${self ? 'You can edit it now. ' : 'The admin approves first, then you can edit it. '}After the correction the signatures are cleared and it is signed again. The signed version is kept.</p>
-        <div class="fld"><label>What is wrong? <em>*</em></label><textarea id="fixWhy" rows="3" placeholder="e.g. Wrong manpower count on 14 Nov / photo of the wrong area / typo in the client name"></textarea></div></div>
+        <div class="fld"><label>What is wrong? <em>*</em></label><textarea id="fixWhy" rows="3" placeholder="e.g. Wrong manpower count on 14 Nov / photo of the wrong area / typo in the client name"></textarea>
+          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${[...(docById(id)?.type === 'PR' ? ['Update the S-curve from the work programme (.mpp)'] : []), 'Wrong figures', 'Wrong date', 'Wrong / missing photos', 'Typing mistake'].map(t => `<button type="button" class="btn sm" data-act="fixwhy" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div></div></div>
         <div class="mf"><button class="btn pri" data-act="${self ? 'fixselfgo' : 'fixreqsend'}" data-id="${esc(id)}">${self ? '✎ Start correcting' : 'Send to admin'}</button></div></div>`); break; }
     case 'fixreqsend': { const why = ($('#fixWhy').value || '').trim(); if(why.length < 3){ toast('Say briefly what is wrong.', true); break; }
       try { const v = {by: S.me || null, name: S.names[S.me] || '', at: new Date().toISOString(), reason: why}; await S.db.doc(dpath(id)).update({fixReq: v}); const g = docById(id); if(g) g.fixReq = v; closeModal(); toast('Sent — the admin will approve it'); render(); }
