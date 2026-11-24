@@ -1832,7 +1832,11 @@ const DSR_CLIENT_SIG = {role:'Acknowledged by', hint:'Client / Consultant', wait
 // the Axis (client) progress report format applies to every report of that project not already signed under another format
 // a client's progress report format always wins for that project (even over a format saved earlier), unless the report is already signed by more than "Prepared by"
 const fmtOf = d => { if(d.type === 'PR' && typeof projPreset === 'function'){ const pre = projPreset(d.projectId); if(pre && pre.PR && (d.signatures || []).filter(Boolean).length <= 1) return pre.PR; } return d.fmt; };
+// progress report (user, 24 Nov 2026): no signature — only who prepared it (name & designation). AXISWKPJ keeps its format.
+// A report already signed by more than "Prepared by" the old way keeps its signers.
+const PR_PREP = [{role: 'Prepared by', hint: 'Name & designation'}];
 const TT = d => { const T = buildType(d.type, fmtOf(d)); const n = (d.signatures || []).filter(Boolean).length;
+  if(d.type === 'PR'){ if(T.coverStyle === 'axis' || isAxP(d.projectId) || n > 1) return T; return {...T, sigs: PR_PREP, noSigImg: true, done: 'Submitted'}; }
   if(d.type !== 'DSR') return T;
   const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
   if(n > sigs.length) return {...T, sigs: [...sigs, ...DSR_OLD_SIGS.slice(sigs.length, n)]};
@@ -3305,6 +3309,11 @@ async function makeDocx(id){
       const w = widths([36, 49, 36, 49]);
       return table(w, rows.map(r => row([cell(r[0][0], w[0], {bold: true, fill: LIGHT}), ...(r[1] ? [cell(r[0][1], w[1]), cell(r[1][0], w[2], {bold: true, fill: LIGHT}), cell(r[1][1], w[3])] : [cell(r[0][1], w[1] + w[2] + w[3], {span: 3})])]))); };
     const sigTable = async () => { const sigs = d.signatures || [], n = T.sigs.length, w = widths([26, ...T.sigs.map(() => 144 / n)]);
+      if(T.noSigImg){ const sg = sigs[0], w2 = widths([26, 64]);   // prepared by — name & designation only
+        return table(w2, [row([cell('', w2[0], {fill: GREEN}), cell('PREPARED BY', w2[1], {bold: true, fill: GREEN, align: AlignmentType.CENTER})], {head: true}),
+          row([cell('Name', w2[0], {bold: true, fill: LIGHT}), cell(sg?.name || '', w2[1], {align: AlignmentType.CENTER})]),
+          row([cell('Designation', w2[0], {bold: true, fill: LIGHT}), cell(sg ? (sg.designation || '') : '', w2[1], {align: AlignmentType.CENTER})]),
+          row([cell('Date', w2[0], {bold: true, fill: LIGHT}), cell(sg ? (sg.date ? fmtDate(sg.date) : fmtDate(String(sg.at || '').slice(0, 10))) : '', w2[1], {align: AlignmentType.CENTER})])]); }
       const imgs = await Promise.all(T.sigs.map(async (s, i) => { if(!sigs[i] || !sigs[i].img) return null; try { return new ImageRun({type: 'png', data: durl2u8((await imgData(sigs[i].img, 600, 'png')).url), transformation: {width: 120, height: 40}}); } catch(e){ return null; } }));
       return table(w, [row([cell('', w[0], {fill: GREEN}), ...T.sigs.map((s, i) => cell(s.role.toUpperCase(), w[i + 1], {bold: true, fill: GREEN, align: AlignmentType.CENTER}))], {head: true}),
         row([cell('Name', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i]?.name || '', w[i + 1], {align: AlignmentType.CENTER}))]),
@@ -3560,7 +3569,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · AXISWKPJ works exactly as before today's updates</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress report: Prepared by name & designation only, no signature</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3967,12 +3976,12 @@ function docView(id){
   const cols = Math.min(T.sigs.length, 4);
   const sigHTML = T.sigs.map((s,i) => {
     const g = sigs[i];
-    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div><div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div><div class="nm">${esc(g.name)}</div>${isAxP(d.projectId) ? `<div class="ds">${esc(g.designation||'')}${T.sigDate && g.date ? ' · dated ' + fmtDate(g.date) : ''}</div><div class="when">${fmtDT(g.at)}</div>` : `<div class="ds">${esc(g.designation||'')}</div><div class="when">${esc(sigWhen(g, d))}</div>`}${S.canEdit ? `<button class="btn sm ghost" style="margin-top:6px" data-act="sigedit" data-id="${esc(d.id)}" data-i="${i}">✎ Edit name / designation</button>` : ''}</div>`;
+    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div>${T.noSigImg ? '' : `<div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div>`}<div class="nm">${esc(g.name)}</div>${isAxP(d.projectId) ? `<div class="ds">${esc(g.designation||'')}${T.sigDate && g.date ? ' · dated ' + fmtDate(g.date) : ''}</div><div class="when">${fmtDT(g.at)}</div>` : `<div class="ds">${esc(g.designation||'')}</div><div class="when">${esc(sigWhen(g, d))}</div>`}${S.canEdit ? `<button class="btn sm ghost" style="margin-top:6px" data-act="sigedit" data-id="${esc(d.id)}" data-i="${i}">✎ Edit name / designation</button>` : ''}</div>`;
     const isNext = i === st.next;
     const blocked = isNext && s.needsResponse && !respFilled;
     const rq = isNext ? sigReqOf(d) : null, rqOk = rq && rq.slot === i;
     const subStop = S.isSub && d.type === 'PR' && i > 0;   // a sub-contractor prepares the progress report; Sadhana checks and approves it
-    return `<div class="sig wait ${isNext?'next':''}"><div class="role">${esc(s.role)}</div><div class="img">${isNext && S.canWrite && !subStop ? (blocked ? `<span>Add the ${T.code==='PTW'?'close-out remarks':'response'} first</span>` : `<button class="btn pri sm" data-act="sign" data-id="${esc(d.id)}" data-i="${i}">✍ Sign here</button>`) : `<span>${isNext?'Awaiting signature':'Pending'}</span>`}</div><div class="ds">${esc(s.hint)}</div>${isNext && S.canWrite && !blocked ? (rqOk ? `<div class="small" style="margin-top:6px;color:var(--warn)">Requested from <b>${esc(rq.toName)}</b> <button class="btn sm ghost" data-act="askcancel" data-id="${esc(d.id)}">Cancel</button></div>` : `<button class="btn sm ghost" style="margin-top:6px" data-act="asksign" data-id="${esc(d.id)}">👤 Ask someone to sign</button>`) : ''}</div>`;
+    return `<div class="sig wait ${isNext?'next':''}"><div class="role">${esc(s.role)}</div><div class="img">${isNext && S.canWrite && !subStop ? (blocked ? `<span>Add the ${T.code==='PTW'?'close-out remarks':'response'} first</span>` : `<button class="btn pri sm" data-act="sign" data-id="${esc(d.id)}" data-i="${i}">${T.noSigImg ? '✓ Submit' : '✍ Sign here'}</button>`) : `<span>${isNext ? (T.noSigImg ? 'Not submitted yet' : 'Awaiting signature') : 'Pending'}</span>`}</div><div class="ds">${esc(s.hint)}</div>${isNext && S.canWrite && !blocked && !T.noSigImg ? (rqOk ? `<div class="small" style="margin-top:6px;color:var(--warn)">Requested from <b>${esc(rq.toName)}</b> <button class="btn sm ghost" data-act="askcancel" data-id="${esc(d.id)}">Cancel</button></div>` : `<button class="btn sm ghost" style="margin-top:6px" data-act="asksign" data-id="${esc(d.id)}">👤 Ask someone to sign</button>`) : ''}</div>`;
   }).join('');
   const sigEditsTrail = (d.signatures || []).flatMap(g => (g && g.edited || []).map(e => `<div><i></i><span>${e.date ? `Date on the form for <b>${esc(g.name)}</b> changed from ${fmtDate(e.date)} to ${fmtDate(g.date)}` + (e.name !== g.name ? ` · name was <b>${esc(e.name)}</b>` : '') : `Name under a signature changed from <b>${esc(e.name)}</b>${e.designation ? ' (' + esc(e.designation) + ')' : ''} to <b>${esc(g.name)}</b>`}<br><span class="muted">${fmtDT(e.at)} by ${esc(nameOf(e.by))}</span></span></div>`));
   const paperTrail = d.paper ? `<div><i></i><span>Signed on paper (${esc(fmtDate(d.paper.date))}) — signed copy uploaded<br><span class="muted">${fmtDT(d.paper.at)} by ${esc(d.paper.name || nameOf(d.paper.by))}</span></span></div>` : '';
@@ -3989,7 +3998,7 @@ function docView(id){
         <tr><td class="k">Location</td><td>${esc(p.location||'—')}</td><td class="k">Contract no.</td><td>${esc(p.contractNo||'—')}</td></tr></table>
       ${docBodyHTML(d)}
       <div class="sigs" style="grid-template-columns:repeat(${cols},1fr)">${sigHTML}</div>
-      ${S.canWrite && !S.isSub && st.next !== -1 && (!sigs.some(Boolean) || S.canEdit) ? `<div style="text-align:right;margin-top:6px"><button class="btn sm ghost" data-act="sigsetup" data-id="${esc(d.id)}">✍ Add / remove signatures</button></div>` : ''}
+      ${S.canWrite && !S.isSub && !T.noSigImg && st.next !== -1 && (!sigs.some(Boolean) || S.canEdit) ? `<div style="text-align:right;margin-top:6px"><button class="btn sm ghost" data-act="sigsetup" data-id="${esc(d.id)}">✍ Add / remove signatures</button></div>` : ''}
     </div>
     <aside class="side">
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
@@ -4619,13 +4628,13 @@ function editView(){
   ${d._redo ? `<div class="vhint form" style="background:#fdecea;color:#912018;align-items:center"><b>✎</b><span><b style="font-size:14px">Correcting a signed report — Rev ${(d.rev || 0) + 1}</b><br>Fix what is wrong, then save. The signatures are cleared and it needs signing again; the signed version is kept under “Earlier signed versions”.</span></div>` : ''}
   ${d.data?._from && !resp ? `<div class="vhint form" style="align-items:center"><b>↻</b><span>Started from <b>${esc(d.data._from)}</b> — update what has changed.</span></div>` : ''}
   ${(d.type === 'PR' || d.type === 'MM') && !resp ? `<div class="vhint form" style="background:#e9f6ee;color:#1f6b3f;align-items:center;flex-wrap:wrap"><b>⤓</b><span style="flex:1;min-width:180px"><b style="font-size:14px">Fill from daily reports</b><br>Copies ${d.type === 'PR' ? 'weather, ' : ''}manpower and machinery for this period from the daily site reports.</span><button class="btn sm pri" data-act="fillpr">Fill now</button></div>` : ''}
-  <div class="form">${html}${!resp ? `<div class="fsec"><h3>Signatures</h3></div><div class="card pad" style="box-shadow:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">✍ ${T.sigs.map(s => `<b>${esc(s.role)}</b>${s.hint ? ` <span class="muted small">(${esc(s.hint)})</span>` : ''}`).join(' · ')}</span><button class="btn sm" data-act="sigsetup">Add / remove signatures</button></div>` : ''}</div>
+  <div class="form">${html}${!resp && T.noSigImg ? `<div class="fsec"><h3>Prepared by</h3></div><div class="card pad small muted" style="box-shadow:none">No signature needed — when you tap <b>✓ Submit</b>, your name and designation are shown as <b>Prepared by</b>.</div>` : ''}${!resp && !T.noSigImg ? `<div class="fsec"><h3>Signatures</h3></div><div class="card pad" style="box-shadow:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">✍ ${T.sigs.map(s => `<b>${esc(s.role)}</b>${s.hint ? ` <span class="muted small">(${esc(s.hint)})</span>` : ''}`).join(' · ')}</span><button class="btn sm" data-act="sigsetup">Add / remove signatures</button></div>` : ''}</div>
   ${S.sample ? '' : '<!--'}<button class="fab" data-act="voice" aria-label="Speak (voice note)"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6.5-3.5a1 1 0 1 0-2 0 4.5 4.5 0 0 1-9 0 1 1 0 1 0-2 0 6.5 6.5 0 0 0 5.5 6.42V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08a6.5 6.5 0 0 0 5.5-6.42Z"/></svg><span>Tap to speak</span></button>${S.sample ? '' : '-->'}
   <div class="actbar"><div class="in">
     <button class="btn ghost" data-act="${d.id?'open':'proj'}" data-id="${esc(d.id||d.projectId)}">Cancel</button><div class="sp"></div>
     ${S.sample ? `<button class="btn voice" data-act="voice">🎤 Voice</button>` : ''}
     ${resp ? `<button class="btn pri" data-act="saveresp">Save ${T.code==='PTW'?'close-out':T.code==='TR'?'proof of receipt':'response'}</button>` :
-      `${S.draft.type === 'DSR' ? `<button class="btn" data-act="wadraft" title="Send on WhatsApp" style="background:#25D366;color:#fff;border-color:#25D366">💬<span class="hidem"> WhatsApp</span></button>` : ''}<button class="btn" data-act="save">Save draft</button><button class="btn pri" data-act="savesign">✍ Sign<span class="hidem"> & submit</span></button>`}
+      `${S.draft.type === 'DSR' ? `<button class="btn" data-act="wadraft" title="Send on WhatsApp" style="background:#25D366;color:#fff;border-color:#25D366">💬<span class="hidem"> WhatsApp</span></button>` : ''}<button class="btn" data-act="save">Save draft</button><button class="btn pri" data-act="savesign">${T.noSigImg ? '✓ Submit' : '✍ Sign<span class="hidem"> & submit</span>'}</button>`}
   </div></div>`;
 }
 function chkCount(rows, f){ const o = (f && (f.cols.find(c => c.k === 'ans') || {}).o) || ['Yes', 'No', 'N/A'], it = (rows || []).filter(r => r && !r._g && r.item), c = k => it.filter(r => r.ans === k).length, left = it.length - o.reduce((a, k) => a + c(k), 0);
@@ -4820,6 +4829,7 @@ function openSign(docId, idx){
   const T = TT(d), slot = T.sigs[idx];
   const myName = S.names[S.me] || '';
   if(idx === 0 && !(d.signatures || []).length){ const miss = missingRequired(d); if(miss.length){ toast('Fill in first: ' + miss.map(f => f.l).join(', '), true); S.draft = clone(d); go('edit'); setTimeout(() => flagMissing(miss), 300); return; } }
+  if(T.noSigImg){ prepForm(d, docId, idx, slot, myName); return; }
   const mine = S.mySig || '', sigsL = S.mySigs && S.mySigs.length ? S.mySigs : (mine ? [{img: mine}] : []), stampsL = S.myStamps || [];
   showModal(`<div class="box"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>${esc(slot.role)}</h3></div></div>
     <div class="mb">
@@ -4840,6 +4850,18 @@ function openSign(docId, idx){
     <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="sgdo" data-id="${esc(docId)}" data-i="${idx}">Sign document</button></div></div>`);
   if(!mine) initPad(); else PAD = null;
   setTimeout(()=>$('#sgName')?.focus(), 50);
+}
+// no signature: just who prepared it
+function prepForm(d, docId, idx, slot, myName){
+  PAD = null;
+  showModal(`<div class="box" style="max-width:480px"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>${esc(slot.role)}</h3></div></div>
+    <div class="mb"><div class="fgrid">
+      <div class="fld half" id="fld_sn"><label>Full name <em>*</em></label><input id="sgName" value="${esc(myName)}" autocomplete="name"></div>
+      <div class="fld half"><label>Designation</label><input id="sgDes" placeholder="e.g. Site Engineer" value="${esc(S.myDes || '')}"></div>
+      <div class="fld half"><label>Date</label><input type="date" id="sgDate" value="${today()}" max="${today()}"><div class="hint">Change it if the report was prepared on an earlier day.</div></div></div>
+      <div class="declare">I confirm the contents of <b>${esc(d.number)}</b> are true and accurate. No signature is needed — only your name and designation are shown. Once submitted, the report is locked.</div></div>
+    <div class="mf"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn pri" data-act="sgdo" data-id="${esc(docId)}" data-i="${idx}" data-noimg="1">✓ Submit report</button></div></div>`);
+  setTimeout(() => $('#sgName')?.focus(), 50);
 }
 let PAD = null;
 function initPad(){
@@ -4987,8 +5009,9 @@ async function doSign(docId, idx){
   const savedImg = useSaved ? ((S.mySigs || [])[+selU.dataset.si || 0]?.img || S.mySig) : '';
   const stIdx = document.querySelector('input[name=sgStamp]:checked')?.value, stampImg = stIdx ? (S.myStamps || [])[+stIdx]?.img : '';
   if(useSaved && name !== (S.names[S.me] || name)){ toast('Your e-signature can only be used with your own name.', true); return; }
-  if(!useSaved && (!PAD || PAD.strokes === 0 || (PAD.maxX-PAD.minX) < 12*PAD.dpr)){ toast('Please draw a signature.', true); return; }
-  const btn = document.querySelector('[data-act=sgdo]'); btn.disabled = true; btn.textContent = 'Signing…';
+  const noImg = !!document.querySelector('[data-act=sgdo][data-noimg]');
+  if(!noImg && !useSaved && (!PAD || PAD.strokes === 0 || (PAD.maxX-PAD.minX) < 12*PAD.dpr)){ toast('Please draw a signature.', true); return; }
+  const btn = document.querySelector('[data-act=sgdo]'); btn.disabled = true; btn.textContent = noImg ? 'Submitting…' : 'Signing…';
   try {
     const ref = S.db.doc(dpath(docId)); const snap = await ref.get();
     if(!snap.exists) throw {code:'gone'};
@@ -4998,7 +5021,7 @@ async function doSign(docId, idx){
     for(let i=0;i<idx;i++) if(!sigs[i]){ closeModal(); toast('Earlier signatures are still missing.', true); return; }
     if(T.sigs[idx].needsResponse && T.fields.some(f => f.phase==='response' && f.req && isEmpty(cur.data?.[f.k]))){ closeModal(); toast('Add the response first.', true); return; }
     while(sigs.length < idx) sigs.push(null);
-    const sImg = useSaved ? savedImg : padImage();
+    const sImg = noImg ? '' : useSaved ? savedImg : padImage();
     const fDate = ($('#sgDate')?.value || '').slice(0, 10);
     const axS = isAxP(cur.projectId);
     if(fDate && fDate > today()){ btn.disabled = false; btn.textContent = 'Sign document'; toast(axS ? 'The date on the form can\'t be in the future.' : 'The date signed can\'t be in the future.', true); return; }
@@ -5008,7 +5031,7 @@ async function doSign(docId, idx){
     if(!axS && fDate && prevD && fDate < prevD){ btn.disabled = false; btn.textContent = 'Sign document'; toast(`The date signed can't be before the earlier signature (${fmtDate(prevD)}).`, true); return; }
     sigs[idx] = {name, designation:des, img: stampImg ? await withStamp(sImg, stampImg) : sImg, at:new Date().toISOString(), ...(fDate && fDate !== today() ? {date: fDate} : {}), uid:S.me||null, ...(useSaved ? {esig: true} : {}), ...(stampImg ? {stamped: true} : {})};
     await ref.update({signatures:sigs, updatedAt:new Date().toISOString(), updatedBy:S.me||null});
-    closeModal(); toast('Signed ✓');
+    closeModal(); toast(noImg ? 'Submitted ✓' : 'Signed ✓');
     try { const p = projById(cur.projectId); if(p && p.sigReq && p.sigReq[docId] && p.sigReq[docId].slot <= idx){ await S.db.doc('projects/' + cur.projectId).update({['sigReq.' + docId]: null}); p.sigReq[docId] = null; } } catch(e){ console.warn(e); }
     go('doc',{id:docId});
   } catch(e){ btn.disabled=false; btn.textContent='Sign document'; dbErr(e); }
@@ -5105,7 +5128,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z102';
+const APP_VER = 'Z103';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5490,6 +5513,11 @@ async function makePDF(id, opt){
 
     // ---- signature table (same layout everywhere) ----
     const sigTable = async () => {
+      if(T.noSigImg){ const sg = (d.signatures || [])[0]; need(30);   // prepared by — name & designation only, no signature
+        doc.autoTable({...base, tableWidth: 26 + 64, margin: {...base.margin, left: L + CW - 90}, startY: y, head: [['', 'PREPARED BY']],
+          body: [['Name', pt(sg?.name || '')], ['Designation', pt(sg ? (sg.designation || '') : '')], ['Date', sg ? pt(sg.date ? fmtDate(sg.date) : fmtDate(String(sg.at || '').slice(0, 10))) : '']],
+          columnStyles: {0: {cellWidth: 26, fontStyle: 'bold', fillColor: LABEL_FILL}, 1: {cellWidth: 64, halign: 'center'}}});
+        after(); return; }
       const sigs = d.signatures || [], n = T.sigs.length, lw = 26, cw = n === 1 ? 64 : (CW - lw) / n;
       const imgs = await Promise.all(T.sigs.map((s, i) => sigs[i] ? imgData(sigs[i].img, 600, 'png').catch(() => null) : null));
       if(T.onePage && n <= 3){   // one-page forms: one compact row per signer
