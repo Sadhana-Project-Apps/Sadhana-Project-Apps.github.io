@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress summary (main works) updates from the work programme</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Upload the final Word copy of a published report — the next report follows it</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4001,6 +4001,7 @@ function docView(id){
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF${d.paper ? ' (unsigned)' : ''}</button>
         ${!d.paper && st.next !== -1 && S.canWrite && !S.isSub ? `<button class="btn" data-act="paperup" data-id="${esc(d.id)}">📄 Signed on paper? Upload the signed copy</button>` : ''}
         ${T.paperForm ? '' : `<button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>`}
+        ${st.next !== 0 && S.canWrite && !S.isDev && !S.isSub ? `<button class="btn" data-act="subup" data-id="${esc(d.id)}" title="The Word file as it was finally sent">⇪ ${d.asSub ? 'Upload a newer final copy' : 'Upload the final copy (as sent)'}</button>` : ''}
         ${d.type === 'SEA' && S.canWrite && !S.isSub ? `<button class="btn" data-act="mksse" data-id="${esc(d.id)}">⭐ Evaluate this subcontractor (F01)</button>` : ''}
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
         ${d.type === 'PC' && S.canWrite ? (S.docs.find(o => o.type === 'DO' && o.data?.claimId === d.id) ? `<button class="btn" data-act="mkdo" data-id="${esc(d.id)}">📦 Open the delivery order (DO)</button>` : `<button class="btn pri" data-act="mkdo" data-id="${esc(d.id)}">📦 Make the delivery order (DO)</button>`) : ''}
@@ -4019,6 +4020,8 @@ function docView(id){
           : (S.canAdmin || canSelfDelete(d)) ? '' : S.canWrite && !S.isSub && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}
         </div></details>
       </div></div>
+      ${d.asSub ? `<div class="card pad" style="border-color:var(--good,#2f7d32);margin-bottom:12px;min-width:0;overflow-wrap:anywhere"><b>📄 Final copy as sent</b><div class="small muted" style="margin:2px 0 8px">${esc(d.asSub.file || '')} · uploaded by ${esc(d.asSub.name || nameOf(d.asSub.by))} · ${fmtDT(d.asSub.at)}${d.asSub.data ? '<br>The next report continues from this copy (S-curve, progress summary, forecast, issues, manpower, manhours).' : ''}</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">${d.asSub.fileId ? `<button class="btn sm" data-act="fileopen" data-id="${esc(d.asSub.fileId)}">Open</button>` : ''}${(d.asSub.prev || []).length ? `<span class="small muted">${d.asSub.prev.length} earlier upload${d.asSub.prev.length === 1 ? '' : 's'} kept in Project files</span>` : ''}</div></div>` : ''}
       ${d.paper ? `<div class="card pad" style="border-color:var(--good,#2f7d32);margin-bottom:12px"><b>📄 Signed on paper</b> · ${esc(fmtDate(d.paper.date))}<div class="small muted" style="margin:2px 0 8px">Signed copy uploaded by ${esc(d.paper.name || nameOf(d.paper.by))} · ${fmtDT(d.paper.at)}${d.paper.note ? ' — ' + esc(d.paper.note) : ''}</div>
         <div class="row" style="gap:8px;flex-wrap:wrap">${(d.paper.fileIds || []).map((fid, i) => `<button class="btn sm" data-act="fileopen" data-id="${esc(fid)}">View${(d.paper.fileIds || []).length > 1 ? ' page ' + (i + 1) : ' signed copy'}</button>`).join('')}${S.canEdit ? `<button class="btn sm ghost danger" data-act="paperundo" data-id="${esc(d.id)}">Undo</button>` : ''}</div></div>` : ''}
       ${d.fixReq ? `<div class="card pad actcard" style="margin-bottom:12px"><b>✎ Correction requested</b> by ${esc(d.fixReq.name || nameOf(d.fixReq.by))} · ${fmtDT(d.fixReq.at)}<div class="small" style="margin:4px 0 8px">“${esc(d.fixReq.reason || '')}”</div>
@@ -4263,7 +4266,10 @@ function syncAxisScurve(d){
    They can't open other people's reports, so staff keep a copy of the latest report's carried parts on the project (prLast);
    cover photo / key plan are copied into photos marked subShare so the sub-contractor's phone can show them. */
 const PR_SHARE_KEYS = ['scMode', 'period', 'reportNo', 'from', 'to', 'planned', 'actual', 'scurve', 'mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'byLevelPlan', 'issues', 'coverPhoto', 'hseW', 'bfMh', 'bfSafe', 'mhPeriod', 'sfPeriod', 'manpower', 'machinery', 'gridFrom', 'gridTo'];
+// a published report whose final Word file was uploaded again: the next report continues from what was actually submitted
+const asSent = d => d && d.asSub && d.asSub.data ? {...d, data: d.asSub.data} : d;
 async function sharePRLast(d, force){
+  d = asSent(d);
   try {
     if(!d || d.type !== 'PR' || S.isSub || !S.canWrite || !d.id || !d.data || !d.data.to) return;
     const p = projById(d.projectId); if(!p) return; const cur = p.prLast || {};
@@ -4289,9 +4295,9 @@ function newDraft(pid, type){
   const fmt0 = projFmt(pid, type), T = buildType(type, fmt0), data = {};
   T.fields.forEach(f => { if(!f.k) return; const v = typeof f.def === 'function' ? f.def() : f.def; if(f.phase==='response') return; data[f.k] = v !== undefined ? clone(v) : (f.t==='table'?[{}]:f.t==='photos'||f.t==='checks'?[]:''); });
   const sharedPR = () => { const pl = (projById(pid) || {}).prLast; return pl && pl.data && pl.data.to && !S.docs.some(x => x.id === pl.docId) ? {id: '_shared', type: 'PR', projectId: pid, seq: pl.seq || 0, createdAt: pl.at || '', data: pl.data} : null; };
-  const prevOf = t => { const a = S.docs.filter(x => x.type === t && x.projectId === pid); const sp = t === 'PR' && sharedPR(); if(sp && !a.some(x => (x.data?.to || '') >= sp.data.to)) a.push(sp); return a.sort((a, b) => (b.seq || 0) - (a.seq || 0)); };
+  const prevOf = t => { const a = S.docs.filter(x => x.type === t && x.projectId === pid).map(asSent); const sp = t === 'PR' && sharedPR(); if(sp && !a.some(x => (x.data?.to || '') >= sp.data.to)) a.push(sp); return a.sort((a, b) => (b.seq || 0) - (a.seq || 0)); };
   if(type === 'PR' || type === 'SW' || type === 'ENM'){ const prev = prevOf(type); data.reportNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.reportNo) || 0), 0) + 1); }
-  const lastPRof = () => { const all = [...S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to), ...(sharedPR() ? [sharedPR()] : [])], full = all.filter(x => (x.data.mainWorks || []).some(r => r && r.desc)); return (full.length ? full : all).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0]; };
+  const lastPRof = () => { const all = [...S.docs.filter(x => x.type === 'PR' && x.projectId === pid && !x.deleted && x.data?.to).map(asSent), ...(sharedPR() ? [sharedPR()] : [])], full = all.filter(x => (x.data.mainWorks || []).some(r => r && r.desc)); return (full.length ? full : all).sort((a, b) => String(b.data.to).localeCompare(String(a.data.to)) || (b.seq || 0) - (a.seq || 0))[0]; };
   if(type === 'PR'){ const last = lastPRof() || prevOf('PR')[0];
     if(last && Array.isArray(last.data?.hse) && Array.isArray(data.hse)) data.hse = data.hse.map(r => { const o = last.data.hse.find(z => z && z.item === r.item); return o ? {...r, prev: o.todate || o.prev || ''} : r; });
     if(last && last.data?.to){ data.from = addDays(last.data.to, 1); }
@@ -5064,7 +5070,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z98';
+const APP_VER = 'Z99';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6584,6 +6590,7 @@ document.addEventListener('click', async e => {
     case 'mpcut': { const i = $('#mpCut'); if(i){ i.value = el.dataset.v; mppPreview(); } break; }
     case 'mpgo': prMppApply(el); break;
     case 'mppick': $('#mpFile')?.click(); break;
+    case 'subup': prPick('', f => subUpload(id, f)); break;
     case 'prdocmpp': case 'prdocword': { const g = docById(id); if(!g) break; if(nextSigIndex(g) !== 0){ toast('Signed documents are locked — use “✎ Ask to correct this report”.', true); break; }
       S.draft = clone(g); S.respMode = false; go('edit'); if(a === 'prdocmpp') setTimeout(prMppForm, 150); else prPick('.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', prFromWord); break; }
     case 'fixwhy': { const t = $('#fixWhy'); if(t){ t.value = el.dataset.v; t.focus(); } break; }
@@ -7631,6 +7638,29 @@ function axisImportToPR(pid, o, file){
   delete x.mhPeriod; delete x.sfPeriod;   // its manhours are the ones in the submitted report
   x._import = {file: file.name, writer: o.writer || '', designation: o.designation || '', at: new Date().toISOString(), by: S.me || null};
   return d;
+}
+// ---------- a published document: keep the final file as it was sent (after editing the Word copy) ----------
+// Axis progress reports are also read, so the next report continues from the submitted figures. The signed record itself is not changed.
+async function subUpload(id, f){
+  const d = docById(id); if(!d) return; const axisPR = d.type === 'PR' && TT(d).coverStyle === 'axis';
+  if(!navigator.onLine){ toast('No internet — uploading needs a connection.', true); return; }
+  let sub = null;
+  if(axisPR){ if(!/\.docx$/i.test(f.name)){ toast('Choose the Word file (.docx) of this report.', true); return; }
+    try { toast('Reading ' + f.name + '…'); const o = await parseAxisPRDocx(f);
+      if(o.reportNo && d.data.reportNo && String(+o.reportNo) !== String(+d.data.reportNo)){ toast(`That Word file is Progress Report No.${o.reportNo} — this is No.${d.data.reportNo}. Choose the right file.`, true); return; }
+      const tmp = axisImportToPR(d.projectId, o, f).data, keep = ['period', 'reportNo', 'from', 'to', 'cutoff', 'planned', 'actual', 'scurve', 'mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'issues', 'manpower', 'machinery', 'gridFrom', 'gridTo', 'hseW', 'bfMh', 'bfSafe'];
+      sub = clone(d.data); keep.forEach(k => { if(tmp[k] !== undefined && !(Array.isArray(tmp[k]) && !tmp[k].length && k !== 'issues')) sub[k] = tmp[k]; }); delete sub.mhPeriod; delete sub.sfPeriod; delete sub._import;
+    } catch(e){ toast('Could not read that Word file: ' + (e.message || 'unknown format') + ' — it is kept as a file only.', true); sub = null; } }
+  try {
+    toast('Uploading ' + f.name + '…');
+    const fid = await uploadOne(d.projectId, f, {category: d.type === 'PR' ? 'Submitted progress reports' : 'Submitted documents', folder: d.type === 'PR' ? 'Submitted progress reports' : 'Submitted documents',
+      title: `${d.number} ${docTitle(d) || ''} (as sent)`.replace(/\s+/g, ' '), refNo: d.number || '', date: docDate(d) ? String(docDate(d)).slice(0, 10) : today(), expiry: '', notes: 'Final copy as sent — uploaded after editing the Word copy', docId: d.id, updatedAt: new Date().toISOString(), updatedBy: S.me || null});
+    const v = {fileId: fid || null, file: f.name.replace(/^[0-9a-f]{8}-/i, ''), at: new Date().toISOString(), by: S.me || null, name: S.names[S.me] || '', ...(sub ? {data: sub} : {}),
+      prev: [...((d.asSub && d.asSub.prev) || []), ...(d.asSub && d.asSub.fileId ? [d.asSub.fileId] : [])]};
+    await S.db.doc(dpath(id)).update({asSub: v, updatedAt: v.at, updatedBy: S.me || null}); d.asSub = v;
+    if(sub && !S.isSub) await sharePRLast(d);   // only if it is still the project's latest report
+    toast(sub ? 'Final copy kept — the next report continues from it' : 'Final copy kept with this document'); render();
+  } catch(e){ if(e && e.code === 'permission-denied') toast('Not allowed yet — the admin needs to publish the latest Firebase rules.', true); else dbErr(e); }
 }
 // ---------- inside a progress report: fill it from a report already prepared in Word, or from the MS Project file ----------
 function prPick(accept, cb){ const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = false; i.onchange = () => { const f = i.files && i.files[0]; if(f) cb(f); }; i.click(); }
