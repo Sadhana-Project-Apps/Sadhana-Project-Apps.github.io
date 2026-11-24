@@ -3569,7 +3569,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress report: Prepared by name & designation only, no signature</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Edited Word progress reports read back into the app (all projects)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -5128,7 +5128,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z103';
+const APP_VER = 'Z104';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -7725,6 +7725,79 @@ function axisImportToPR(pid, o, file){
   x._import = {file: file.name, writer: o.writer || '', designation: o.designation || '', at: new Date().toISOString(), by: S.me || null};
   return d;
 }
+// ---------- standard progress report: read back the app's own Word copy after staff edited it ----------
+// Tables are matched to the report's fields by their column headings (and the section they sit under); label / value tables
+// fill the single fields; the line under the title gives report no., period and submission date. Photos stay as they are.
+async function parseStdPRDocx(file, d){
+  const T = TT(d), JSZip = await jszip(), zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const xml = await zip.file('word/document.xml')?.async('string'); if(!xml) throw new Error('not a Word file');
+  const dom = new DOMParser().parseFromString(xml, 'application/xml'), body = [...dom.getElementsByTagName('w:body')][0];
+  const kids = el => [...el.children], ln = el => el.localName;
+  const ptxt = p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('');
+  const ctxt = tc => [...tc.getElementsByTagName('w:p')].map(ptxt).join('\n').trim();
+  const norm = v => String(v || '').toUpperCase().replace(/[–—]/g, '-').replace(/[^A-Z0-9%]+/g, ' ').trim();
+  const MON = {jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12};
+  const iso = v => { v = String(v || '').trim(); let m = v.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})/); if(m && MON[m[2].toLowerCase()]) return `${m[3]}-${pad2(MON[m[2].toLowerCase()])}-${pad2(m[1])}`;
+    m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(m[2])}-${pad2(m[1])}`; return /^\d{4}-\d\d-\d\d/.test(v) ? v.slice(0, 10) : ''; };
+  const blocks = []; let head = '', sub = '';
+  for(const el of kids(body)){
+    if(ln(el) === 'p'){ const t = ptxt(el).trim(); if(!t) continue; blocks.push({p: t}); if(/^\d+\.\s+/.test(t)){ head = t.replace(/^\d+\.\s+/, ''); sub = ''; } else if(t === t.toUpperCase() && t.length < 80) sub = t; continue; }
+    if(ln(el) !== 'tbl') continue;
+    const rows = kids(el).filter(e => ln(e) === 'tr').map(tr => kids(tr).filter(e => ln(e) === 'tc').map(ctxt));
+    blocks.push({rows, head, sub}); }
+  const out = {}, used = new Set(), found = [];
+  const secName = f => (T.fields.slice(0, T.fields.indexOf(f)).filter(z => z.sec).pop() || {}).sec || '';
+  // title line: "Report No. 3 | Period: 18 Nov 2026 – 24 Nov 2026 | Submitted: 24 Nov 2026"
+  const tl = blocks.find(b => b.p && /Report No\.|Period:/i.test(b.p));
+  if(tl){ const m1 = tl.p.match(/Report No\.?\s*([\w-]+)/i), m2 = tl.p.match(/Period:\s*(.+?)\s*[–-]\s*(\d{1,2}\s+\w+\s+\d{4})/i), m3 = tl.p.match(/Submitted:\s*(\d{1,2}\s+\w+\s+\d{4})/i);
+    if(m1) out.reportNo = m1[1]; if(m2){ const a = iso(m2[1]), b = iso(m2[2]); if(a) out.from = a; if(b) out.to = b; } if(m3 && iso(m3[1])) out.subDate = iso(m3[1]); }
+  const tabs = blocks.filter(b => b.rows);
+  // single fields from label / value cells
+  const singles = T.fields.filter(f => f.k && ['date', 'datetime', 'select', 'text', 'number'].includes(f.t) && f.pdf !== false);
+  tabs.forEach(b => b.rows.forEach(r => { for(let i = 0; i + 1 < r.length; i += 1){ const f = singles.find(z => norm(z.l) === norm(r[i])); if(!f) continue;
+    let v = String(r[i + 1] || '').trim(); if(v === '-') v = ''; if(f.t === 'date') v = iso(v); else if(f.t === 'number') v = v.replace(/[^\d.\-]/g, '');
+    out[f.k] = v; found.push(f.l); } }));
+  // tables
+  T.fields.filter(f => f.t === 'table' && f.k && f.pdf !== false).forEach(f => {
+    const plain = f.cols.filter(c => c.day == null), want = plain.map(c => norm(c.l)), ctxWords = [f.l, secName(f)].map(norm);
+    let best = null, bs = 0;
+    tabs.forEach((b, bi) => { if(used.has(bi) || !b.rows.length) return; const h = b.rows.slice(0, 2).flat().map(norm);
+      let sc = f.k === 'scurve' ? (h.filter(x => x === 'DATE').length && h.some(x => /SCHEDULE/.test(x)) ? 1 : 0) : want.filter(w => h.includes(w)).length / want.length;
+      if(sc < 0.6) return; const ctx = norm(b.head + ' ' + b.sub); if(ctxWords.some(w => w && ctx.includes(w))) sc += 1;
+      if(sc > bs){ bs = sc; best = bi; } });
+    if(best == null) return; used.add(best); const R = tabs[best].rows;
+    if(f.k === 'scurve'){ const h = R[0].map(norm), rows = [];
+      for(let g = 0; g * 3 < h.length; g++) R.slice(1).forEach(r => { const c = r.slice(g * 3, g * 3 + 3); if(c[0]) rows.push({date: c[0], sched: c[1] || '', actual: c[2] || ''}); });
+      out.scurve = rows; found.push(f.l); return; }
+    const hdr = R[0].map(norm), hasNum = !!f.num && !want.includes(hdr[0]), dayCols = f.cols.filter(c => c.day != null), tc0 = plain.find(c => !c.n);
+    const rows = [];
+    R.slice(hdr.some(x => want.includes(x)) ? 1 : 2).forEach(r => {
+      const cells = r.map(x => String(x || '').trim()); if(!cells.some(Boolean)) return;
+      if(cells.length === 1 && /^(nil|-)$/i.test(cells[0])) return;
+      const first = cells.find((c, i) => !(hasNum && i === 0)) || ''; if(/^TOTAL$/i.test(first.trim()) || (f.sumLabel && first.trim() === String(f.sumLabel({...d.data, ...out}) || '').trim())) return;   // the yellow totals row only
+      if(cells.length < hdr.length - (dayCols.length ? 0 : 0) && cells.length <= 2 && tc0){   // a heading row across the table
+        const lab = cells.filter(Boolean).pop() || ''; rows.push({[tc0.k]: lab.replace(/^\d+[.)]\s*/, '')}); return; }
+      const vals = (hasNum ? cells.slice(1) : cells).slice(0, f.rowTotal ? -1 : undefined), o = {}; let k = 0;   // the row's TOTAL column is worked out, not read
+      const days = periodDays({...d.data, ...out}, f.maxDays || 7);
+      f.cols.forEach(c => { if(c.day != null && (c.day >= days || k >= vals.length)) return; let v = vals[k++] ?? ''; if(v === '-' && !c.n) v = ''; if(c.date) v = iso(v) || v; if(!isEmpty(v)) o[c.k] = v; });
+      if(Object.keys(o).length) rows.push(o); });
+    out[f.k] = rows; found.push(f.l); });
+  // text boxes: a one-column table headed by the field's name (or under its own section)
+  T.fields.filter(f => f.t === 'textarea' && f.k && f.pdf !== false).forEach(f => {
+    const bi = tabs.findIndex((b, i) => !used.has(i) && b.rows.every(r => r.length === 1) && (norm(b.rows[0][0]) === norm(f.l) || (norm(b.head) === norm(secName(f)) && b.rows.length <= 2)));
+    if(bi < 0) return; used.add(bi); const R = tabs[bi].rows, txt = (norm(R[0][0]) === norm(f.l) ? R.slice(1) : R).map(r => r[0]).join('\n').trim(); out[f.k] = txt === '-' ? '' : txt; found.push(f.l); });
+  if(!found.length && !tl) throw new Error('this does not look like a progress report made by the app');
+  return {data: out, found};
+}
+// standard progress report: fill the draft from its edited Word copy, then line the S-curve up again
+async function prFromStdWord(file){
+  const d = S.draft; let r; try { toast('Reading ' + file.name + '…'); r = await parseStdPRDocx(file, d); } catch(e){ toast('Could not read that Word file: ' + (e.message || 'unknown format'), true); return; }
+  const x = d.data, keepNo = x.reportNo; Object.entries(r.data).forEach(([k, v]) => { if(!(Array.isArray(v) && !v.length && ['mainWorks', 'scurve'].includes(k))) x[k] = v; });
+  if(keepNo && r.data.reportNo && String(r.data.reportNo) !== String(keepNo)) toast(`Note: the Word file says report No.${r.data.reportNo} — this report is No.${keepNo}.`, true);
+  if(Array.isArray(x.scurve)) syncAxisScurve(d);
+  x._fromWord = {file: file.name.replace(/^[0-9a-f]{8}-/i, ''), at: new Date().toISOString(), by: S.me || null};
+  S.dirty = true; render(); toast(`Filled from ${x._fromWord.file} — ${r.found.length} part${r.found.length === 1 ? '' : 's'} updated. Check it, then save.`);
+}
 // ---------- a published document: keep the final file as it was sent (after editing the Word copy) ----------
 // Axis progress reports are also read, so the next report continues from the submitted figures. The signed record itself is not changed.
 async function subUpload(id, f){
@@ -7736,6 +7809,11 @@ async function subUpload(id, f){
       if(o.reportNo && d.data.reportNo && String(+o.reportNo) !== String(+d.data.reportNo)){ toast(`That Word file is Progress Report No.${o.reportNo} — this is No.${d.data.reportNo}. Choose the right file.`, true); return; }
       const tmp = axisImportToPR(d.projectId, o, f).data, keep = ['period', 'reportNo', 'from', 'to', 'cutoff', 'planned', 'actual', 'scurve', 'mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'issues', 'manpower', 'machinery', 'gridFrom', 'gridTo', 'hseW', 'bfMh', 'bfSafe'];
       sub = clone(d.data); keep.forEach(k => { if(tmp[k] !== undefined && !(Array.isArray(tmp[k]) && !tmp[k].length && k !== 'issues')) sub[k] = tmp[k]; }); delete sub.mhPeriod; delete sub.sfPeriod; delete sub._import;
+    } catch(e){ toast('Could not read that Word file: ' + (e.message || 'unknown format') + ' — it is kept as a file only.', true); sub = null; } }
+  else if(d.type === 'PR' && /\.docx$/i.test(f.name)){   // standard progress report: read its edited Word copy too
+    try { toast('Reading ' + f.name + '…'); const r = await parseStdPRDocx(f, d);
+      if(r.data.reportNo && d.data.reportNo && String(+r.data.reportNo) !== String(+d.data.reportNo)){ toast(`That Word file is Progress Report No.${r.data.reportNo} — this is No.${d.data.reportNo}. Choose the right file.`, true); return; }
+      sub = clone(d.data); Object.entries(r.data).forEach(([k, v]) => { if(!(Array.isArray(v) && !v.length && ['mainWorks', 'scurve'].includes(k))) sub[k] = v; });
     } catch(e){ toast('Could not read that Word file: ' + (e.message || 'unknown format') + ' — it is kept as a file only.', true); sub = null; } }
   try {
     toast('Uploading ' + f.name + '…');
@@ -7752,6 +7830,7 @@ async function subUpload(id, f){
 function prPick(accept, cb){ const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = false; i.onchange = () => { const f = i.files && i.files[0]; if(f) cb(f); }; i.click(); }
 async function prFromWord(file){
   const d = S.draft; if(!d || d.type !== 'PR') return;
+  if(TT(d).coverStyle !== 'axis' && !isAxP(d.projectId)) return prFromStdWord(file);
   let o; try { toast('Reading ' + file.name + '…'); o = await parseAxisPRDocx(file); } catch(e){ toast('Could not read that Word file: ' + (e.message || 'unknown format'), true); return; }
   const x = d.data, T = TT(d), axis = T.coverStyle === 'axis';
   Object.assign(x, {reportNo: o.reportNo || x.reportNo, from: o.from || x.from, to: o.to || x.to});
