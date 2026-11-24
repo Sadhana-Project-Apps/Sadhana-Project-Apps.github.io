@@ -159,6 +159,15 @@ body.intern [data-v=team]{display:none}
 .sigpick{display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 10px}.sigopt{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.fld label.sigopt,label.sigopt{display:flex;flex-direction:row;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-weight:500;font-size:14px;color:inherit;cursor:pointer}.sigopt .sigprev{min-width:120px;min-height:56px;padding:6px}.sigopt .sigprev img{max-height:60px}
 .sigchoose{display:flex;flex-wrap:wrap;gap:8px 18px;margin:2px 0 10px;font-size:14px}.fld .sigchoose label{display:flex;align-items:center;gap:8px;font-weight:500;color:inherit;margin:0;font-size:14px;text-transform:none;letter-spacing:0}.fld .sigchoose input{width:18px;height:18px;margin:0;padding:0;flex:none;accent-color:var(--hazard)}
 .al .abtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.permits{margin-bottom:14px;padding:0}.permits>summary{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;list-style:none;flex-wrap:wrap}.permits>summary::-webkit-details-marker{display:none}.permits>summary::after{content:'▾';color:#8a8072}.permits[open]>summary::after{content:'▴'}
+.permits .warnt{color:#b42318;font-weight:700}.permlist{padding:0 14px 12px;display:grid;gap:8px}.permits>.small{padding:0 14px 12px!important}
+.permrow{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff}
+.permrow .ic{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;background:#efebe3}
+.permrow.ok .ic{background:#2E7D32;color:#fff}.permrow.soon .ic{background:#f79009;color:#fff}.permrow.exp{border-color:#d92d20}.permrow.exp .ic{background:#d92d20;color:#fff}
+.permrow.miss:not(.opt){border-style:dashed;border-color:#d92d20}.permrow.miss.opt{border-style:dashed}
+.permrow .pt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.permrow .pt b{font-size:14px}
+.permfile{all:unset;cursor:pointer;font-size:13px;color:var(--ink,#222);text-decoration:underline;text-decoration-color:#c9c1b3;overflow-wrap:anywhere}.permfile .bad{color:#b42318;font-weight:700}.permfile .warn{color:#b54708;font-weight:700}
+.permrow .btn{flex:none}
 .recrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-4px 0 14px}
 .recchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px 5px 6px;font:inherit;font-size:13px;cursor:pointer;color:inherit}
 .recchip .ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:#e6e1d6;color:#555}
@@ -2602,7 +2611,7 @@ function projectView(id, tab){
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
   ${S.canWrite && !intern() && !S.isSub && PROJECT_PRESETS.some(x => x.test(p)) && !S.docs.some(d => d.projectId === id && d.type === 'PR' && !d.deleted) ? `<div class="card pad" style="margin-bottom:14px;border:2px dashed var(--accent,#2f7d32)"><b>📥 Progress reports already submitted to the client aren't in the app yet</b><div class="small muted" style="margin:4px 0 10px">Choose the Word files (e.g. PR No.1 – No.5) once. Everything in them goes into the app — S-curve, progress summary, forecast, progress by level, issues, manpower, manhours and photos — and the next progress report starts from the last one, so staff only update what changed.</div><label class="btn pri" style="margin:0">Choose the Word files<input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden data-axpr="${esc(id)}"></label></div>` : ''}
   ${projRecordsCard(id)}
-  ${(() => { const ex = expiringFiles().filter(x => x.f.projectId === id); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
+  ${(() => { const inCard = S.isSub ? [] : REQ_DOCS.flatMap(r => projRecFiles(id, r)).map(f => f.id), ex = expiringFiles().filter(x => x.f.projectId === id && !inCard.includes(x.f.id)); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
   ${(() => { try { const A = projAlerts(p); return A.length ? `<div class="card alerts" style="margin-bottom:14px">${alertLines(A)}</div>` : ''; } catch(e){ return ''; } })()}
   ${(() => { const it = [['Client', p.client], ['Consultant', p.consultant], ['Location', p.location], ['Contract no.', p.contractNo], ['Project manager', p.pm]].filter(x => x[1]).map(([l, v]) => `<div><span>${l}</span>${esc(v)}</div>`);
     if(p.start || p.end) it.splice(Math.min(it.length, 4), 0, `<div><span>Period</span>${(p.status||'Active') === 'Completed' ? fmtDate(p.start) + ' – ' + fmtDate(p.end) : countdownHTML(p)}</div>`);
@@ -3546,7 +3555,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 22 Nov 2026 (${APP_VER}) · Sub-contractor progress reports start from the project's latest report</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Authority permits &amp; insurance on every project</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4978,7 +4987,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z88';
+const APP_VER = 'Z89';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5011,18 +5020,34 @@ document.addEventListener('visibilitychange', () => { if(document.visibilityStat
 
 /* ---------- project records checklist + EOT approval ---------- */
 const REQ_DOCS = [
-  {k: 'CIDB', l: 'CIDB registration', short: 'CIDB', cat: 'CIDB registration', re: /\bcidb\b|\bppk\b|\bspkk\b|\bstb\b/i},
-  {k: 'LHDN', l: 'LHDN stamping', short: 'LHDN stamping', cat: 'Stamp duty (LHDN)', re: /lhdn|stamp(ing| duty)|setem/i},
-  {k: 'LOA', l: 'Letter of Award (LOA)', short: 'LOA', cat: 'Letter of Award (LOA)', re: /\bloa\b|letter of (award|acceptance)|surat setuju terima/i},
-  {k: 'INS', l: 'Insurance', short: 'insurance', cat: 'Insurance', re: /insurance|insuran|\bcar\b|all risks|workmen|public liability|\bpli\b|socso|perkeso/i},
-  {k: 'DOSH', l: 'DOSH registration', short: 'DOSH', cat: 'DOSH registration', re: /\bdosh\b|\bjkkp\b|jabatan keselamatan/i}];
-const projRecFiles = (pid, r) => !r ? [] : S.files.filter(f => f.projectId === pid && f.status !== 'uploading' && !f.letterKind && ((f.folder || f.category) === r.cat || r.re.test((f.title || '') + ' ' + (f.folder || f.category || ''))));
+  {k: 'INS', l: 'Insurance', short: 'insurance', icon: '🛡', cat: 'Insurance', re: /insurance|insuran|\bcar\b|all risks|workmen|public liability|\bpli\b|socso|perkeso/i,
+    hint: 'CAR, Workmen\'s Compensation, Public Liability…', sug: ["Contractor's All Risks (CAR) policy", "Workmen's Compensation policy", 'Public Liability (PLI) policy', 'SOCSO / PERKESO registration', 'Insurance — cover note']},
+  {k: 'CIDB', l: 'CIDB registration', short: 'CIDB', icon: '🏗', cat: 'CIDB registration', re: /\bcidb\b|\bppk\b|\bspkk\b|\bstb\b/i,
+    hint: 'PPK, SPKK, STB, project registration / levy', sug: ['CIDB PPK certificate', 'CIDB SPKK certificate', 'CIDB STB certificate', 'CIDB project registration (levy)']},
+  {k: 'LHDN', l: 'Stamp duty (LHDN)', short: 'Stamp duty', icon: '🧾', cat: 'Stamp duty (LHDN)', re: /lhdn|stamp(ing| duty)|setem/i,
+    hint: 'Stamping certificate for the LOA / contract', sug: ['Stamp duty certificate — Letter of Award', 'Stamp duty certificate — contract agreement']},
+  {k: 'DOSH', l: 'DOSH registration', short: 'DOSH', icon: '⛑', cat: 'DOSH registration', re: /\bdosh\b|\bjkkp\b|jabatan keselamatan/i,
+    hint: 'Project / site registration with DOSH (JKKP)', sug: ['DOSH project registration', 'DOSH notification of construction work']},
+  {k: 'PMT', l: 'Other authority permits', short: 'Permits', icon: '🏛', cat: 'Permits & approvals', re: /\bpermits?\b|\blesen\b|kebenaran|\bpbt\b|\bmajlis\b|\bdbkl\b/i, opt: true,
+    hint: 'Local council, demolition, hoarding, road closure, police, SWCorp…', sug: ['Local council (PBT) demolition permit', 'Hoarding permit', 'Road / lane closure permit', 'Police permit', 'Scheduled waste / disposal permit (SWCorp)', 'Utility clearance (TNB / water / telco)']},
+  {k: 'LOA', l: 'Letter of Award (LOA)', short: 'LOA', icon: '📜', cat: 'Letter of Award (LOA)', re: /\bloa\b|letter of (award|acceptance)|surat setuju terima/i,
+    hint: 'The client\'s award letter', sug: ['Letter of Award (LOA)']}];
+const REQ_CATS = REQ_DOCS.map(r => r.cat);
+// a file in one record's own group belongs only there; title words are used only for files kept in other groups
+const projRecFiles = (pid, r) => !r ? [] : S.files.filter(f => { if(f.projectId !== pid || f.status === 'uploading' || f.letterKind) return false; const g = f.folder || f.category || '';
+  return g === r.cat || (!REQ_CATS.includes(g) && r.re.test((f.title || '') + ' ' + g)); });
+function recState(pid, r){ const fs = projRecFiles(pid, r), ex = fs.map(f => expiryInfo(f)).filter(Boolean).sort((a, b) => b.days - a.days)[0];
+  return {fs, ex, st: !fs.length ? 'miss' : ex && ex.days < 0 ? 'exp' : ex && ex.days <= 30 ? 'soon' : 'ok'}; }
 function projRecordsCard(pid){
-  const it = REQ_DOCS.map(r => { const fs = projRecFiles(pid, r), ex = fs.map(f => expiryInfo(f)).filter(Boolean).sort((a, b) => b.days - a.days)[0];
-    const st = !fs.length ? 'miss' : ex && ex.days < 0 ? 'exp' : ex && ex.days <= 30 ? 'soon' : 'ok';
-    return `<button class="recchip ${st}" ${st === 'ok' || st === 'soon' ? `data-act="files" data-id="${esc(pid)}"` : `data-act="fileaddcat" data-p="${esc(pid)}" data-c="${esc(r.cat)}" data-t="${esc(r.l)}"`} title="${st === 'miss' ? 'Not uploaded yet — tap to upload' : st === 'exp' ? 'Expired — tap to upload the renewal' : 'Open project files'}">
-      <span class="ic">${st === 'ok' ? '✓' : st === 'soon' ? '⏰' : st === 'exp' ? '!' : '+'}</span>${esc(r.short === 'insurance' ? 'Insurance' : r.short)}</button>`; }).join('');
-  return `<div class="recrow"><span class="small muted">Project records:</span>${it}</div>`;
+  if(S.isSub) return '';
+  const R = REQ_DOCS.map(r => ({r, ...recState(pid, r)})), need = R.filter(x => x.st === 'exp' || x.st === 'soon' || (x.st === 'miss' && !x.r.opt)).length, have = R.filter(x => x.fs.length).length;
+  const up = x => S.canWrite ? `<button class="btn sm" data-act="fileaddcat" data-p="${esc(pid)}" data-c="${esc(x.r.cat)}" data-t="${x.r.k === 'PMT' ? '' : esc(x.r.sug.length === 1 ? x.r.sug[0] : '')}">⇪ ${x.fs.length ? 'Add' : 'Upload'}</button>` : '';
+  const rows = R.map(x => `<div class="permrow ${x.st}${x.r.opt && x.st === 'miss' ? ' opt' : ''}"><span class="ic">${x.st === 'ok' ? '✓' : x.st === 'soon' ? '⏰' : x.st === 'exp' ? '!' : x.r.icon}</span>
+    <div class="pt"><b>${esc(x.r.l)}</b>${x.fs.length ? x.fs.slice().sort((a, b) => String(b.expiry || b.date || '').localeCompare(String(a.expiry || a.date || ''))).map(f => { const e = expiryInfo(f);
+      return `<button class="permfile" data-act="fileopen" data-id="${esc(f.id)}">${f._sec ? '🔒 ' : ''}${esc(f.title)}${f.refNo ? ' · ' + esc(f.refNo) : ''}${e ? ` · <span class="${e.cls === 'bad' ? 'bad' : e.cls === 'pending' ? 'warn' : ''}">${esc(e.label)}</span>` : ''}</button>`; }).join('')
+      : `<span class="small muted">${x.r.opt ? 'If needed — ' : 'Not uploaded yet — '}${esc(x.r.hint)}</span>`}</div>${up(x)}</div>`).join('');
+  return `<details class="card permits" ${need ? 'open' : ''}><summary><b>🏛 Authority permits &amp; insurance</b><span class="small ${need ? 'warnt' : 'muted'}">${need ? need + ' need' + (need === 1 ? 's' : '') + ' action' : have + ' of ' + R.length + ' uploaded'}</span></summary>
+    <div class="permlist">${rows}</div><div class="small muted" style="padding:8px 2px 0">Kept in Project files. Put the expiry date when you upload — the app warns 30 days before it expires.</div></details>`;
 }
 function eotApproveForm(pid){
   const p = projById(pid); if(!p) return;
@@ -6626,6 +6651,7 @@ document.addEventListener('click', async e => {
     case 'savedes': { const v = ($('#myDes') || {}).value || '', nm = (($('#myName') || {}).value || '').trim().replace(/\s+/g, ' '); if($('#myName') && nm.length < 2){ toast('Enter your name.', true); break; } try { await S.db.doc('users/' + S.me).update({designation: v.trim(), ...(nm ? {name: nm} : {})}); S.myDes = v.trim(); if(nm){ S.names[S.me] = nm; (S.users || []).forEach(u => { if(u.id === S.me || u.uid === S.me) u.name = nm; }); try { FB.auth?.currentUser && FB.authM?.updateProfile(FB.auth.currentUser, {displayName: nm}).catch(() => {}); } catch(e2){} } toast('Saved ✓'); render(); } catch(err){ dbErr(err); } break; }
     case 'eotapprove': if(!(S.canEdit || el.dataset.by === S.me || !el.dataset.by)){ toast('Only the person who sent the EOT letter (or an admin) updates the approved date.', true); break; } eotApproveForm(el.dataset.p); break;
     case 'eotsave': saveEotApproval(el.dataset.p, el); break;
+    case 'ftitle': { const i = $('#fTitle'); if(i){ i.value = el.dataset.v; $('#fld_fTitle').classList.remove('err'); } break; }
     case 'fileaddcat': fileForm(el.dataset.p, {category: el.dataset.c, title: el.dataset.t || '', kind: 'upload'}); break;
     case 'chatcopy1': { const m = S.chat.find(x => x.id === el.dataset.id); if(!m) break;
       const txt = `[${(CHAT_KINDS[m.kind] || CHAT_KINDS.msg).l}] ${m.name || ''}, ${fmtDT(m.at)}${m.where ? ' — page: ' + m.where : ''}${(m.photos || []).length ? ' — ' + m.photos.length + ' screenshot(s) in the app' : ''}\n${String(m.text || '')}\n\nPlease fix / add this in the next update.`;
@@ -7087,7 +7113,7 @@ function projAlerts(p){
     if(last && !ins.some(f => (f.expiry && f.expiry >= p.end) || (!f.expiry && String(f.uploadedAt || '') >= String(last.at || '')))) add('amber', '🛡', `Completion date extended to <b>${fmtDate(p.end)}</b> (EOT ${(p.eots || []).length} approved ${fmtDate(last.approvedOn)}). Upload the <b>renewed / extended insurance</b> covering the new date.`, upIns);
     else if(maxExp && maxExp < p.end) add('amber', '🛡', `Insurance cover ends <b>${fmtDate(maxExp)}</b> but the completion date is ${fmtDate(p.end)}. Upload the renewed / extended insurance.`, upIns); }
   // ---- project records everyone needs (CIDB, LHDN stamping, LOA, insurance, DOSH) ----
-  { const miss = REQ_DOCS.filter(r => !projRecFiles(p.id, r).length);
+  { const miss = REQ_DOCS.filter(r => !r.opt && !projRecFiles(p.id, r).length);
     if(miss.length) add('amber', '📁', `Project records missing: <b>${miss.map(r => r.l).join(', ')}</b>. Upload them in Project files for everyone's reference.`, {act: 'fileaddcat', p: p.id, c: miss[0].cat, t: miss[0].l, l: '⇪ Upload ' + miss[0].short}); }
   // ---- progress against plan ----
   if(pr && actual != null && !done){
@@ -7686,7 +7712,7 @@ function fileForm(pid, f){
   showModal(`<div class="box"><div class="mh"><h3>${isNew ? 'Add document' : 'Edit document'}</h3></div><div class="mb"><div class="fgrid">
     <div class="fld half"><label>Group <em>*</em></label><input id="fCat" list="fCatList" value="${esc(f.folder || f.category || FILE_CATS[0])}"><datalist id="fCatList">${[...new Set([...S.files.filter(x => x.projectId === pid).map(x => x.folder || x.category).filter(Boolean), ...FILE_CATS])].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="fld half"><label>Reference no.</label><input id="fRef" value="${esc(f.refNo || '')}" placeholder="e.g. policy / LOA no."></div>
-    <div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="e.g. Contractor's All Risks policy"></div>
+    ${(() => { const rq = REQ_DOCS.find(r => r.cat === (f.folder || f.category)); return `<div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="${esc(rq ? 'e.g. ' + rq.sug[0] : "e.g. Contractor's All Risks policy")}" ${rq ? 'list="fTitleList"' : ''}>${rq ? `<datalist id="fTitleList">${rq.sug.map(t => `<option value="${esc(t)}">`).join('')}</datalist>${isNew && rq.sug.length > 1 ? `<div class="chips" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">${rq.sug.map(t => `<button type="button" class="btn sm ghost" data-act="ftitle" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}` : ''}</div>`; })()}
     <div class="fld half"><label>Document date</label><input type="date" id="fDate" value="${esc(f.date || '')}"></div>
     <div class="fld half"><label>Expiry date (if any)</label><input type="date" id="fExp" value="${esc(f.expiry || '')}"><div class="hint">You'll be warned 30 days before it expires.</div></div>
     <div class="fld"><label>Notes</label><textarea id="fNotes" style="min-height:60px">${esc(f.notes || '')}</textarea></div>
