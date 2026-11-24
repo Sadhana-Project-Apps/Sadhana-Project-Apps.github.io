@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Actual % syncs between the S-curve and “Actual progress to date”</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress summary (main works) updates from the work programme</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4160,14 +4160,46 @@ function applyProgramme(d, opts = {}){
   const nx0 = addDays(x.to, 1), nx1 = addDays(x.to, 7);
   const fc = progLeaves(g).filter(t => t.pc < 100 && t.s <= nx1 && t.f >= nx0 && (t.pc === 0 || t.s >= addDays(x.to, -14))).sort((a, b) => a.s.localeCompare(b.s) || a.name.localeCompare(b.name));
   if(fc.length){ x.lookahead = fc.map(t => ({desc: t.name, start: axis ? progDMY(t.s) : t.s})); n++; }
-  // progress summary: status of activities with the same name
-  const key = v => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(), byName = {}; progLeaves(g).forEach(t => byName[key(t.name)] = t);
-  const fd = v => axis ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(2, 4)}` : v;
-  (x.mainWorks || []).forEach(r => { const t = r && byName[key(r.desc)]; if(!t) return;
-    if(t.pc >= 100 && !/complet/i.test(r.status || '')){ r.status = 'Completed'; if(isEmpty(r.finish)) r.finish = fd(t.f); if(isEmpty(r.start)) r.start = fd(t.s); n++; }
-    else if(t.pc > 0 && t.pc < 100 && isEmpty(r.status)){ r.status = 'In progress'; if(isEmpty(r.start)) r.start = fd(t.s); n++; } });
+  // progress summary – main works: status and dates from each activity's % complete
+  n += progMainWorks(x, g, axis);
   // generic report: work programme table (weightage by duration, actual % from MS Project)
   if(syncAxisScurve(d)) n++;
+  return n;
+}
+// Progress summary – main works from the work programme's % complete.
+// Rows are matched to activities by name (same words, or one name inside the other); an empty list is built from the programme.
+// 100% → Completed (+ finish date); 1–99% → In progress (keeps "Ongoing"); 0% → left as it is. A row marked Completed is never set back,
+// and a status written in other words (e.g. "Revision 2 submitted") is left alone.
+function progMainWorks(x, g, axis){
+  const L = progLeaves(g); if(!L.length) return 0; let n = 0;
+  const fd = v => !v ? '' : `${v.slice(8, 10)}/${v.slice(5, 7)}/${axis ? v.slice(2, 4) : v.slice(0, 4)}`;
+  const key = v => String(v || '').toLowerCase().replace(/&/g, ' and ').replace(/\b(at|the|of|and|works?|level)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const words = v => new Set(key(v).split(' ').filter(Boolean));
+  const head = r => { const d = String(r.desc || '').trim(); return !!d && d === d.toUpperCase() && /[A-Z]/.test(d) && isEmpty(r.start) && isEmpty(r.finish) && isEmpty(r.status); };
+  const rows = (x.mainWorks || []).filter(r => r && String(r.desc || '').trim());
+  if(!rows.length){   // nothing yet: headings = the programme's summary tasks, rows = their activities
+    const T = g.tasks || [], top = Math.min(...T.map(t => t.lvl || 1)), out = []; let h = 0;
+    T.forEach(t => { if(t.sum && t.lvl === top && T.filter(z => z.sum && z.lvl === top).length === 1) return;
+      if(t.sum){ h++; out.push({desc: (axis ? h + '. ' : '') + String(t.name).toUpperCase()}); } else out.push({desc: t.name}); });
+    x.mainWorks = out; n++;
+  }
+  // which summary task (section) each activity sits under, so "L3 column" under Repair and under Strengthening stay apart
+  const T = g.tasks || [], par = new Map(), stack = [];
+  T.forEach(t => { while(stack.length && stack[stack.length - 1].lvl >= t.lvl) stack.pop(); if(!t.sum) par.set(t, stack[stack.length - 1] || null); else stack.push(t); });
+  const sums = T.filter(t => t.sum);
+  const same = (a, b) => { const k = key(a), j = key(b); if(!k || !j) return 0; if(k === j) return 1; if(k.length > 4 && j.length > 4 && (k.includes(j) || j.includes(k))) return 0.9;
+    const w = words(a), v = words(b), inter = [...w].filter(z => v.has(z)).length; return inter / Math.max(w.size, v.size); };
+  const used = new Set(); let sec = null;
+  const find = r => { const pool = L.filter(a => !used.has(a) && (!sec || par.get(a) === sec)); let t = null, best = 0;
+    (pool.length ? pool : L.filter(a => !used.has(a))).forEach(a => { const sc = same(r.desc, a.name); if(sc > best){ best = sc; t = a; } });
+    return best >= 0.75 ? t : null; };
+  (x.mainWorks || []).forEach(r => { if(!r) return;
+    if(head(r)){ const h = String(r.desc).replace(/^\s*\d+[.)]\s*/, ''); let b = 0; sec = null; sums.forEach(z => { const sc = same(h, z.name); if(sc > b){ b = sc; sec = z; } }); if(b < 0.75) sec = null; return; }
+    const t = find(r); if(!t) return; used.add(t);
+    const st = String(r.status || '').trim(), std = !st || /^(completed?|in progress|ongoing|on-going|not started)\b/i.test(st), done = /^complet/i.test(st);
+    const iso = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad2(m[2]) + '-' + pad2(m[1]) : String(v || '').slice(0, 10); };
+    if(t.pc >= 100){ if(!done){ r.status = 'Completed'; n++; } if(isEmpty(r.start)) r.start = fd(t.s); if(isEmpty(r.finish) && t.f && t.f >= iso(r.start)){ r.finish = fd(t.f); n++; } }
+    else if(t.pc > 0){ if(std && !done && !/^(in progress|ongoing|on-going)/i.test(st)){ r.status = 'In progress'; n++; } if(isEmpty(r.start)){ r.start = fd(t.s); n++; } } });
   return n;
 }
 /* ---------- client S-curve (Wisma Kemajuan): cut-off dates = project start, every Sunday, 1st and last day of each month, completion.
@@ -5032,7 +5064,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z97';
+const APP_VER = 'Z98';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6583,7 +6615,7 @@ document.addEventListener('click', async e => {
     case 'recdel': if(S.draft){ S.draft.data.recordings = (S.draft.data.recordings || []).filter((_, i) => i !== +el.dataset.i); S.dirty = true; rerenderEditorField('recordings'); } break;
     case 'new': if(S.modalOpen) closeModal(); S.draft = newDraft(el.dataset.p, el.dataset.t); S.respMode = false; go('edit'); break;
     case 'edit': { const d = docById(id); if(!d) return; if(nextSigIndex(d)!==0){ toast('Signed documents are locked.', true); return; } S.draft = clone(d);
-      if(d.type === 'PR' && projById(d.projectId)?.programme) syncAxisScurve(S.draft);   // schedule % always from the latest work programme
+      if(d.type === 'PR' && projById(d.projectId)?.programme){ syncAxisScurve(S.draft); progMainWorks(S.draft.data, projById(d.projectId).programme, TT(S.draft).coverStyle === 'axis'); }   // schedule % and main works from the latest work programme
       S.respMode = false; go('edit'); break; }
     case 'respond': { const d = docById(id); if(!d) return; S.draft = clone(d); const T = TT(d); T.fields.forEach(f => { if(f.phase==='response' && f.k && isEmpty(S.draft.data[f.k]) && f.def) S.draft.data[f.k] = typeof f.def==='function'?f.def():f.def; }); if(d.type==='PTW' && !S.draft.data.closeTime){ const n=new Date(); S.draft.data.closeTime = n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate())+'T'+pad2(n.getHours())+':'+pad2(n.getMinutes()); } S.respMode = true; go('edit'); break; }
     case 'dup': { const d = docById(id); if(!d) return; const nd = newDraft(d.projectId, d.type); const T = TT(d);
