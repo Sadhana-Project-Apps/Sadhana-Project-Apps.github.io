@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress summary lists only started activities (above 0%)</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · AXISWKPJ progress report kept as before; other projects get the new progress report updates</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4175,6 +4175,13 @@ function applyProgramme(d, opts = {}){
 // added under their section's heading; headings left with nothing under them go. Rows that match no activity are kept as they are.
 function progMainWorks(x, g, axis){
   const L = progLeaves(g); if(!L.length) return 0; let n = 0;
+  if(axis){   // AXISWKPJ (client format) keeps its earlier rule: same-name rows only, nothing added or removed
+    const key = v => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(), byName = {}; L.forEach(t => byName[key(t.name)] = t);
+    const fd = v => `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(2, 4)}`;
+    (x.mainWorks || []).forEach(r => { const t = r && byName[key(r.desc)]; if(!t) return;
+      if(t.pc >= 100 && !/complet/i.test(r.status || '')){ r.status = 'Completed'; if(isEmpty(r.finish)) r.finish = fd(t.f); if(isEmpty(r.start)) r.start = fd(t.s); n++; }
+      else if(t.pc > 0 && t.pc < 100 && isEmpty(r.status)){ r.status = 'In progress'; if(isEmpty(r.start)) r.start = fd(t.s); n++; } });
+    return n; }
   const fd = v => !v ? '' : `${v.slice(8, 10)}/${v.slice(5, 7)}/${axis ? v.slice(2, 4) : v.slice(0, 4)}`;
   const iso = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad2(m[2]) + '-' + pad2(m[1]) : String(v || '').slice(0, 10); };
   const key = v => String(v || '').toLowerCase().replace(/&/g, ' and ').replace(/\b(at|the|of|and|works?|level)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -4255,7 +4262,8 @@ function syncAxisScurve(d){
   const raw = rows.map(r => scDate(r.date)), pts = [];
   rows.forEach((r, i) => { const prev = raw.slice(0, i).filter(Boolean).pop(), next = raw.slice(i + 1).find(Boolean); const iso = scDate(r.date, prev, next); if(iso) pts.push({iso, sched: r.sched, actual: r.actual}); });
   const pg = p.programme && progLeaves(p.programme).length ? p.programme : null;
-  const start = (pg && pg.tasks.reduce((m, t) => !m || t.s < m ? t.s : m, '')) || p.start || (pts[0] && pts[0].iso), end = (pg && pg.tasks.reduce((m, t) => t.f > m ? t.f : m, '')) || p.end || (pts.length && pts[pts.length - 1].iso); if(!start || !end || start >= end) return false;
+  const axisP = !!((projPreset(d.projectId) || {}).PR), pgS = pg && pg.tasks.reduce((m, t) => !m || t.s < m ? t.s : m, ''), pgE = pg && pg.tasks.reduce((m, t) => t.f > m ? t.f : m, '');
+  const start = (axisP ? p.start || pgS : pgS || p.start) || (pts[0] && pts[0].iso), end = (axisP ? p.end || pgE : pgE || p.end) || (pts.length && pts[pts.length - 1].iso); if(!start || !end || start >= end) return false;
   const S0 = pts.filter(q => !isEmpty(q.sched)).sort((a, b) => a.iso.localeCompare(b.iso)); if(S0.length < 2 && !(p.programme && progLeaves(p.programme).length)) return false;
   const days = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
   const prog = p.programme && progLeaves(p.programme).length ? p.programme : null;
@@ -5085,7 +5093,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z100';
+const APP_VER = 'Z101';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6637,7 +6645,7 @@ document.addEventListener('click', async e => {
     case 'recdel': if(S.draft){ S.draft.data.recordings = (S.draft.data.recordings || []).filter((_, i) => i !== +el.dataset.i); S.dirty = true; rerenderEditorField('recordings'); } break;
     case 'new': if(S.modalOpen) closeModal(); S.draft = newDraft(el.dataset.p, el.dataset.t); S.respMode = false; go('edit'); break;
     case 'edit': { const d = docById(id); if(!d) return; if(nextSigIndex(d)!==0){ toast('Signed documents are locked.', true); return; } S.draft = clone(d);
-      if(d.type === 'PR' && projById(d.projectId)?.programme){ syncAxisScurve(S.draft); progMainWorks(S.draft.data, projById(d.projectId).programme, TT(S.draft).coverStyle === 'axis'); }   // schedule % and main works from the latest work programme
+      if(d.type === 'PR' && projById(d.projectId)?.programme && TT(d).coverStyle !== 'axis'){ syncAxisScurve(S.draft); progMainWorks(S.draft.data, projById(d.projectId).programme, TT(S.draft).coverStyle === 'axis'); }   // schedule % and main works from the latest work programme
       S.respMode = false; go('edit'); break; }
     case 'respond': { const d = docById(id); if(!d) return; S.draft = clone(d); const T = TT(d); T.fields.forEach(f => { if(f.phase==='response' && f.k && isEmpty(S.draft.data[f.k]) && f.def) S.draft.data[f.k] = typeof f.def==='function'?f.def():f.def; }); if(d.type==='PTW' && !S.draft.data.closeTime){ const n=new Date(); S.draft.data.closeTime = n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate())+'T'+pad2(n.getHours())+':'+pad2(n.getMinutes()); } S.respMode = true; go('edit'); break; }
     case 'dup': { const d = docById(id); if(!d) return; const nd = newDraft(d.projectId, d.type); const T = TT(d);
@@ -7708,7 +7716,9 @@ async function prFromWord(file){
 function prMppForm(){
   const d = S.draft; if(!d || d.type !== 'PR') return; const x = d.data, p = projById(d.projectId) || {};
   S.mppTmp = null; const g0 = p.programme && progLeaves(p.programme).length ? p.programme : null;
-  const cut0 = x.scCut || (TT(d).coverStyle === 'axis' ? '' : x.cutoff) || x.to || today();
+  // AXISWKPJ: as before, the cut-off is the client's next S-curve date on / after the period end (Sunday, 1st or last day of the month)
+  const axNext = () => { let t = x.to; for(let i = 0; t && i < 7; i++){ const z = new Date(t + 'T00:00:00'); if(z.getDay() === 0 || z.getDate() === 1 || addDays(t, 1).slice(8) === '01') return t; t = addDays(t, 1); } return x.to; };
+  const cut0 = x.scCut || (TT(d).coverStyle === 'axis' ? axNext() : x.cutoff) || x.to || today();
   showModal(`<div class="box" style="max-width:560px"><div class="mh"><div><div class="eyebrow">${esc(d.number || 'Progress report')}</div><h3>📈 Work programme → S-curve</h3></div></div><div class="mb">
     <div class="fld"><label>MS Project file (.mpp)${g0 ? '' : ' <em>*</em>'}</label><button type="button" class="btn ${g0 ? '' : 'pri'}" data-act="mppick" style="width:100%;justify-content:center">📂 <span id="mpName">${g0 ? 'Choose a newer .mpp file' : 'Choose the .mpp file'}</span></button><input type="file" id="mpFile" hidden>
       <div class="hint">${g0 ? `Now using <b>${esc(g0.file || g0.title || 'the project programme')}</b> — choose a file only if there is a newer one.` : 'The work programme as it is (.mpp, MS Project 2010 or newer).'}</div></div>
