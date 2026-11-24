@@ -830,7 +830,7 @@ const TYPES = {
     fields: [
       {sec:'Reporting period', pdf:false},
       {k:'_word', l:'', t:'draftbtn', act:'prword', btn:'📄 Already prepared in Word? Upload it to fill this report', pdf:false},
-      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📈 Upload the MS Project file (.mpp) — schedule %, actual %, forecast', pdf:false},
+      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📈 Work programme (.mpp) → pick the cut-off date and fill the S-curve', pdf:false},
       {k:'period', l:'Report type', t:'select', req:1, o:['Weekly','Fortnightly','Monthly'], w:'half', def:'Weekly', pdf:false},
       {k:'reportNo', l:'Report no.', t:'text', w:'half', ph:'e.g. 1', pdf:false},
       {k:'from', l:'Period from', t:'date', req:1, w:'half', pdf:false},
@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Correct a signed report after the admin approves</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress report: .mpp → pick the cut-off date → S-curve</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4181,9 +4181,12 @@ function scDate(t, prev, next){   // "dd/mm/yyyy" → ISO; fixes slips like 31/1
   if(prev && next && (v < prev || v > next)){ for(const yy of [y - 1, y + 1]) if(ok(yy, mo, d)){ const w = iso(yy, mo, d); if(w >= prev && w <= next){ v = w; break; } } }
   return v;
 }
-function scCutDates(start, end){
-  const out = new Set([start, end]); let t = start;
-  while(t <= end){ const z = new Date(t + 'T00:00:00'); if(z.getDay() === 0 || z.getDate() === 1 || addDays(t, 1).slice(8) === '01') out.add(t); t = addDays(t, 1); }
+const SC_MODES = {client: 'Every Sunday + 1st and last day of each month', sun: 'Every Sunday', fort: 'Every 2nd Sunday', month: 'Last day of each month'};
+function scCutDates(start, end, mode){
+  const out = new Set([start, end]); let t = start, k = 0; mode = SC_MODES[mode] ? mode : 'client';
+  while(t <= end){ const z = new Date(t + 'T00:00:00'), sun = z.getDay() === 0, eom = addDays(t, 1).slice(8) === '01';
+    if(sun) k++;
+    if(mode === 'client' ? sun || z.getDate() === 1 || eom : mode === 'sun' ? sun : mode === 'fort' ? sun && k % 2 === 1 : eom) out.add(t); t = addDays(t, 1); }
   return [...out].filter(x => x >= start && x <= end).sort();
 }
 function scCutRow(x){ const rows = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso && x.to && o.iso >= x.to).sort((a, b) => a.iso.localeCompare(b.iso)); return rows[0] || null; }
@@ -4204,8 +4207,11 @@ function syncAxisScurve(d){
     if(!a) return String(numv(b.sched)); if(!b) return String(numv(a.sched));
     return String(Math.round(numv(a.sched) + (numv(b.sched) - numv(a.sched)) * days(a.iso, t) / Math.max(1, days(a.iso, b.iso)))); };
   const act = {}; pts.forEach(q => { if(!isEmpty(q.actual)) act[q.iso] = String(q.actual); });
-  const cut = scCutDates(start, end), rowAt = x.to ? cut.find(t => t >= x.to) : null;
+  // the cut-off date picked for this report (kept only while it belongs to this period); earlier reports' cut-off dates stay as rows
+  const pick = x.scCut && x.to && x.scCut >= addDays(x.from || x.to, -7) && x.scCut <= addDays(x.to, 7) && x.scCut >= start && x.scCut <= end ? x.scCut : '';
+  const base = scCutDates(start, end, x.scMode || p.scMode), rowAt = pick || (x.to ? base.find(t => t >= x.to) : null);
   if(x._scRow && x._scRow !== rowAt && act[x._scRow] === String(x.actual)) delete act[x._scRow];
+  const cut = [...new Set([...base, ...Object.keys(act).filter(t => t >= start && t <= end), ...(rowAt ? [rowAt] : [])])].sort();
   if(rowAt && !isEmpty(x.actual)) act[rowAt] = String(x.actual); x._scRow = rowAt || '';
   const dm = t => `${pad2(+t.slice(8))}/${t.slice(5, 7)}/${t.slice(0, 4)}`;
   x.scurve = cut.map(t => ({date: dm(t), sched: schedAt(t), actual: act[t] || ''}));
@@ -4215,7 +4221,7 @@ function syncAxisScurve(d){
 /* ---------- sub-contractors start their progress report from the project's latest one ----------
    They can't open other people's reports, so staff keep a copy of the latest report's carried parts on the project (prLast);
    cover photo / key plan are copied into photos marked subShare so the sub-contractor's phone can show them. */
-const PR_SHARE_KEYS = ['period', 'reportNo', 'from', 'to', 'planned', 'actual', 'scurve', 'mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'byLevelPlan', 'issues', 'coverPhoto', 'hseW', 'bfMh', 'bfSafe', 'mhPeriod', 'sfPeriod', 'manpower', 'machinery', 'gridFrom', 'gridTo'];
+const PR_SHARE_KEYS = ['scMode', 'period', 'reportNo', 'from', 'to', 'planned', 'actual', 'scurve', 'mainWorks', 'otherWorks', 'lookahead', 'byLevel', 'byLevelPlan', 'issues', 'coverPhoto', 'hseW', 'bfMh', 'bfSafe', 'mhPeriod', 'sfPeriod', 'manpower', 'machinery', 'gridFrom', 'gridTo'];
 async function sharePRLast(d, force){
   try {
     if(!d || d.type !== 'PR' || S.isSub || !S.canWrite || !d.id || !d.data || !d.data.to) return;
@@ -5017,7 +5023,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z92';
+const APP_VER = 'Z93';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6533,7 +6539,9 @@ document.addEventListener('click', async e => {
     case 'programme': programmeForm(el.dataset.p); break;
     case 'pgsave': programmeSave(el.dataset.p, el); break;
     case 'prword': prPick('.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', prFromWord); break;
-    case 'prmpp': prPick('.mpp,.xml,application/vnd.ms-project,text/xml', prFromMPP); break;
+    case 'prmpp': prMppForm(); break;
+    case 'mpcut': { const i = $('#mpCut'); if(i){ i.value = el.dataset.v; mppPreview(); } break; }
+    case 'mpgo': prMppApply(el); break;
     case 'pgapply': { if(!S.draft) break; const n = applyProgramme(S.draft, {force: true}); S.dirty = true; render(); toast(n ? 'Updated from the work programme — please check' : 'Nothing to update from the work programme', !n); break; }
     case 'viewas': if(el.dataset.r === 'sub') viewAsSubForm(); else setViewAs(el.dataset.r ? {role: el.dataset.r} : null); break;
     case 'viewassub': { const ps = [...document.querySelectorAll('[data-vap]:checked')].map(x => x.dataset.vap); if(!ps.length){ toast('Tick at least one project.', true); break; }
@@ -7601,6 +7609,66 @@ async function prFromWord(file){
   x._fromWord = {file: file.name.replace(/^[0-9a-f]{8}-/i, ''), at: new Date().toISOString(), by: S.me || null};
   S.dirty = true; render();
   toast(`Filled from ${x._fromWord.file} — report No.${x.reportNo || '?'}, ${o.photos.length} photo${o.photos.length === 1 ? '' : 's'}. Check it, then save.`);
+}
+// progress report: upload the .mpp, pick the cut-off date and how the S-curve dates run, then fill the schedule % (and actual %)
+function prMppForm(){
+  const d = S.draft; if(!d || d.type !== 'PR') return; const x = d.data, p = projById(d.projectId) || {};
+  S.mppTmp = null; const g0 = p.programme && progLeaves(p.programme).length ? p.programme : null;
+  const cut0 = x.scCut || (TT(d).coverStyle === 'axis' ? '' : x.cutoff) || x.to || today();
+  showModal(`<div class="box" style="max-width:560px"><div class="mh"><div><div class="eyebrow">${esc(d.number || 'Progress report')}</div><h3>📈 Work programme → S-curve</h3></div></div><div class="mb">
+    <div class="fld"><label>MS Project file (.mpp)${g0 ? '' : ' <em>*</em>'}</label><input type="file" id="mpFile" accept=".mpp,.xml,application/vnd.ms-project,text/xml">
+      <div class="hint">${g0 ? `Now using <b>${esc(g0.file || g0.title || 'the project programme')}</b> — choose a file only if there is a newer one.` : 'The work programme as it is (.mpp, MS Project 2010 or newer).'}</div></div>
+    <div class="fgrid">
+      <div class="fld half"><label>Cut-off date <em>*</em></label><input type="date" id="mpCut" value="${esc(cut0)}"><div class="hint">Progress is measured up to this date. Period ${esc(fmtDate(x.from))} – ${esc(fmtDate(x.to))}.</div>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${(() => { const sun = x.to && (() => { let t = x.to; for(let i = 0; i < 7 && new Date(t + 'T00:00:00').getDay() !== 0; i++) t = addDays(t, 1); return t; })();
+          return [[x.to, 'period end'], [sun, 'Sunday'], [today(), 'today']].filter((o, i, a) => o[0] && a.findIndex(z => z[0] === o[0]) === i).map(([t, l]) => `<button type="button" class="btn sm" data-act="mpcut" data-v="${esc(t)}">${esc(fmtDate(t))} (${l})</button>`).join(''); })()}</div></div>
+      <div class="fld half"><label>Actual % at cut-off</label><input id="mpAct" inputmode="decimal" value="${esc(x.actual || '')}" placeholder="from the file"><div class="hint">Filled from “% complete” in the file — change it if needed.</div></div>
+      <div class="fld"><label>S-curve dates</label><select id="mpMode">${Object.entries(SC_MODES).map(([k, l]) => `<option value="${k}" ${(x.scMode || p.scMode || 'client') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div class="hint">The schedule % is worked out from the programme for every date. Your cut-off date and earlier reports' cut-off dates are always included.</div></div>
+    </div>
+    <div id="mpPrev" class="card pad" style="box-shadow:none;margin-top:4px"></div>
+    <div class="row" style="margin-top:10px"><div class="sp"></div><button class="btn pri" data-act="mpgo">📈 Fill the S-curve</button></div></div></div>`);
+  const prev = () => mppPreview(); ['#mpCut', '#mpMode', '#mpAct'].forEach(k => $(k)?.addEventListener('input', prev)); $('#mpMode')?.addEventListener('change', prev);
+  $('#mpFile')?.addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; if(!f) return; const box = $('#mpPrev'); if(box) box.innerHTML = '<span class="small muted">Reading the file…</span>';
+    try { const g = /\.xml$/i.test(f.name) ? parseMSPDI(await f.text()) : parseMPP(await f.arrayBuffer()); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); S.mppTmp = g;
+      const a = $('#mpAct'); if(a) a.value = String(progActual(g)); } catch(err){ S.mppTmp = null; if(box) box.innerHTML = `<span class="small" style="color:var(--bad)">⚠ ${esc(err.message || 'Could not read that file')}</span>`; return; }
+    prev(); });
+  if(g0 && isEmpty(x.actual)){ const h = (p.progHist || {})[cut0]; const a = $('#mpAct'); if(a) a.value = String(h != null ? h : progActual(g0)); }
+  prev();
+}
+function mppPreview(){
+  const d = S.draft, box = $('#mpPrev'); if(!d || !box) return; const p = projById(d.projectId) || {}, g = S.mppTmp || (p.programme && progLeaves(p.programme).length ? p.programme : null);
+  if(!g){ box.innerHTML = '<span class="small muted">Choose the .mpp file to see the schedule %.</span>'; return; }
+  const cut = $('#mpCut').value, mode = $('#mpMode').value, s0 = g.tasks.reduce((m, t) => !m || t.s < m ? t.s : m, ''), e0 = g.tasks.reduce((m, t) => t.f > m ? t.f : m, '');
+  const pl = cut ? progPlanAt(g, cut) : null, ac = $('#mpAct').value.trim(), n = s0 && e0 ? scCutDates(p.start || s0, p.end || e0, mode).length : 0, diff = pl != null && ac !== '' ? numv(ac) - Math.round(pl) : null;
+  box.innerHTML = `<div class="small"><b>${esc(g.file || g.title || 'Programme')}</b> · ${progLeaves(g).length} activities · ${esc(fmtDate(s0))} – ${esc(fmtDate(e0))}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><div><div class="small muted">Schedule at ${esc(fmtDate(cut) || '—')}</div><b style="font-size:20px">${pl == null ? '—' : Math.round(pl) + '%'}</b></div>
+    <div><div class="small muted">Actual</div><b style="font-size:20px">${ac === '' ? '—' : esc(ac) + '%'}</b></div>
+    ${diff != null ? `<div><div class="small muted">Variance</div><b style="font-size:20px;color:${diff < 0 ? 'var(--bad)' : 'var(--good,#2f7d32)'}">${diff > 0 ? '+' : ''}${diff}%</b></div>` : ''}
+    <div><div class="small muted">S-curve dates</div><b style="font-size:20px">${n}</b></div></div>
+    ${cut && (cut < s0 || cut > e0) ? '<div class="small" style="color:var(--bad);margin-top:6px">The cut-off date is outside the programme dates.</div>' : ''}`;
+}
+async function prMppApply(btn){
+  const d = S.draft; if(!d) return; const x = d.data, p = projById(d.projectId) || {}, T = TT(d), axis = T.coverStyle === 'axis';
+  const g = S.mppTmp || (p.programme && progLeaves(p.programme).length ? p.programme : null), cut = $('#mpCut').value, mode = $('#mpMode').value, ac = $('#mpAct').value.trim();
+  if(!g){ toast('Choose the MS Project file (.mpp).', true); return; } if(!cut){ toast('Pick the cut-off date.', true); return; }
+  if(ac !== '' && !(numv(ac) >= 0 && numv(ac) <= 100)){ toast('Actual % must be between 0 and 100.', true); return; }
+  btn.disabled = true;
+  const hist = {...(p.progHist || {})}; if(S.mppTmp || ac !== '') hist[cut] = ac !== '' ? numv(ac) : progActual(g);
+  // staff keep it with the project (next reports use it too); a sub-contractor's upload fills only this report
+  let saved = false;
+  if(!S.isSub){ try { const upd = {progHist: hist, scMode: mode, ...(S.mppTmp && (!p.programme || cut >= (p.programme.asAt || '')) ? {programme: {...S.mppTmp, asAt: cut, importedAt: new Date().toISOString(), by: S.me || null}} : {})};
+    await S.db.doc('projects/' + d.projectId).update(upd); Object.assign(p, upd); saved = true; } catch(e){ console.warn(e); } }
+  const keep = {programme: p.programme, progHist: p.progHist};
+  if(!saved){ if(S.mppTmp) p.programme = {...S.mppTmp, asAt: cut}; p.progHist = hist; }
+  // moving the cut-off: the old cut-off row loses this report's actual %
+  const oldRow = x.scCut || x._scRow; if(oldRow && oldRow !== cut) (x.scurve || []).forEach(r => { if(r && scDate(r.date) === oldRow && String(r.actual) === String(x.actual)) r.actual = ''; });
+  x.scCut = cut; x.scMode = mode; x.cutoff = cut; if(ac !== '') x.actual = String(numv(ac));
+  applyProgramme(d, {force: true}); if(ac !== '') x.actual = String(numv(ac));
+  const ok = syncAxisScurve(d);
+  if(!saved){ p.programme = keep.programme; p.progHist = keep.progHist; }
+  S.mppTmp = null; closeModal(); S.dirty = true; render();
+  const row = (x.scurve || []).find(r => scDate(r.date) === cut);
+  toast(ok ? `S-curve filled — ${(x.scurve || []).length} dates; at ${fmtDate(cut)} schedule ${row ? row.sched : x.planned}%${x.actual ? ', actual ' + x.actual + '%' : ''}${saved ? '. Programme kept for the next reports.' : '.'}` : 'Could not fill the S-curve — check the programme dates.', !ok);
 }
 async function prFromMPP(file){
   const d = S.draft; if(!d || d.type !== 'PR') return;
