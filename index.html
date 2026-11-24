@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Upload the final Word copy of a published report — the next report follows it</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress summary lists only started activities (above 0%)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4169,40 +4169,55 @@ function applyProgramme(d, opts = {}){
   if(syncAxisScurve(d)) n++;
   return n;
 }
-// Progress summary – main works from the work programme's % complete.
-// Rows are matched to activities by name (same words, or one name inside the other); an empty list is built from the programme.
-// 100% → Completed (+ finish date); 1–99% → In progress (keeps "Ongoing"); 0% → left as it is. A row marked Completed is never set back,
-// and a status written in other words (e.g. "Revision 2 submitted") is left alone.
+// Progress summary – main works from the work programme's % complete. Only activities that have started (% > 0) are listed:
+// rows are matched to activities by name within the same section; 100% → Completed (+ finish), 1–99% → In progress (keeps "Ongoing");
+// a row whose activity is still 0% is taken out (unless someone wrote a status or date in it); started activities not yet listed are
+// added under their section's heading; headings left with nothing under them go. Rows that match no activity are kept as they are.
 function progMainWorks(x, g, axis){
   const L = progLeaves(g); if(!L.length) return 0; let n = 0;
   const fd = v => !v ? '' : `${v.slice(8, 10)}/${v.slice(5, 7)}/${axis ? v.slice(2, 4) : v.slice(0, 4)}`;
+  const iso = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad2(m[2]) + '-' + pad2(m[1]) : String(v || '').slice(0, 10); };
   const key = v => String(v || '').toLowerCase().replace(/&/g, ' and ').replace(/\b(at|the|of|and|works?|level)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
   const words = v => new Set(key(v).split(' ').filter(Boolean));
   const head = r => { const d = String(r.desc || '').trim(); return !!d && d === d.toUpperCase() && /[A-Z]/.test(d) && isEmpty(r.start) && isEmpty(r.finish) && isEmpty(r.status); };
-  const rows = (x.mainWorks || []).filter(r => r && String(r.desc || '').trim());
-  if(!rows.length){   // nothing yet: headings = the programme's summary tasks, rows = their activities
-    const T = g.tasks || [], top = Math.min(...T.map(t => t.lvl || 1)), out = []; let h = 0;
-    T.forEach(t => { if(t.sum && t.lvl === top && T.filter(z => z.sum && z.lvl === top).length === 1) return;
-      if(t.sum){ h++; out.push({desc: (axis ? h + '. ' : '') + String(t.name).toUpperCase()}); } else out.push({desc: t.name}); });
-    x.mainWorks = out; n++;
-  }
   // which summary task (section) each activity sits under, so "L3 column" under Repair and under Strengthening stay apart
   const T = g.tasks || [], par = new Map(), stack = [];
   T.forEach(t => { while(stack.length && stack[stack.length - 1].lvl >= t.lvl) stack.pop(); if(!t.sum) par.set(t, stack[stack.length - 1] || null); else stack.push(t); });
-  const sums = T.filter(t => t.sum);
+  const top = Math.min(...T.map(t => t.lvl || 1)), root = T.filter(z => z.sum && z.lvl === top).length === 1 ? T.find(z => z.sum && z.lvl === top) : null;
+  const sums = T.filter(t => t.sum && t !== root), secOf = t => { const p0 = par.get(t); return p0 === root ? null : p0; };
   const same = (a, b) => { const k = key(a), j = key(b); if(!k || !j) return 0; if(k === j) return 1; if(k.length > 4 && j.length > 4 && (k.includes(j) || j.includes(k))) return 0.9;
     const w = words(a), v = words(b), inter = [...w].filter(z => v.has(z)).length; return inter / Math.max(w.size, v.size); };
   const used = new Set(); let sec = null;
-  const find = r => { const pool = L.filter(a => !used.has(a) && (!sec || par.get(a) === sec)); let t = null, best = 0;
+  const find = r => { const pool = L.filter(a => !used.has(a) && (!sec || secOf(a) === sec)); let t = null, best = 0;
     (pool.length ? pool : L.filter(a => !used.has(a))).forEach(a => { const sc = same(r.desc, a.name); if(sc > best){ best = sc; t = a; } });
     return best >= 0.75 ? t : null; };
-  (x.mainWorks || []).forEach(r => { if(!r) return;
-    if(head(r)){ const h = String(r.desc).replace(/^\s*\d+[.)]\s*/, ''); let b = 0; sec = null; sums.forEach(z => { const sc = same(h, z.name); if(sc > b){ b = sc; sec = z; } }); if(b < 0.75) sec = null; return; }
-    const t = find(r); if(!t) return; used.add(t);
+  const out = [], secRow = new Map(), rowSec = new Map();   // heading row ↔ summary task
+  (x.mainWorks || []).filter(r => r && String(r.desc || '').trim()).forEach(r => {
+    if(head(r)){ const h = String(r.desc).replace(/^\s*\d+[.)]\s*/, ''); let b = 0; sec = null; sums.forEach(z => { const sc = same(h, z.name); if(sc > b){ b = sc; sec = z; } }); if(b < 0.75) sec = null;
+      if(sec && !secRow.has(sec)) secRow.set(sec, r); rowSec.set(r, sec); out.push(r); return; }
+    const t = find(r); if(t) used.add(t); rowSec.set(r, sec);
+    if(!t){ out.push(r); return; }
     const st = String(r.status || '').trim(), std = !st || /^(completed?|in progress|ongoing|on-going|not started)\b/i.test(st), done = /^complet/i.test(st);
-    const iso = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad2(m[2]) + '-' + pad2(m[1]) : String(v || '').slice(0, 10); };
     if(t.pc >= 100){ if(!done){ r.status = 'Completed'; n++; } if(isEmpty(r.start)) r.start = fd(t.s); if(isEmpty(r.finish) && t.f && t.f >= iso(r.start)){ r.finish = fd(t.f); n++; } }
-    else if(t.pc > 0){ if(std && !done && !/^(in progress|ongoing|on-going)/i.test(st)){ r.status = 'In progress'; n++; } if(isEmpty(r.start)){ r.start = fd(t.s); n++; } } });
+    else if(t.pc > 0){ if(std && !done && !/^(in progress|ongoing|on-going)/i.test(st)){ r.status = 'In progress'; n++; } if(isEmpty(r.start)){ r.start = fd(t.s); n++; } }
+    else if((!st || /^not started/i.test(st)) && isEmpty(r.start) && isEmpty(r.finish)){ n++; return; }   // not started yet → not listed
+    out.push(r); });
+  // started activities that aren't listed yet → under their section's heading (a new heading if there is none)
+  L.filter(t => t.pc > 0 && !used.has(t)).forEach(t => {
+    const sc = secOf(t), row = {desc: t.name, start: fd(t.s), finish: t.pc >= 100 ? fd(t.f) : '', status: t.pc >= 100 ? 'Completed' : 'In progress'}; n++;
+    let hi = sc ? out.indexOf(secRow.get(sc)) : -1;
+    if(sc && hi < 0){ const h = {desc: (axis ? '0. ' : '') + String(sc.name).toUpperCase()}; secRow.set(sc, h); rowSec.set(h, sc);
+      // keep the programme's order: before the first heading of a later section
+      const order = sums.indexOf(sc), at = out.findIndex(r => head(r) && rowSec.get(r) && sums.indexOf(rowSec.get(r)) > order);
+      if(at < 0) out.push(h); else out.splice(at, 0, h); hi = out.indexOf(h); }
+    let k = hi < 0 ? out.findIndex(r => head(r)) : hi + 1;   // no section → top of the list, before the first heading
+    if(k < 0) k = out.length; else if(hi >= 0) while(k < out.length && !head(out[k])) k++;
+    out.splice(k, 0, row); rowSec.set(row, sc); });
+  // headings with nothing under them go; numbered headings ("1. …") are numbered again
+  const fin = out.filter((r, i) => !head(r) || (i + 1 < out.length && !head(out[i + 1])));
+  if(fin.length !== out.length) n++;
+  let h = 0; fin.forEach(r => { if(head(r) && /^\s*\d+[.)]\s*/.test(r.desc)){ h++; const v = String(r.desc).replace(/^\s*\d+([.)])\s*/, h + '$1 '); if(v !== r.desc){ r.desc = v; } } });
+  x.mainWorks = fin;
   return n;
 }
 /* ---------- client S-curve (Wisma Kemajuan): cut-off dates = project start, every Sunday, 1st and last day of each month, completion.
@@ -5070,7 +5085,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z99';
+const APP_VER = 'Z100';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
