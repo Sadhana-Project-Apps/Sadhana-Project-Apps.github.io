@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Schedule % filled from the work programme — every Monday</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Actual % syncs between the S-curve and “Actual progress to date”</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4192,7 +4192,12 @@ function scCutDates(start, end, mode){
     if(mode === 'client' ? sun || z.getDate() === 1 || eom : mode === 'mon' ? z.getDay() === 1 : mode === 'sun' ? sun : mode === 'fort' ? sun && k % 2 === 1 : eom) out.add(t); t = addDays(t, 1); }
   return [...out].filter(x => x >= start && x <= end).sort();
 }
-function scCutRow(x){ const rows = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso && x.to && o.iso >= x.to).sort((a, b) => a.iso.localeCompare(b.iso)); return rows[0] || null; }
+function scCutRow(x){ const all = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso), want = x._scRow || x.scCut || '';
+  return (want && all.find(o => o.iso === want)) || all.filter(o => x.to && o.iso >= x.to).sort((a, b) => a.iso.localeCompare(b.iso))[0] || null; }
+// "Actual progress to date" = the actual % on the cut-off row (else the latest actual % on or before it)
+function scActualToDate(x){ const c = scCutRow(x); if(!c) return null; if(!isEmpty(c.r.actual)) return String(c.r.actual);
+  const prev = (x.scurve || []).map(r => ({r, iso: r && scDate(r.date)})).filter(o => o.iso && o.iso < c.iso && !isEmpty(o.r.actual)).sort((a, b) => b.iso.localeCompare(a.iso))[0];
+  return prev ? String(prev.r.actual) : ''; }
 function syncAxisScurve(d){
   const x = d.data, p = projById(d.projectId) || {}; if(!Array.isArray(x.scurve)) return false;
   const rows = x.scurve.filter(r => r && !isEmpty(r.date));
@@ -4215,6 +4220,7 @@ function syncAxisScurve(d){
   const base = scCutDates(start, end, scModeOf(d, p)), rowAt = pick || (x.to ? base.find(t => t >= x.to) : null);
   if(x._scRow && x._scRow !== rowAt && act[x._scRow] === String(x.actual)) delete act[x._scRow];
   const cut = [...new Set([...base, ...Object.keys(act).filter(t => t >= start && t <= end), ...(rowAt ? [rowAt] : [])])].sort();
+  if(rowAt && isEmpty(x.actual) && act[rowAt]) x.actual = act[rowAt];   // actual typed in the S-curve row → actual progress to date
   if(rowAt && !isEmpty(x.actual)) act[rowAt] = String(x.actual); x._scRow = rowAt || ''; if(rowAt) x.cutoff = rowAt;
   const dm = t => `${pad2(+t.slice(8))}/${t.slice(5, 7)}/${t.slice(0, 4)}`;
   x.scurve = cut.map(t => ({date: dm(t), sched: schedAt(t), actual: act[t] || ''}));
@@ -5026,7 +5032,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z96';
+const APP_VER = 'Z97';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6840,8 +6846,8 @@ document.addEventListener('input', e => {
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
     if(t.dataset.col === 'name' && t.getAttribute('list')) pplAutofill(t, rows[i]);
     if(t.dataset.tbl === 'manpower' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && axisHseFromGrid(S.draft.data)) rerenderEditorField('hseW');
-    if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis'){ const c = scCutRow(S.draft.data);
-      if(c && c.i === i){ S.draft.data.actual = t.value; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = t.value; } }
+    if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR'){ const v = scActualToDate(S.draft.data);
+      if(v != null && v !== String(S.draft.data.actual ?? '')){ S.draft.data.actual = v; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = v; } }
     refreshAutos(); }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
 });
