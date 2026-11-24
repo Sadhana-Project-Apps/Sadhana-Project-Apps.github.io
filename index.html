@@ -830,7 +830,7 @@ const TYPES = {
     fields: [
       {sec:'Reporting period', pdf:false},
       {k:'_word', l:'', t:'draftbtn', act:'prword', btn:'📄 Already prepared in Word? Upload it to fill this report', pdf:false},
-      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📂 Upload the work programme (.mpp) — fills the S-curve schedule % and actual %', pdf:false},
+      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📂 Upload the work programme (.mpp) — fills the S-curve schedule % and actual %', axAct:'prmppax', axBtn:'📈 Upload the MS Project file (.mpp) — schedule %, actual %, forecast', pdf:false},
       {k:'period', l:'Report type', t:'select', req:1, o:['Weekly','Fortnightly','Monthly'], w:'half', def:'Weekly', pdf:false},
       {k:'reportNo', l:'Report no.', t:'text', w:'half', ph:'e.g. 1', pdf:false},
       {k:'from', l:'Period from', t:'date', req:1, w:'half', pdf:false},
@@ -843,7 +843,7 @@ const TYPES = {
         def: () => [{}, {}, {}]},
       {k:'cutoff', l:'S-curve cut-off date', t:'date', w:'half', def: () => today(), hint:'Filled in from the S-curve dates (first date on / after the period end) — change it to use another date.'},
       {k:'_gen', when: () => false, l:'', t:'draftbtn', act:'genscurve', btn:'📈 Generate the S-curve from the work programme', pdf:false},
-      {k:'_pgap', l:'', t:'draftbtn', act:'prmpp', btn:'📂 Upload the work programme (.mpp) → pick the cut-off date → fill the S-curve', pdf:false},
+      {k:'_pgap', l:'', t:'draftbtn', act:'prmpp', btn:'📂 Upload the work programme (.mpp) → pick the cut-off date → fill the S-curve', axAct:'pgapply', axBtn:'📈 Update from the MS Project work programme (schedule %, actual %, forecast)', pdf:false},
       {k:'planned', l:'Scheduled progress to date (%)', t:'number', w:'half'},
       {k:'actual', l:'Actual progress to date (%)', t:'number', req:1, w:'half'},
       {k:'aheadDelay', l:'Ahead / delay', t:'auto', w:'half', calc:(x, d, p) => {
@@ -1970,7 +1970,7 @@ function statusOf(d){
 const pill = d => { const s = statusOf(d); return `<span class="pill ${s.cls}"><span class="dot"></span>${esc(s.label)}</span>`; };
 const docDate = d => d.data?.[TT(d).dateField] || d.createdAt;
 // date printed for a signature: the date chosen when signing (backdated) — else the actual signing time
-const sigWhen = g => !g ? '' : g.date ? fmtDate(g.date) : fmtDT(g.at);
+const sigWhen = (g, d) => !g ? '' : g.date && !(d && isAxP(d.projectId)) ? fmtDate(g.date) : fmtDT(g.at);   // AXISWKPJ prints the signing time, as before
 const docTitle = d => { if(d.customTitle) return d.customTitle; try { return swapTypeName(d.type, TT(d).title(d.data || {})); } catch(e){ return TT(d).name; } };
 const nameOf = id => (id && S.names[id]) || 'Team member';
 
@@ -2434,7 +2434,7 @@ async function paperFormPDF(d){
     doc.setPage(6);
     fit(x.repName, 108, 305, 163, 10.5); fit(x.subCompany, 291, 305, 194, 10.5);
     const sg = sgs[0];
-    if(sg){ await sigImg(sg, 232, 470, 150, 34); fit(sg.designation, 232, 540, 250, 10.5); fit(dmy(sg.date ? sg.date + 'T12:00:00' : sg.at), 232, 566, 150, 10.5); }
+    if(sg){ await sigImg(sg, 232, 470, 150, 34); fit(sg.designation, 232, 540, 250, 10.5); fit(dmy(sg.at), 232, 566, 150, 10.5); }
   }
   return doc;
 }
@@ -2616,7 +2616,7 @@ function projectView(id, tab){
   ${S.canWrite && !intern()?`<button class="btn" data-act="editproj" data-id="${esc(id)}">Edit project</button>`:''}</div>
   ${S.canWrite && !intern() && !S.isSub && PROJECT_PRESETS.some(x => x.test(p)) && !S.docs.some(d => d.projectId === id && d.type === 'PR' && !d.deleted) ? `<div class="card pad" style="margin-bottom:14px;border:2px dashed var(--accent,#2f7d32)"><b>📥 Progress reports already submitted to the client aren't in the app yet</b><div class="small muted" style="margin:4px 0 10px">Choose the Word files (e.g. PR No.1 – No.5) once. Everything in them goes into the app — S-curve, progress summary, forecast, progress by level, issues, manpower, manhours and photos — and the next progress report starts from the last one, so staff only update what changed.</div><label class="btn pri" style="margin:0">Choose the Word files<input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden data-axpr="${esc(id)}"></label></div>` : ''}
   ${projRecordsCard(id)}
-  ${(() => { const inCard = S.isSub ? [] : REQ_DOCS.flatMap(r => projRecFiles(id, r)).map(f => f.id), ex = expiringFiles().filter(x => x.f.projectId === id && !inCard.includes(x.f.id)); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
+  ${(() => { const inCard = S.isSub || isAxP(id) ? [] : REQ_DOCS.flatMap(r => projRecFiles(id, r)).map(f => f.id), ex = expiringFiles().filter(x => x.f.projectId === id && !inCard.includes(x.f.id)); return ex.length ? `<div class="vhint" style="background:var(--warn-l);color:var(--warn);align-items:center;cursor:pointer" data-act="files" data-id="${esc(id)}"><b>!</b><span>${ex.map(x => esc(x.f.title) + ' — ' + esc(x.ex.label)).join('<br>')}</span></div>` : ''; })()}
   ${(() => { try { const A = projAlerts(p); return A.length ? `<div class="card alerts" style="margin-bottom:14px">${alertLines(A)}</div>` : ''; } catch(e){ return ''; } })()}
   ${(() => { const it = [['Client', p.client], ['Consultant', p.consultant], ['Location', p.location], ['Contract no.', p.contractNo], ['Project manager', p.pm]].filter(x => x[1]).map(([l, v]) => `<div><span>${l}</span>${esc(v)}</div>`);
     if(p.start || p.end) it.splice(Math.min(it.length, 4), 0, `<div><span>Period</span>${(p.status||'Active') === 'Completed' ? fmtDate(p.start) + ' – ' + fmtDate(p.end) : countdownHTML(p)}</div>`);
@@ -2933,7 +2933,7 @@ function presentDoc(id){
 }
 function presentSigs(d){ const T = TT(d), sigs = d.signatures || [];
   return `<div style="display:grid;grid-template-columns:repeat(${Math.min(T.sigs.length, 4)},minmax(0,1fr));gap:10px">${T.sigs.map((s, i) => { const g = sigs[i];
-    return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center"><div class="small muted" style="text-transform:uppercase;letter-spacing:.05em">${esc(s.role)}</div>${g ? `<img src="${esc(g.img)}" alt="" style="max-height:56px;max-width:100%"><div><b>${esc(g.name)}</b></div><div class="small muted">${esc(g.designation || '')} · ${sigWhen(g)}</div>` : '<div class="muted small" style="padding:20px 0">Pending</div>'}</div>`; }).join('')}</div>`; }
+    return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center"><div class="small muted" style="text-transform:uppercase;letter-spacing:.05em">${esc(s.role)}</div>${g ? `<img src="${esc(g.img)}" alt="" style="max-height:56px;max-width:100%"><div><b>${esc(g.name)}</b></div><div class="small muted">${esc(g.designation || '')} · ${sigWhen(g, d)}</div>` : '<div class="muted small" style="padding:20px 0">Pending</div>'}</div>`; }).join('')}</div>`; }
 function presentProject(pid){
   const p = projById(pid); if(!p) return;
   const ds = S.docs.filter(d => d.projectId === pid);
@@ -3310,7 +3310,7 @@ async function makeDocx(id){
         row([cell('Name', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i]?.name || '', w[i + 1], {align: AlignmentType.CENTER}))]),
         row([cell('Designation', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigs[i] ? (sigs[i].designation || '') : '', w[i + 1], {align: AlignmentType.CENTER}))]),
         row([cell('Signature', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(new Paragraph({alignment: AlignmentType.CENTER, spacing: {before: 120, after: 120}, children: imgs[i] ? [imgs[i]] : [t('')]}), w[i + 1]))]),
-        row([cell('Date', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigWhen(sigs[i]), w[i + 1], {align: AlignmentType.CENTER}))])]); };
+        row([cell('Date', w[0], {bold: true, fill: LIGHT}), ...T.sigs.map((s, i) => cell(sigWhen(sigs[i], d), w[i + 1], {align: AlignmentType.CENTER}))])]); };
     const docTitleTxt = T.letter ? '' : docName(T, data);
     if(T.letter){
       const L = ltrParts(d), x = L.x;
@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · AXISWKPJ progress report kept as before; other projects get the new progress report updates</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · AXISWKPJ works exactly as before today's updates</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3935,7 +3935,7 @@ async function letterPdf(d){
   doc.setDrawColor(...INK); doc.setLineWidth(0.2); doc.line(LX, y, LX + 60, y); y += 1.5;
   write(x.signName || '', {bold: true}); [x.signTitle, x.signPhone, x.signEmail].filter(Boolean).forEach(v => write(v));
   write(L.forCo, {size: 8.5});
-  if(sig){ font(false, 7.5); doc.setTextColor(102); doc.text(pt('Signed electronically by ' + sig.name + ' on ' + sigWhen(sig)), LX, y + 3.2); y += LH; }
+  if(sig){ font(false, 7.5); doc.setTextColor(102); doc.text(pt('Signed electronically by ' + sig.name + ' on ' + sigWhen(sig, d)), LX, y + 3.2); y += LH; }
   const en = lines(x.enclosures); if(en.length){ y += 4; write(L.enclL, {bold: true}); en.forEach((e, i) => hang((i + 1) + '.', e, 0, 7)); }
   const cc = lines(x.cc); if(cc.length){ y += 4; write(L.ccL, {bold: true}); cc.forEach(c => write(c)); }
   // letterhead + footer
@@ -3967,7 +3967,7 @@ function docView(id){
   const cols = Math.min(T.sigs.length, 4);
   const sigHTML = T.sigs.map((s,i) => {
     const g = sigs[i];
-    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div><div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div><div class="nm">${esc(g.name)}</div><div class="ds">${esc(g.designation||'')}</div><div class="when">${esc(sigWhen(g))}</div>${S.canEdit ? `<button class="btn sm ghost" style="margin-top:6px" data-act="sigedit" data-id="${esc(d.id)}" data-i="${i}">✎ Edit name / designation</button>` : ''}</div>`;
+    if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div><div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div><div class="nm">${esc(g.name)}</div>${isAxP(d.projectId) ? `<div class="ds">${esc(g.designation||'')}${T.sigDate && g.date ? ' · dated ' + fmtDate(g.date) : ''}</div><div class="when">${fmtDT(g.at)}</div>` : `<div class="ds">${esc(g.designation||'')}</div><div class="when">${esc(sigWhen(g, d))}</div>`}${S.canEdit ? `<button class="btn sm ghost" style="margin-top:6px" data-act="sigedit" data-id="${esc(d.id)}" data-i="${i}">✎ Edit name / designation</button>` : ''}</div>`;
     const isNext = i === st.next;
     const blocked = isNext && s.needsResponse && !respFilled;
     const rq = isNext ? sigReqOf(d) : null, rqOk = rq && rq.slot === i;
@@ -3977,7 +3977,7 @@ function docView(id){
   const sigEditsTrail = (d.signatures || []).flatMap(g => (g && g.edited || []).map(e => `<div><i></i><span>${e.date ? `Date on the form for <b>${esc(g.name)}</b> changed from ${fmtDate(e.date)} to ${fmtDate(g.date)}` + (e.name !== g.name ? ` · name was <b>${esc(e.name)}</b>` : '') : `Name under a signature changed from <b>${esc(e.name)}</b>${e.designation ? ' (' + esc(e.designation) + ')' : ''} to <b>${esc(g.name)}</b>`}<br><span class="muted">${fmtDT(e.at)} by ${esc(nameOf(e.by))}</span></span></div>`));
   const paperTrail = d.paper ? `<div><i></i><span>Signed on paper (${esc(fmtDate(d.paper.date))}) — signed copy uploaded<br><span class="muted">${fmtDT(d.paper.at)} by ${esc(d.paper.name || nameOf(d.paper.by))}</span></span></div>` : '';
   const trail = [`<div><i></i><span>Created ${fmtDT(d.createdAt)}<br><span class="muted">by ${esc(nameOf(d.createdBy))}</span></span></div>`, ...(d.data?._import ? [`<div><i></i><span>Imported from the old report <b>${esc(d.data._import.file || '')}</b>${d.data._import.writer ? `<br><span class="muted">written by ${esc(d.data._import.writer)}</span>` : ''}</span></div>`] : [])]
-    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b>${sigs[i].date ? ` — dated ${esc(fmtDate(sigs[i].date))}` : ''}<br><span class="muted">${sigs[i].date ? 'actually signed ' : ''}${fmtDT(sigs[i].at)}</span></span></div>` : d.paper ? `<div><i></i><span>${esc(s.role)} — <b>signed on paper</b></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('') + sigEditsTrail.join('') + paperTrail;
+    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b>${sigs[i].date && !isAxP(d.projectId) ? ` — dated ${esc(fmtDate(sigs[i].date))}` : ''}<br><span class="muted">${sigs[i].date && !isAxP(d.projectId) ? 'actually signed ' : ''}${fmtDT(sigs[i].at)}</span></span></div>` : d.paper ? `<div><i></i><span>${esc(s.role)} — <b>signed on paper</b></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('') + sigEditsTrail.join('') + paperTrail;
   return `
   <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
   <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}${d.data?._subcon ? ` <span class="pill draft">From sub-contractor: ${esc(d.data._subcon)}</span>` : ''}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
@@ -3994,14 +3994,14 @@ function docView(id){
     <aside class="side">
       <div class="card"><div class="eyebrow" style="margin-bottom:8px">Actions</div><div class="acts" style="display:grid;gap:8px">
         ${st.next===0 && S.canWrite ? `<button class="btn pri" data-act="edit" data-id="${esc(d.id)}">Edit draft</button>`:''}
-        ${d.type === 'PR' && st.next === 0 && S.canWrite && !(S.isSub && d.createdBy !== S.me) ? `<button class="btn" data-act="prdocmpp" data-id="${esc(d.id)}">📂 Upload work programme (.mpp)</button>${TT(d).coverStyle === 'axis' ? `<button class="btn" data-act="prdocword" data-id="${esc(d.id)}">📄 Upload Word report</button>` : ''}` : ''}
+        ${d.type === 'PR' && !isAxP(d.projectId) && st.next === 0 && S.canWrite && !(S.isSub && d.createdBy !== S.me) ? `<button class="btn" data-act="prdocmpp" data-id="${esc(d.id)}">📂 Upload work programme (.mpp)</button>${TT(d).coverStyle === 'axis' ? `<button class="btn" data-act="prdocword" data-id="${esc(d.id)}">📄 Upload Word report</button>` : ''}` : ''}
         ${needResp && S.canWrite ? `<button class="btn ${respFilled?'':'pri'}" data-act="respond" data-id="${esc(d.id)}">${T.code==='TR' ? (isEmpty(d.data?.response) ? '📷 Add proof of receipt' : '📷 Edit proof of receipt') : (respFilled?'Edit':'Add') + ' ' + (T.code==='PTW'?'close-out':'response')}</button>`:''}
         ${st.next>0 && S.canWrite && !(S.isSub && d.type === 'PR') && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         ${d.paper && (d.paper.fileIds || []).length ? `<button class="btn pri" data-act="papershow" data-id="${esc(d.id)}">📄 Signed copy (hardcopy)</button>` : ''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF${d.paper ? ' (unsigned)' : ''}</button>
         ${!d.paper && st.next !== -1 && S.canWrite && !S.isSub ? `<button class="btn" data-act="paperup" data-id="${esc(d.id)}">📄 Signed on paper? Upload the signed copy</button>` : ''}
         ${T.paperForm ? '' : `<button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>`}
-        ${st.next !== 0 && S.canWrite && !S.isDev && !S.isSub ? `<button class="btn" data-act="subup" data-id="${esc(d.id)}" title="The Word file as it was finally sent">⇪ ${d.asSub ? 'Upload a newer final copy' : 'Upload the final copy (as sent)'}</button>` : ''}
+        ${st.next !== 0 && !isAxP(d.projectId) && S.canWrite && !S.isDev && !S.isSub ? `<button class="btn" data-act="subup" data-id="${esc(d.id)}" title="The Word file as it was finally sent">⇪ ${d.asSub ? 'Upload a newer final copy' : 'Upload the final copy (as sent)'}</button>` : ''}
         ${d.type === 'SEA' && S.canWrite && !S.isSub ? `<button class="btn" data-act="mksse" data-id="${esc(d.id)}">⭐ Evaluate this subcontractor (F01)</button>` : ''}
         ${d.type === 'DSR' ? `<button class="btn" data-act="wa" data-id="${esc(d.id)}" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp update</button>` : ''}
         ${d.type === 'PC' && S.canWrite ? (S.docs.find(o => o.type === 'DO' && o.data?.claimId === d.id) ? `<button class="btn" data-act="mkdo" data-id="${esc(d.id)}">📦 Open the delivery order (DO)</button>` : `<button class="btn pri" data-act="mkdo" data-id="${esc(d.id)}">📦 Make the delivery order (DO)</button>`) : ''}
@@ -4009,15 +4009,18 @@ function docView(id){
         ${d.type === 'DSR' && S.canWrite && (d.signatures || []).filter(Boolean).length <= 1 ? (d.data?.clientSign === 'Yes'
           ? `<button class="btn ghost" data-act="clientsig" data-id="${esc(d.id)}" data-v="No">✕ Client signature not needed</button>`
           : `<button class="btn ghost" data-act="clientsig" data-id="${esc(d.id)}" data-v="Yes">+ Add client signature</button>`) : ''}
-        ${!(d.signatures || []).some(Boolean) && canSelfDelete(d) ? `<button class="btn ghost danger" data-act="deldraft" data-id="${esc(d.id)}">🗑 Delete this draft</button>` : ''}
-        ${st.next !== 0 && S.canAdmin && !d.fixOk ? `<button class="btn" data-act="fixself" data-id="${esc(d.id)}">✎ Correct this report</button>` : ''}
-        ${st.next !== 0 && !S.canAdmin && S.canWrite && !S.isDev && !d.fixReq && !d.fixOk ? `<button class="btn" data-act="fixreq" data-id="${esc(d.id)}">✎ Ask to correct this report</button>` : ''}
+        ${!isAxP(d.projectId) && !(d.signatures || []).some(Boolean) && canSelfDelete(d) ? `<button class="btn ghost danger" data-act="deldraft" data-id="${esc(d.id)}">🗑 Delete this draft</button>` : ''}
+        ${st.next !== 0 && !isAxP(d.projectId) && S.canAdmin && !d.fixOk ? `<button class="btn" data-act="fixself" data-id="${esc(d.id)}">✎ Correct this report</button>` : ''}
+        ${st.next !== 0 && !isAxP(d.projectId) && !S.canAdmin && S.canWrite && !S.isDev && !d.fixReq && !d.fixOk ? `<button class="btn" data-act="fixreq" data-id="${esc(d.id)}">✎ Ask to correct this report</button>` : ''}
         <details class="more docmore"><summary>More actions ▾</summary><div style="display:grid;gap:8px;padding-top:8px">
         <button class="btn" data-act="present" data-id="${esc(d.id)}">▶ Present</button>
         ${S.canWrite ? `<button class="btn" data-act="dup" data-id="${esc(d.id)}">Duplicate as new draft</button>`:''}
         ${S.canEdit ? `<button class="btn ghost" data-act="renamedoc" data-id="${esc(d.id)}">✎ Rename / subject</button>`:''}
-        ${(S.canAdmin || canSelfDelete(d)) && (d.signatures || []).some(Boolean) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
-          : (S.canAdmin || canSelfDelete(d)) ? '' : S.canWrite && !S.isSub && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}
+        ${isAxP(d.projectId) ? `${S.canEdit && st.next!==0 ? `<button class="btn ghost danger" data-act="revert" data-id="${esc(d.id)}">Return to draft</button>`:''}
+        ${S.canAdmin || canSelfDelete(d) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
+          : S.canWrite && !S.isSub && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}`
+        : `${(S.canAdmin || canSelfDelete(d)) && (d.signatures || []).some(Boolean) ? `<button class="btn ghost danger" data-act="del" data-id="${esc(d.id)}">🗑 Delete this document</button>`
+          : (S.canAdmin || canSelfDelete(d)) ? '' : S.canWrite && !S.isSub && !d.delReq ? `<button class="btn ghost danger" data-act="delreq" data-id="${esc(d.id)}">🗑 Ask admin to delete</button>` : ''}`}
         </div></details>
       </div></div>
       ${d.asSub ? `<div class="card pad" style="border-color:var(--good,#2f7d32);margin-bottom:12px;min-width:0;overflow-wrap:anywhere"><b>📄 Final copy as sent</b><div class="small muted" style="margin:2px 0 8px">${esc(d.asSub.file || '')} · uploaded by ${esc(d.asSub.name || nameOf(d.asSub.by))} · ${fmtDT(d.asSub.at)}${d.asSub.data ? '<br>The next report continues from this copy (S-curve, progress summary, forecast, issues, manpower, manhours).' : ''}</div>
@@ -4129,25 +4132,25 @@ function programmeForm(pid){
     ${g ? `<div class="card pad" style="margin-bottom:12px"><b>${esc(g.file || g.title || 'Programme')}</b><div class="small muted">${progLeaves(g).length} activities · ${esc(fmtDate(g.tasks[0]?.s))} – ${esc(fmtDate(g.tasks.reduce((m, t) => t.f > m ? t.f : m, '')))} · progress as at ${esc(fmtDate(g.asAt))}: <b>${esc(String(progActual(g)))}%</b> actual, ${esc(String(Math.round(progPlanAt(g, g.asAt))))}% scheduled</div>
       ${hist.length > 1 ? `<div class="small muted" style="margin-top:6px">Actual % by date: ${hist.map(([d, v]) => esc(progDMY(d)) + ' ' + esc(String(v)) + '%').join(' · ')}</div>` : ''}</div>` : '<p class="small muted" style="margin-top:0">No work programme yet.</p>'}
     <p class="small" style="margin:0 0 8px">Every progress report then gets the <b>schedule %</b> for each S-curve date from the programme, the <b>actual %</b> (% complete in MS Project) for its period, the <b>1-week forecast</b> and the status of activities that match the progress summary.</p>
-    <div class="fld"><label>MS Project file (.mpp) <em>*</em></label><input type="file" id="pgFile" multiple>
+    <div class="fld"><label>MS Project file (.mpp) <em>*</em></label><input type="file" id="pgFile" ${isAxP(pid) ? 'accept=".mpp,.xml,application/vnd.ms-project,text/xml,application/xml" ' : ''}multiple>
       <div class="hint">The work programme file as it is (.mpp, MS Project 2010 or newer). Update the % complete in MS Project each week and upload it again — choose several files at once to add earlier weeks.</div></div>
-    <div class="fld"><label>S-curve dates</label><select id="pgMode">${Object.entries(SC_MODES).map(([k, l]) => `<option value="${k}" ${scModeOf(null, p) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div class="hint">Every progress report gets the schedule % for these dates from the programme automatically. Only the actual % is yours to fill in.</div></div>
+    ${isAxP(pid) ? '' : `<div class="fld"><label>S-curve dates</label><select id="pgMode">${Object.entries(SC_MODES).map(([k, l]) => `<option value="${k}" ${scModeOf(null, p) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div class="hint">Every progress report gets the schedule % for these dates from the programme automatically. Only the actual % is yours to fill in.</div></div>`}
     <div class="fld"><label>Progress as at</label><input type="date" id="pgAsAt"><div class="hint">Leave empty to take it from the file name (e.g. WP_Axis_151126 → 15/11/2026).</div></div>
     <div id="pgMsg" class="small muted"></div>
     <div class="row" style="margin-top:10px"><div class="sp"></div><button class="btn pri" data-act="pgsave" data-p="${esc(pid)}">Import</button></div></div></div>`);
 }
 async function programmeSave(pid, btn){
   const p = projById(pid); if(!p) return; const files = [...($('#pgFile')?.files || [])], asAt0 = $('#pgAsAt')?.value || '', msg = $('#pgMsg');
-  if(!files.length && p.programme){ try { await S.db.doc('projects/' + pid).update({scMode: $('#pgMode').value}); p.scMode = $('#pgMode').value; closeModal(); toast('S-curve dates saved — new progress reports use them'); render(); } catch(e){ dbErr(e); } return; }
+  if(!files.length && p.programme && !isAxP(pid)){ try { await S.db.doc('projects/' + pid).update({scMode: $('#pgMode').value}); p.scMode = $('#pgMode').value; closeModal(); toast('S-curve dates saved — new progress reports use them'); render(); } catch(e){ dbErr(e); } return; }
   if(!files.length){ toast('Choose the MS Project file (.mpp).', true); return; }
   btn.disabled = true;
   try {
     const got = [];
     for(const f of files){ const g = await readProgFile(f); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); g.asAt = files.length === 1 && asAt0 ? asAt0 : progAsAt(g.file, g); got.push(g); }
     got.sort((a, b) => a.asAt.localeCompare(b.asAt));
-    const hist = {...(p.progHist || {})}; got.forEach(g => { const pc = progActual(g); if(pc > 0) hist[g.asAt] = pc; });
+    const hist = {...(p.progHist || {})}; got.forEach(g => { const pc = progActual(g); if(pc > 0 || isAxP(pid)) hist[g.asAt] = pc; });
     const last = got[got.length - 1], keep = !p.programme || last.asAt >= (p.programme.asAt || '');
-    const upd = {progHist: hist, scMode: $('#pgMode')?.value || scModeOf(null, p), ...(keep ? {programme: {...last, importedAt: new Date().toISOString(), by: S.me || null}} : {})};
+    const upd = {progHist: hist, ...(isAxP(pid) ? {} : {scMode: $('#pgMode')?.value || scModeOf(null, p)}), ...(keep ? {programme: {...last, importedAt: new Date().toISOString(), by: S.me || null}} : {})};
     await S.db.doc('projects/' + pid).update(upd); Object.assign(p, upd);
     closeModal(); toast(`Work programme saved — ${progLeaves(last).length} activities, ${progActual(last)}% complete as at ${fmtDate(last.asAt)}`); render();
   } catch(e){ btn.disabled = false; if(msg) msg.textContent = '⚠ ' + (e.message || 'could not read the file'); if(e && e.code) dbErr(e); }
@@ -4158,15 +4161,14 @@ function applyProgramme(d, opts = {}){
   const T = TT(d), axis = T.coverStyle === 'axis';
   // actual %: the programme figure dated inside this period (or the latest before its end)
   const hist = Object.entries(p.progHist || {}).filter(([t]) => t <= addDays(x.to, 1) && t >= (x.from || x.to)).sort((a, b) => b[0].localeCompare(a[0]))[0];
-  if(hist && numv(hist[1]) > 0 && (isEmpty(x.actual) || opts.force)){ x.actual = String(hist[1]); n++; }
+  if(hist && (axis || numv(hist[1]) > 0) && (isEmpty(x.actual) || opts.force)){ x.actual = String(hist[1]); n++; }
   // 1-week forecast: activities not finished that start or carry on in the 7 days after the period
   const nx0 = addDays(x.to, 1), nx1 = addDays(x.to, 7);
   const fc = progLeaves(g).filter(t => t.pc < 100 && t.s <= nx1 && t.f >= nx0 && (t.pc === 0 || t.s >= addDays(x.to, -14))).sort((a, b) => a.s.localeCompare(b.s) || a.name.localeCompare(b.name));
   if(fc.length){ x.lookahead = fc.map(t => ({desc: t.name, start: axis ? progDMY(t.s) : t.s})); n++; }
   // progress summary – main works: status and dates from each activity's % complete
   n += progMainWorks(x, g, axis);
-  // generic report: work programme table (weightage by duration, actual % from MS Project)
-  if(syncAxisScurve(d)) n++;
+  if(axis) syncAxisScurve(d); else if(syncAxisScurve(d)) n++;   // schedule % for every S-curve date
   return n;
 }
 // Progress summary – main works from the work programme's % complete. Only activities that have started (% > 0) are listed:
@@ -4249,7 +4251,8 @@ function scCutDates(start, end, mode){
     if(mode === 'client' ? sun || z.getDate() === 1 || eom : mode === 'mon' ? z.getDay() === 1 : mode === 'sun' ? sun : mode === 'fort' ? sun && k % 2 === 1 : eom) out.add(t); t = addDays(t, 1); }
   return [...out].filter(x => x >= start && x <= end).sort();
 }
-function scCutRow(x){ const all = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso), want = x._scRow || x.scCut || '';
+function scCutRowAx(x){ const rows = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso && x.to && o.iso >= x.to).sort((a, b) => a.iso.localeCompare(b.iso)); return rows[0] || null; }   // AXISWKPJ: as before
+function scCutRow(x, ax){ if(ax) return scCutRowAx(x); const all = (x.scurve || []).map((r, i) => ({r, i, iso: r && scDate(r.date)})).filter(o => o.iso), want = x._scRow || x.scCut || '';
   return (want && all.find(o => o.iso === want)) || all.filter(o => x.to && o.iso >= x.to).sort((a, b) => a.iso.localeCompare(b.iso))[0] || null; }
 // "Actual progress to date" = the actual % on the cut-off row (else the latest actual % on or before it)
 function scActualToDate(x){ const c = scCutRow(x); if(!c) return null; if(!isEmpty(c.r.actual)) return String(c.r.actual);
@@ -4274,12 +4277,12 @@ function syncAxisScurve(d){
     return String(Math.round(numv(a.sched) + (numv(b.sched) - numv(a.sched)) * days(a.iso, t) / Math.max(1, days(a.iso, b.iso)))); };
   const act = {}; pts.forEach(q => { if(!isEmpty(q.actual)) act[q.iso] = String(q.actual); });
   // the cut-off date picked for this report (kept only while it belongs to this period); earlier reports' cut-off dates stay as rows
-  const pick = x.scCut && x.to && x.scCut >= addDays(x.from || x.to, -7) && x.scCut <= addDays(x.to, 7) && x.scCut >= start && x.scCut <= end ? x.scCut : '';
+  const pick = !axisP && x.scCut && x.to && x.scCut >= addDays(x.from || x.to, -7) && x.scCut <= addDays(x.to, 7) && x.scCut >= start && x.scCut <= end ? x.scCut : '';
   const base = scCutDates(start, end, scModeOf(d, p)), rowAt = pick || (x.to ? base.find(t => t >= x.to) : null);
   if(x._scRow && x._scRow !== rowAt && act[x._scRow] === String(x.actual)) delete act[x._scRow];
-  const cut = [...new Set([...base, ...Object.keys(act).filter(t => t >= start && t <= end), ...(rowAt ? [rowAt] : [])])].sort();
-  if(rowAt && isEmpty(x.actual) && act[rowAt]) x.actual = act[rowAt];   // actual typed in the S-curve row → actual progress to date
-  if(rowAt && !isEmpty(x.actual)) act[rowAt] = String(x.actual); x._scRow = rowAt || ''; if(rowAt) x.cutoff = rowAt;
+  const cut = axisP ? base : [...new Set([...base, ...Object.keys(act).filter(t => t >= start && t <= end), ...(rowAt ? [rowAt] : [])])].sort();
+  if(!axisP && rowAt && isEmpty(x.actual) && act[rowAt]) x.actual = act[rowAt];   // actual typed in the S-curve row → actual progress to date
+  if(rowAt && !isEmpty(x.actual)) act[rowAt] = String(x.actual); x._scRow = rowAt || ''; if(rowAt && !axisP) x.cutoff = rowAt;
   const dm = t => `${pad2(+t.slice(8))}/${t.slice(5, 7)}/${t.slice(0, 4)}`;
   x.scurve = cut.map(t => ({date: dm(t), sched: schedAt(t), actual: act[t] || ''}));
   if(rowAt) x.planned = schedAt(rowAt);
@@ -4565,7 +4568,8 @@ function fieldInput(f, v){
   switch(f.t){
     case 'rec': return recFieldHTML(f, v);
     case 'textarea': return `<div class="dict"><textarea ${dk} placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>${micBtn(f.k)}</div>${S.sample?`<div class="fixrow">${f.k in S.fixUndo?`<button class="undo" data-act="undofix" data-k="${f.k}">Undo</button>`:''}<button class="aibtn" data-act="fixen" data-k="${f.k}">✨ Fix English</button></div>`:''}`;
-    case 'draftbtn': return `<button type="button" class="btn pri" data-act="${f.act || 'ltrdraft'}" style="width:100%">${esc(f.btn || '✨ Draft the letter from the details above')}</button>`;
+    case 'draftbtn': { const ax = f.axAct && S.draft && isAxP(S.draft.projectId);   // AXISWKPJ keeps its earlier buttons
+      return `<button type="button" class="btn pri" data-act="${ax ? f.axAct : f.act || 'ltrdraft'}" style="width:100%">${esc(ax ? f.axBtn : f.btn || '✨ Draft the letter from the details above')}</button>`; }
     case 'auto': return `<div class="autobox"><span data-auto="${f.k}">${esc(S.draft ? autoValue(f, S.draft) : v) || '—'}</span><em>auto</em></div>`;
     case 'date': return `<input type="date" ${dk} value="${esc(v)}">`;
     case 'datetime': return `<input type="datetime-local" ${dk} value="${esc(v)}">`;
@@ -4822,7 +4826,8 @@ function openSign(docId, idx){
       <div class="fgrid">
         <div class="fld half" id="fld_sn"><label>Full name <em>*</em></label><input id="sgName" value="${esc(idx===0 || mine ? myName : '')}" autocomplete="name"></div>
         <div class="fld half"><label>Designation</label><input id="sgDes" placeholder="${esc(slot.hint)}" value="${esc(mine || idx === 0 ? (S.myDes || '') : '')}"></div>
-        <div class="fld half"><label>Date signed</label><input type="date" id="sgDate" value="${today()}" max="${today()}"><div class="hint">Signing for an earlier day? Pick that date — it is printed on the document.</div></div>
+        ${isAxP(d.projectId) ? (T.sigDate ? `<div class="fld half"><label>Date on the form</label><input type="date" id="sgDate" value="${today()}" max="${today()}"><div class="hint">Change it if the ${esc(slot.role.toLowerCase().replace(/ by$/, ''))} was done on an earlier day.</div></div>` : '')
+          : `<div class="fld half"><label>Date signed</label><input type="date" id="sgDate" value="${today()}" max="${today()}"><div class="hint">Signing for an earlier day? Pick that date — it is printed on the document.</div></div>`}
         <div class="fld"><label>Signature <em>*</em></label>
           ${mine ? `<div class="sigpick">${sigsL.map((g, i) => `<label class="sigopt"><input type="radio" name="sgUse" value="saved" data-si="${i}" ${i === 0 ? 'checked' : ''} data-sguse><span class="sigprev"><img src="${g.img}" alt="My e-signature ${i + 1}"></span></label>`).join('')}<label class="sigopt draw"><input type="radio" name="sgUse" value="draw" data-sguse><span>✏ Draw now / someone else signs</span></label></div><div id="sgSaved"></div>` : ''}
           <div id="sgDraw" style="${mine ? 'display:none' : ''}"><div class="padbox"><canvas id="sgPad"></canvas><div class="line"></div><div class="x">✕</div></div>
@@ -4889,6 +4894,11 @@ async function paperSave(id){
   } catch(e){ if(btn) btn.disabled = false; if(e && e.code === 'permission-denied') toast('Not allowed yet — the admin needs to publish the latest Firebase rules.', true); else dbErr(e); }
 }
 function canSelfDelete(d){
+  if(d && isAxP(d.projectId)){   // AXISWKPJ: the earlier rule
+    if(!S.canWrite || intern() || S.isDev || d.createdBy !== S.me) return false;
+    if(S.isSub) return !(d.signatures || []).some(Boolean);
+    const sg = (d.signatures || []).filter(Boolean);
+    return sg.length === 0 || (sg.length === 1 && (d.signatures || [])[0] && d.signatures[0].uid === S.me && (d.signatures || []).length === 1); }
   if(!d || !S.canWrite || S.isDev || d.createdBy !== S.me || d.rev) return false;
   if(S.isSub || intern()) return !(d.signatures || []).some(Boolean);   // sub-contractors and interns: only their unsigned drafts
   const sg = (d.signatures || []).filter(Boolean);
@@ -4946,13 +4956,14 @@ async function sigSetupSave(){
 }
 function sigEditForm(docId, idx){
   const d = S.docs.find(x => x.id === docId), g = d && (d.signatures || [])[idx]; if(!g || !S.canEdit) return;
-  showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Edit name / designation / date</h3></div><div class="mb">
+  const axE = isAxP(d.projectId), dOk = !axE || TT(d).sigDate;   // AXISWKPJ: as before (date only on F01 / JIF)
+  showModal(`<div class="box" style="max-width:480px"><div class="mh"><h3>Edit name / designation${!axE ? ' / date' : dOk ? ' / date' : ''}</h3></div><div class="mb">
     <div class="sigprev" style="margin-bottom:10px"><img src="${esc(g.img)}" alt=""></div>
     <div class="fgrid"><div class="fld"><label>Name <em>*</em></label><input id="seName" value="${esc(g.name || '')}"></div>
     <div class="fld"><label>Designation</label><input id="seDes" value="${esc(g.designation || '')}"></div>
-    <div class="fld"><label>Date signed</label><input type="date" id="seDate" value="${esc(g.date || String(g.at || '').slice(0, 10))}" max="${today()}"></div></div>
+    ${dOk ? `<div class="fld"><label>${axE ? 'Date on the form' : 'Date signed'}</label><input type="date" id="seDate" value="${esc(g.date || String(g.at || '').slice(0, 10))}" max="${today()}"></div>` : ''}</div>
     ${g.uid === S.me ? `<button class="btn sm" data-act="sigeditme">Use my profile name & designation</button>` : ''}
-    <p class="small muted">The signature stays as it is; the actual signing time is kept in the record. The change is noted in the record trail.</p></div>
+    <p class="small muted">${dOk ? 'The signature stays as it is; the actual signing time is kept in the record. ' : 'The signature, date and time stay as they are. '}The change is noted in the record trail.</p></div>
     <div class="mf"><button class="btn pri" data-act="sigeditsave" data-id="${esc(docId)}" data-i="${idx}">Save</button></div></div>`);
 }
 async function sigEditSave(docId, idx){
@@ -4989,11 +5000,12 @@ async function doSign(docId, idx){
     while(sigs.length < idx) sigs.push(null);
     const sImg = useSaved ? savedImg : padImage();
     const fDate = ($('#sgDate')?.value || '').slice(0, 10);
-    if(fDate && fDate > today()){ btn.disabled = false; btn.textContent = 'Sign document'; toast('The date signed can\'t be in the future.', true); return; }
+    const axS = isAxP(cur.projectId);
+    if(fDate && fDate > today()){ btn.disabled = false; btn.textContent = 'Sign document'; toast(axS ? 'The date on the form can\'t be in the future.' : 'The date signed can\'t be in the future.', true); return; }
     const prevD = sigs.slice(0, idx).map(g => g && (g.date || String(g.at || '').slice(0, 10))).filter(Boolean).sort().pop();
     const dD = String(docDate({...cur, id: docId}) || '').slice(0, 10);
-    if(fDate && /^\d{4}-\d\d-\d\d$/.test(dD) && fDate < dD && fDate !== today()){ btn.disabled = false; btn.textContent = 'Sign document'; toast(`The date signed can't be before the document date (${fmtDate(dD)}). Change the document date first if needed.`, true); return; }
-    if(fDate && prevD && fDate < prevD){ btn.disabled = false; btn.textContent = 'Sign document'; toast(`The date signed can't be before the earlier signature (${fmtDate(prevD)}).`, true); return; }
+    if(!axS && fDate && /^\d{4}-\d\d-\d\d$/.test(dD) && fDate < dD && fDate !== today()){ btn.disabled = false; btn.textContent = 'Sign document'; toast(`The date signed can't be before the document date (${fmtDate(dD)}). Change the document date first if needed.`, true); return; }
+    if(!axS && fDate && prevD && fDate < prevD){ btn.disabled = false; btn.textContent = 'Sign document'; toast(`The date signed can't be before the earlier signature (${fmtDate(prevD)}).`, true); return; }
     sigs[idx] = {name, designation:des, img: stampImg ? await withStamp(sImg, stampImg) : sImg, at:new Date().toISOString(), ...(fDate && fDate !== today() ? {date: fDate} : {}), uid:S.me||null, ...(useSaved ? {esig: true} : {}), ...(stampImg ? {stamped: true} : {})};
     await ref.update({signatures:sigs, updatedAt:new Date().toISOString(), updatedBy:S.me||null});
     closeModal(); toast('Signed ✓');
@@ -5093,7 +5105,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z101';
+const APP_VER = 'Z102';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -5125,6 +5137,22 @@ document.addEventListener('visibilitychange', () => { if(document.visibilityStat
 
 
 /* ---------- project records checklist + EOT approval ---------- */
+// AXISWKPJ (Axis / Wisma Kemajuan) keeps the app exactly as it was before the 24 Nov 2026 updates (user, 24 Nov 2026)
+const isAxP = pid => !!((projPreset(pid) || {}).PR);
+const REQ_DOCS_AX = [
+  {k: 'CIDB', l: 'CIDB registration', short: 'CIDB', cat: 'CIDB registration', re: /\bcidb\b|\bppk\b|\bspkk\b|\bstb\b/i},
+  {k: 'LHDN', l: 'LHDN stamping', short: 'LHDN stamping', cat: 'Stamp duty (LHDN)', re: /lhdn|stamp(ing| duty)|setem/i},
+  {k: 'LOA', l: 'Letter of Award (LOA)', short: 'LOA', cat: 'Letter of Award (LOA)', re: /\bloa\b|letter of (award|acceptance)|surat setuju terima/i},
+  {k: 'INS', l: 'Insurance', short: 'insurance', cat: 'Insurance', re: /insurance|insuran|\bcar\b|all risks|workmen|public liability|\bpli\b|socso|perkeso/i},
+  {k: 'DOSH', l: 'DOSH registration', short: 'DOSH', cat: 'DOSH registration', re: /\bdosh\b|\bjkkp\b|jabatan keselamatan/i}];
+const projRecFilesAx = (pid, r) => !r ? [] : S.files.filter(f => f.projectId === pid && f.status !== 'uploading' && !f.letterKind && ((f.folder || f.category) === r.cat || r.re.test((f.title || '') + ' ' + (f.folder || f.category || ''))));
+function projRecordsChipsAx(pid){
+  const it = REQ_DOCS_AX.map(r => { const fs = projRecFilesAx(pid, r), ex = fs.map(f => expiryInfo(f)).filter(Boolean).sort((a, b) => b.days - a.days)[0];
+    const st = !fs.length ? 'miss' : ex && ex.days < 0 ? 'exp' : ex && ex.days <= 30 ? 'soon' : 'ok';
+    return `<button class="recchip ${st}" ${st === 'ok' || st === 'soon' ? `data-act="files" data-id="${esc(pid)}"` : `data-act="fileaddcat" data-p="${esc(pid)}" data-c="${esc(r.cat)}" data-t="${esc(r.l)}"`} title="${st === 'miss' ? 'Not uploaded yet — tap to upload' : st === 'exp' ? 'Expired — upload the renewed one' : st === 'soon' ? 'Expires soon' : 'Uploaded'}">
+      <span class="ic">${st === 'ok' ? '✓' : st === 'soon' ? '⏰' : st === 'exp' ? '!' : '+'}</span>${esc(r.short === 'insurance' ? 'Insurance' : r.short)}</button>`; }).join('');
+  return `<div class="recrow"><span class="small muted">Project records:</span>${it}</div>`;
+}
 const REQ_DOCS = [
   {k: 'INS', l: 'Insurance', short: 'insurance', icon: '🛡', cat: 'Insurance', re: /insurance|insuran|\bcar\b|all risks|workmen|public liability|\bpli\b|socso|perkeso/i,
     hint: 'CAR, Workmen\'s Compensation, Public Liability…', sug: ["Contractor's All Risks (CAR) policy", "Workmen's Compensation policy", 'Public Liability (PLI) policy', 'SOCSO / PERKESO registration', 'Insurance — cover note']},
@@ -5145,6 +5173,7 @@ const projRecFiles = (pid, r) => !r ? [] : S.files.filter(f => { if(f.projectId 
 function recState(pid, r){ const fs = projRecFiles(pid, r), ex = fs.map(f => expiryInfo(f)).filter(Boolean).sort((a, b) => b.days - a.days)[0];
   return {fs, ex, st: !fs.length ? 'miss' : ex && ex.days < 0 ? 'exp' : ex && ex.days <= 30 ? 'soon' : 'ok'}; }
 function projRecordsCard(pid){
+  if(isAxP(pid)) return projRecordsChipsAx(pid);
   if(S.isSub) return '';
   const R = REQ_DOCS.map(r => ({r, ...recState(pid, r)})), need = R.filter(x => x.st === 'exp' || x.st === 'soon' || (x.st === 'miss' && !x.r.opt)).length, have = R.filter(x => x.fs.length).length;
   const up = x => S.canWrite ? `<button class="btn sm" data-act="fileaddcat" data-p="${esc(pid)}" data-c="${esc(x.r.cat)}" data-t="${x.r.k === 'PMT' ? '' : esc(x.r.sug.length === 1 ? x.r.sug[0] : '')}">⇪ ${x.fs.length ? 'Add' : 'Upload'}</button>` : '';
@@ -5466,7 +5495,7 @@ async function makePDF(id, opt){
       if(T.onePage && n <= 3){   // one-page forms: one compact row per signer
         need(8 + 16 * n); 
         doc.autoTable({...base, startY: y, head: [['SIGN-OFF', 'NAME', 'DESIGNATION', 'SIGNATURE', 'DATE & TIME']],
-          body: T.sigs.map((s, i) => { const sg = sigs[i]; return [pt(s.role.toUpperCase()), pt(sg?.name || ''), pt(sg ? (sg.designation || '') : ''), '', sg ? pt(sigWhen(sg)) : '']; }),
+          body: T.sigs.map((s, i) => { const sg = sigs[i]; return [pt(s.role.toUpperCase()), pt(sg?.name || ''), pt(sg ? (sg.designation || '') : ''), '', sg ? pt(sigWhen(sg, d)) : '']; }),
           columnStyles: {0: {cellWidth: 30, fontStyle: 'bold', fillColor: LABEL_FILL}, 1: {cellWidth: 40}, 2: {cellWidth: 34}, 3: {cellWidth: 40, minCellHeight: 14 * sc}, 4: {halign: 'center'}}, styles: {...base.styles, valign: 'middle'},
           didDrawCell: h => { if(h.section === 'body' && h.column.index === 3 && imgs[h.row.index]){ const I = imgs[h.row.index], r = Math.min((h.cell.width - 4) / I.w, (h.cell.height - 2) / I.h); doc.addImage(I.url, 'PNG', h.cell.x + (h.cell.width - I.w * r) / 2, h.cell.y + (h.cell.height - I.h * r) / 2, I.w * r, I.h * r); } }});
         after(); return; }
@@ -5475,7 +5504,7 @@ async function makePDF(id, opt){
         body:[['Name', ...T.sigs.map((s,i) => pt(sigs[i]?.name || ''))],
               ['Designation', ...T.sigs.map((s,i) => pt(sigs[i] ? (sigs[i].designation || '') : ''))],
               ['Signature', ...T.sigs.map(() => '')],
-              ['Date', ...T.sigs.map((s,i) => sigs[i] ? pt(sigWhen(sigs[i])) : '')]],
+              ['Date', ...T.sigs.map((s,i) => sigs[i] ? pt(sigWhen(sigs[i], d)) : '')]],
         columnStyles: Object.fromEntries([[0, {cellWidth:lw, fontStyle:'bold', fillColor:LABEL_FILL}], ...T.sigs.map((s, i) => [i + 1, {cellWidth:cw, halign:'center'}])]),
         didParseCell: h => { if(h.section === 'body' && h.row.index === 2) h.cell.styles.minCellHeight = 18 * Math.max(sc, .7); },
         didDrawCell: h => { if(h.section === 'body' && h.row.index === 2 && h.column.index > 0){ const I = imgs[h.column.index - 1]; if(I){ const r = Math.min((h.cell.width - 4)/I.w, (h.cell.height - 3)/I.h); doc.addImage(I.url, 'PNG', h.cell.x + (h.cell.width - I.w*r)/2, h.cell.y + (h.cell.height - I.h*r)/2, I.w*r, I.h*r); } } }});
@@ -6610,6 +6639,7 @@ document.addEventListener('click', async e => {
     case 'pgsave': programmeSave(el.dataset.p, el); break;
     case 'prword': prPick('.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', prFromWord); break;
     case 'prmpp': prMppForm(); break;
+    case 'prmppax': prPick('.mpp,.xml,application/vnd.ms-project,text/xml', prFromMPP); break;
     case 'mpcut': { const i = $('#mpCut'); if(i){ i.value = el.dataset.v; mppPreview(); } break; }
     case 'mpgo': prMppApply(el); break;
     case 'mppick': $('#mpFile')?.click(); break;
@@ -6834,7 +6864,9 @@ document.addEventListener('click', async e => {
     case 'revpdf': { const g = docById(id), r = g && (g.revs || [])[+el.dataset.i]; if(!r) break;
       makePDF(id, {doc: {...g, data: r.data, signatures: r.signatures || [], paper: r.paper || null, rev: r.rev, revs: []}}); break; }
     case 'revert': confirmBox('Return to draft?', 'All signatures on this document will be removed so it can be edited again. This is recorded as an update.', 'Return to draft', async () => {
-      try { const g = docById(id), now = new Date().toISOString(), revs = [...(g.revs || []), {rev: g.rev || 0, data: g.data, signatures: g.signatures || [], at: now, by: S.me || null, name: S.names[S.me] || '', reason: 'Returned to draft', approvedBy: S.me || null}];
+      try { const g = docById(id), now = new Date().toISOString();
+        if(isAxP(g.projectId)){ await S.db.doc(dpath(id)).update({signatures:[], updatedAt: now, updatedBy:S.me||null, revertedAt: now}); toast('Returned to draft'); render(); return; }   // AXISWKPJ: as before
+        const revs = [...(g.revs || []), {rev: g.rev || 0, data: g.data, signatures: g.signatures || [], at: now, by: S.me || null, name: S.names[S.me] || '', reason: 'Returned to draft', approvedBy: S.me || null}];
         await S.db.doc(dpath(id)).update({signatures:[], rev: (g.rev || 0) + 1, revs, updatedAt: now, updatedBy:S.me||null, revertedAt: now}); toast('Returned to draft'); render(); } catch(err){ dbErr(err); } }, true); break;
     case 'paperup': paperForm(id); break;
     case 'papersave': paperSave(id); break;
@@ -6896,7 +6928,7 @@ document.addEventListener('input', e => {
       if(x.weatherAM === 'No work (weather)' && x.weatherPM === 'No work (weather)' && x.status !== 'No work'){ x.status = 'No work'; if(!x.noWorkWhy) x.noWorkWhy = 'Rain / bad weather'; toast('Set to "No work" — no photos needed. Write the details of no work.'); } }
     if(S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && t.dataset.f === 'to' && axisHseFromGrid(S.draft.data)) rerenderEditorField('hseW');
     if(S.draft.type === 'PR' && t.dataset.f === 'cutoff' && TT(S.draft).coverStyle !== 'axis'){ S.draft.data.scCut = t.value; if(syncAxisScurve(S.draft)) rerenderEditorField('scurve'); const pe = document.querySelector('[data-f="planned"]'); if(pe) pe.value = S.draft.data.planned || ''; }
-    if(S.draft.type === 'PR' && ['actual', 'to', 'from'].includes(t.dataset.f) && (syncAxisScurve(S.draft) || (t.dataset.f === 'actual' && (() => { const c = scCutRow(S.draft.data); if(c) c.r.actual = t.value; return !!c; })()))){
+    if(S.draft.type === 'PR' && ['actual', 'to', 'from'].includes(t.dataset.f) && (syncAxisScurve(S.draft) || (t.dataset.f === 'actual' && (() => { const c = scCutRow(S.draft.data, isAxP(S.draft.projectId)); if(c) c.r.actual = t.value; return !!c; })()))){
       rerenderEditorField('scurve'); const pe = document.querySelector('[data-f="planned"]'); if(pe && pe !== t) pe.value = S.draft.data.planned || ''; const ce = document.querySelector('[data-f="cutoff"]'); if(ce && ce !== t) ce.value = S.draft.data.cutoff || ''; }
     refreshAutos();
     // a choice that shows / hides other parts of the form (e.g. "No work", "Quantity only", SST): redraw the form in place
@@ -6908,7 +6940,9 @@ document.addEventListener('input', e => {
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
     if(t.dataset.col === 'name' && t.getAttribute('list')) pplAutofill(t, rows[i]);
     if(t.dataset.tbl === 'manpower' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && axisHseFromGrid(S.draft.data)) rerenderEditorField('hseW');
-    if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR'){ const v = scActualToDate(S.draft.data);
+    if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR' && isAxP(S.draft.projectId)){ const c = scCutRowAx(S.draft.data);   // AXISWKPJ: as before
+      if(c && c.i === i){ S.draft.data.actual = t.value; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = t.value; } }
+    else if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR'){ const v = scActualToDate(S.draft.data);
       if(v != null && v !== String(S.draft.data.actual ?? '')){ S.draft.data.actual = v; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = v; } }
     refreshAutos(); }
   else if(t.dataset.ph){ S.draft.data[t.dataset.ph][+t.dataset.i].caption = t.value; S.dirty = true; }
@@ -7070,14 +7104,15 @@ async function allocateSeq(pid, type){
 async function removeDoc(gone, why){
   const id = gone.id, pid = gone.projectId;
   await S.db.doc(dpath(id)).delete();
-  if(!S.isSub && gone.seq) await closeGap(gone).catch(e => console.warn('renumber', e));
-  await releaseSeq(pid, gone.type, gone.seq).catch(() => {});
-  if(gone.type === 'PR' && !S.isSub && projById(pid)?.prLast?.docId === id){ try { await S.db.doc('projects/' + pid).update({prLast: null}); projById(pid).prLast = null; } catch(e){} }
+  const ax = isAxP(pid);   // AXISWKPJ: as before — no renumbering, sub-contractor counters untouched
+  if(!ax && !S.isSub && gone.seq) await closeGap(gone).catch(e => console.warn('renumber', e));
+  await releaseSeq(pid, gone.type, ax ? 0 : gone.seq).catch(() => {});
+  if(!ax && gone.type === 'PR' && !S.isSub && projById(pid)?.prLast?.docId === id){ try { await S.db.doc('projects/' + pid).update({prLast: null}); projById(pid).prLast = null; } catch(e){} }
   if(!S.isSub){ const entry = {number: gone.number || '', type: gone.type, title: docTitle(gone) || '', by: S.me || null, name: S.names[S.me] || '', at: new Date().toISOString(), reason: why,
       ...(gone.delReq ? {askedBy: gone.delReq.name || nameOf(gone.delReq.by) || ''} : {})};
     try { const pr = await S.db.doc('projects/' + pid).get(); const old = (pr.exists && pr.data().delLog) || []; await S.db.doc('projects/' + pid).update({delLog: [...old, entry].slice(-300)}); } catch(e){ console.warn('delLog', e); } }
   delete S.extra[id]; S.recent = S.recent.filter(x => x.id !== id); recomputeDocs();
-  if(gone.type === 'PR' && !S.isSub && S.prLastChecked){ S.prLastChecked[pid] = 0; try { checkPRLast(pid); } catch(e){} }   // share the report before it again
+  if(!ax && gone.type === 'PR' && !S.isSub && S.prLastChecked){ S.prLastChecked[pid] = 0; try { checkPRLast(pid); } catch(e){} }   // share the report before it again
 }
 // a deleted draft in the middle: later reports move down one number — only when every later one is still an unsigned draft (signed numbers never change)
 async function closeGap(gone){
@@ -7271,7 +7306,7 @@ function projAlerts(p){
     if(last && !ins.some(f => (f.expiry && f.expiry >= p.end) || (!f.expiry && String(f.uploadedAt || '') >= String(last.at || '')))) add('amber', '🛡', `Completion date extended to <b>${fmtDate(p.end)}</b> (EOT ${(p.eots || []).length} approved ${fmtDate(last.approvedOn)}). Upload the <b>renewed / extended insurance</b> covering the new date.`, upIns);
     else if(maxExp && maxExp < p.end) add('amber', '🛡', `Insurance cover ends <b>${fmtDate(maxExp)}</b> but the completion date is ${fmtDate(p.end)}. Upload the renewed / extended insurance.`, upIns); }
   // ---- project records everyone needs (CIDB, LHDN stamping, LOA, insurance, DOSH) ----
-  { const miss = REQ_DOCS.filter(r => !r.opt && !projRecFiles(p.id, r).length);
+  { const miss = isAxP(p.id) ? REQ_DOCS_AX.filter(r => !projRecFilesAx(p.id, r).length) : REQ_DOCS.filter(r => !r.opt && !projRecFiles(p.id, r).length);
     if(miss.length) add('amber', '📁', `Project records missing: <b>${miss.map(r => r.l).join(', ')}</b>. Upload them in Project files for everyone's reference.`, {act: 'fileaddcat', p: p.id, c: miss[0].cat, t: miss[0].l, l: '⇪ Upload ' + miss[0].short}); }
   // ---- progress against plan ----
   if(pr && actual != null && !done){
@@ -7964,7 +7999,7 @@ function fileForm(pid, f){
   showModal(`<div class="box"><div class="mh"><h3>${isNew ? 'Add document' : 'Edit document'}</h3></div><div class="mb"><div class="fgrid">
     <div class="fld half"><label>Group <em>*</em></label><input id="fCat" list="fCatList" value="${esc(f.folder || f.category || FILE_CATS[0])}"><datalist id="fCatList">${[...new Set([...S.files.filter(x => x.projectId === pid).map(x => x.folder || x.category).filter(Boolean), ...FILE_CATS])].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="fld half"><label>Reference no.</label><input id="fRef" value="${esc(f.refNo || '')}" placeholder="e.g. policy / LOA no."></div>
-    ${(() => { const rq = REQ_DOCS.find(r => r.cat === (f.folder || f.category)); return `<div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="${esc(rq ? 'e.g. ' + rq.sug[0] : "e.g. Contractor's All Risks policy")}" ${rq ? 'list="fTitleList"' : ''}>${rq ? `<datalist id="fTitleList">${rq.sug.map(t => `<option value="${esc(t)}">`).join('')}</datalist>${isNew && rq.sug.length > 1 ? `<div class="chips" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">${rq.sug.map(t => `<button type="button" class="btn sm ghost" data-act="ftitle" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}` : ''}</div>`; })()}
+    ${(() => { const rq = isAxP(pid || f.projectId) ? null : REQ_DOCS.find(r => r.cat === (f.folder || f.category)); return `<div class="fld" id="fld_fTitle"><label>Title <em>*</em></label><input id="fTitle" value="${esc(f.title || '')}" placeholder="${esc(rq ? 'e.g. ' + rq.sug[0] : "e.g. Contractor's All Risks policy")}" ${rq ? 'list="fTitleList"' : ''}>${rq ? `<datalist id="fTitleList">${rq.sug.map(t => `<option value="${esc(t)}">`).join('')}</datalist>${isNew && rq.sug.length > 1 ? `<div class="chips" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">${rq.sug.map(t => `<button type="button" class="btn sm ghost" data-act="ftitle" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}` : ''}</div>`; })()}
     <div class="fld half"><label>Document date</label><input type="date" id="fDate" value="${esc(f.date || '')}"></div>
     <div class="fld half"><label>Expiry date (if any)</label><input type="date" id="fExp" value="${esc(f.expiry || '')}"><div class="hint">You'll be warned 30 days before it expires.</div></div>
     <div class="fld"><label>Notes</label><textarea id="fNotes" style="min-height:60px">${esc(f.notes || '')}</textarea></div>
