@@ -830,7 +830,7 @@ const TYPES = {
     fields: [
       {sec:'Reporting period', pdf:false},
       {k:'_word', l:'', t:'draftbtn', act:'prword', btn:'📄 Already prepared in Word? Upload it to fill this report', pdf:false},
-      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📈 Work programme (.mpp) → pick the cut-off date and fill the S-curve', pdf:false},
+      {k:'_mpp', l:'', t:'draftbtn', act:'prmpp', btn:'📂 Upload the work programme (.mpp) — fills the S-curve schedule % and actual %', pdf:false},
       {k:'period', l:'Report type', t:'select', req:1, o:['Weekly','Fortnightly','Monthly'], w:'half', def:'Weekly', pdf:false},
       {k:'reportNo', l:'Report no.', t:'text', w:'half', ph:'e.g. 1', pdf:false},
       {k:'from', l:'Period from', t:'date', req:1, w:'half', pdf:false},
@@ -843,7 +843,7 @@ const TYPES = {
         def: () => [{}, {}, {}]},
       {k:'cutoff', l:'S-curve cut-off date', t:'date', w:'half', def: () => today(), hint:'Progress is measured up to this date — normally the end of the reporting period.'},
       {k:'_gen', l:'', t:'draftbtn', act:'genscurve', btn:'📈 Generate the S-curve from the work programme', pdf:false},
-      {k:'_pgap', l:'', t:'draftbtn', act:'pgapply', btn:'📈 Update from the MS Project work programme (schedule %, actual %, forecast)', pdf:false},
+      {k:'_pgap', l:'', t:'draftbtn', act:'prmpp', btn:'📂 Upload the work programme (.mpp) → pick the cut-off date → fill the S-curve', pdf:false},
       {k:'planned', l:'Scheduled progress to date (%)', t:'number', w:'half'},
       {k:'actual', l:'Actual progress to date (%)', t:'number', req:1, w:'half'},
       {k:'aheadDelay', l:'Ahead / delay', t:'auto', w:'half', calc:(x, d, p) => {
@@ -3560,7 +3560,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Progress report: .mpp → pick the cut-off date → S-curve</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Upload the .mpp from any phone — S-curve % filled from it</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4125,7 +4125,7 @@ function programmeForm(pid){
     ${g ? `<div class="card pad" style="margin-bottom:12px"><b>${esc(g.file || g.title || 'Programme')}</b><div class="small muted">${progLeaves(g).length} activities · ${esc(fmtDate(g.tasks[0]?.s))} – ${esc(fmtDate(g.tasks.reduce((m, t) => t.f > m ? t.f : m, '')))} · progress as at ${esc(fmtDate(g.asAt))}: <b>${esc(String(progActual(g)))}%</b> actual, ${esc(String(Math.round(progPlanAt(g, g.asAt))))}% scheduled</div>
       ${hist.length > 1 ? `<div class="small muted" style="margin-top:6px">Actual % by date: ${hist.map(([d, v]) => esc(progDMY(d)) + ' ' + esc(String(v)) + '%').join(' · ')}</div>` : ''}</div>` : '<p class="small muted" style="margin-top:0">No work programme yet.</p>'}
     <p class="small" style="margin:0 0 8px">Every progress report then gets the <b>schedule %</b> for each S-curve date from the programme, the <b>actual %</b> (% complete in MS Project) for its period, the <b>1-week forecast</b> and the status of activities that match the progress summary.</p>
-    <div class="fld"><label>MS Project file (.mpp) <em>*</em></label><input type="file" id="pgFile" accept=".mpp,.xml,application/vnd.ms-project,text/xml,application/xml" multiple>
+    <div class="fld"><label>MS Project file (.mpp) <em>*</em></label><input type="file" id="pgFile" multiple>
       <div class="hint">The work programme file as it is (.mpp, MS Project 2010 or newer). Update the % complete in MS Project each week and upload it again — choose several files at once to add earlier weeks.</div></div>
     <div class="fld"><label>Progress as at</label><input type="date" id="pgAsAt"><div class="hint">Leave empty to take it from the file name (e.g. WP_Axis_151126 → 15/11/2026).</div></div>
     <div id="pgMsg" class="small muted"></div>
@@ -4137,7 +4137,7 @@ async function programmeSave(pid, btn){
   btn.disabled = true;
   try {
     const got = [];
-    for(const f of files){ const g = /\.xml$/i.test(f.name) ? parseMSPDI(await f.text()) : parseMPP(await f.arrayBuffer()); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); g.asAt = files.length === 1 && asAt0 ? asAt0 : progAsAt(g.file, g); got.push(g); }
+    for(const f of files){ const g = await readProgFile(f); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); g.asAt = files.length === 1 && asAt0 ? asAt0 : progAsAt(g.file, g); got.push(g); }
     got.sort((a, b) => a.asAt.localeCompare(b.asAt));
     const hist = {...(p.progHist || {})}; got.forEach(g => hist[g.asAt] = progActual(g));
     const last = got[got.length - 1], keep = !p.programme || last.asAt >= (p.programme.asAt || '');
@@ -5023,7 +5023,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z93';
+const APP_VER = 'Z94';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6542,6 +6542,7 @@ document.addEventListener('click', async e => {
     case 'prmpp': prMppForm(); break;
     case 'mpcut': { const i = $('#mpCut'); if(i){ i.value = el.dataset.v; mppPreview(); } break; }
     case 'mpgo': prMppApply(el); break;
+    case 'mppick': $('#mpFile')?.click(); break;
     case 'pgapply': { if(!S.draft) break; const n = applyProgramme(S.draft, {force: true}); S.dirty = true; render(); toast(n ? 'Updated from the work programme — please check' : 'Nothing to update from the work programme', !n); break; }
     case 'viewas': if(el.dataset.r === 'sub') viewAsSubForm(); else setViewAs(el.dataset.r ? {role: el.dataset.r} : null); break;
     case 'viewassub': { const ps = [...document.querySelectorAll('[data-vap]:checked')].map(x => x.dataset.vap); if(!ps.length){ toast('Tick at least one project.', true); break; }
@@ -7616,7 +7617,7 @@ function prMppForm(){
   S.mppTmp = null; const g0 = p.programme && progLeaves(p.programme).length ? p.programme : null;
   const cut0 = x.scCut || (TT(d).coverStyle === 'axis' ? '' : x.cutoff) || x.to || today();
   showModal(`<div class="box" style="max-width:560px"><div class="mh"><div><div class="eyebrow">${esc(d.number || 'Progress report')}</div><h3>📈 Work programme → S-curve</h3></div></div><div class="mb">
-    <div class="fld"><label>MS Project file (.mpp)${g0 ? '' : ' <em>*</em>'}</label><input type="file" id="mpFile" accept=".mpp,.xml,application/vnd.ms-project,text/xml">
+    <div class="fld"><label>MS Project file (.mpp)${g0 ? '' : ' <em>*</em>'}</label><button type="button" class="btn ${g0 ? '' : 'pri'}" data-act="mppick" style="width:100%;justify-content:center">📂 <span id="mpName">${g0 ? 'Choose a newer .mpp file' : 'Choose the .mpp file'}</span></button><input type="file" id="mpFile" hidden>
       <div class="hint">${g0 ? `Now using <b>${esc(g0.file || g0.title || 'the project programme')}</b> — choose a file only if there is a newer one.` : 'The work programme as it is (.mpp, MS Project 2010 or newer).'}</div></div>
     <div class="fgrid">
       <div class="fld half"><label>Cut-off date <em>*</em></label><input type="date" id="mpCut" value="${esc(cut0)}"><div class="hint">Progress is measured up to this date. Period ${esc(fmtDate(x.from))} – ${esc(fmtDate(x.to))}.</div>
@@ -7629,7 +7630,8 @@ function prMppForm(){
     <div class="row" style="margin-top:10px"><div class="sp"></div><button class="btn pri" data-act="mpgo">📈 Fill the S-curve</button></div></div></div>`);
   const prev = () => mppPreview(); ['#mpCut', '#mpMode', '#mpAct'].forEach(k => $(k)?.addEventListener('input', prev)); $('#mpMode')?.addEventListener('change', prev);
   $('#mpFile')?.addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; if(!f) return; const box = $('#mpPrev'); if(box) box.innerHTML = '<span class="small muted">Reading the file…</span>';
-    try { const g = /\.xml$/i.test(f.name) ? parseMSPDI(await f.text()) : parseMPP(await f.arrayBuffer()); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); S.mppTmp = g;
+    const nm = $('#mpName'); if(nm) nm.textContent = f.name.replace(/^[0-9a-f]{8}-/i, '');
+    try { const g = await readProgFile(f); g.file = f.name.replace(/^[0-9a-f]{8}-/i, ''); S.mppTmp = g;
       const a = $('#mpAct'); if(a) a.value = String(progActual(g)); } catch(err){ S.mppTmp = null; if(box) box.innerHTML = `<span class="small" style="color:var(--bad)">⚠ ${esc(err.message || 'Could not read that file')}</span>`; return; }
     prev(); });
   if(g0 && isEmpty(x.actual)){ const h = (p.progHist || {})[cut0]; const a = $('#mpAct'); if(a) a.value = String(h != null ? h : progActual(g0)); }
@@ -7670,9 +7672,17 @@ async function prMppApply(btn){
   const row = (x.scurve || []).find(r => scDate(r.date) === cut);
   toast(ok ? `S-curve filled — ${(x.scurve || []).length} dates; at ${fmtDate(cut)} schedule ${row ? row.sched : x.planned}%${x.actual ? ', actual ' + x.actual + '%' : ''}${saved ? '. Programme kept for the next reports.' : '.'}` : 'Could not fill the S-curve — check the programme dates.', !ok);
 }
+// any file the phone gives us: MS Project .mpp (binary) or MS Project XML — checked by its content, not its name
+async function readProgFile(f){
+  const buf = await f.arrayBuffer(), b = new Uint8Array(buf.slice(0, 8));
+  if(b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0) return parseMPP(buf);
+  const head = new TextDecoder().decode(buf.slice(0, 400)).replace(/^\uFEFF/, '').trim();
+  if(head.startsWith('<')) return parseMSPDI(new TextDecoder().decode(buf));
+  throw new Error(`“${f.name}” is not an MS Project file — choose the .mpp work programme.`);
+}
 async function prFromMPP(file){
   const d = S.draft; if(!d || d.type !== 'PR') return;
-  let g; try { g = /\.xml$/i.test(file.name) ? parseMSPDI(await file.text()) : parseMPP(await file.arrayBuffer()); } catch(e){ toast(e.message || 'Could not read that MS Project file', true); return; }
+  let g; try { g = await readProgFile(file); } catch(e){ toast(e.message || 'Could not read that MS Project file', true); return; }
   g.file = file.name.replace(/^[0-9a-f]{8}-/i, ''); const nm = progAsAt(g.file, g); g.asAt = /(\d{6})/.test(g.file) ? nm : (d.data.to || nm);
   const p = projById(d.projectId) || {}, hist = {...(p.progHist || {}), [g.asAt]: progActual(g)};
   // staff keep it with the project (next reports use it too); a sub-contractor's upload fills only this report
