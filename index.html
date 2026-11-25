@@ -95,6 +95,27 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .tick{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:13px}
 .tick.y{background:var(--ok-l);color:var(--ok)}
 .tick.n{background:var(--hazard-l);color:var(--hazard)}
+.present.slides .sl-body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px}
+.sl-stage{width:min(100%,calc((100vh - 140px) * 16 / 9));container-type:inline-size}
+.slide{position:relative;aspect-ratio:16/9;background:#fff;border-radius:6px;box-shadow:0 6px 30px rgba(0,0,0,.35);overflow:hidden;padding:3.5cqw 4cqw 4.5cqw;font-family:Inter,Arial,sans-serif;color:#222}
+.slide h3{font:800 2.6cqw/1.15 Archivo,Arial,sans-serif;margin:0 0 .4cqw}.slide h3::after{content:'';display:block;width:9cqw;height:.45cqw;background:#2E7D32;margin-top:.8cqw}
+.sl-ft{position:absolute;left:4cqw;right:4cqw;bottom:1.6cqw;display:flex;justify-content:space-between;font-size:1.05cqw;color:#8a8072}
+.sl-title .sl-lh{width:56cqw;display:block}.sl-band{position:absolute;left:0;right:0;top:16cqw;height:.7cqw;background:#2E7D32}
+.sl-tt{position:absolute;left:6cqw;right:6cqw;top:20cqw}.sl-ey{color:#2E7D32;font-weight:800;font-size:1.4cqw;letter-spacing:.05em}
+.sl-title h1,.sl-end h1{font:800 3.8cqw/1.1 Archivo,Arial,sans-serif;margin:.6cqw 0}.sl-title h2,.sl-end h2{font-weight:500;font-size:2.1cqw;margin:0 0 1cqw}.sl-pd{font-size:1.7cqw;color:#6b6459}.sl-prep{margin-top:1.4cqw;font-size:1.35cqw;color:#6b6459}
+.sl-end{display:flex;flex-direction:column;justify-content:center;padding-left:6cqw}.sl-end .sl-band{top:auto;bottom:9cqw}
+.sl-kpi{display:grid;grid-template-columns:26cqw 1fr;gap:2.4cqw;margin-top:1.6cqw;height:calc(100% - 8cqw)}
+.sl-cards{display:grid;gap:1.1cqw;align-content:start}.sl-card{background:#f6f4ef;border:1px solid #e3e0d8;border-radius:1cqw;padding:1cqw 1.4cqw}
+.sl-card span{display:block;font-size:1.05cqw;font-weight:700;color:#6b6459;text-transform:uppercase;letter-spacing:.04em}.sl-card b{font:800 2.8cqw/1.15 Archivo,Arial,sans-serif;color:#2f6fb3}.sl-card i{font-style:normal;font-size:1.2cqw;color:#6b6459;margin-left:.6cqw}
+.sl-card.ac b,.sl-card.ok b{color:#2E7D32}.sl-card.bad b{color:#b42318}.sl-cut{font-size:1.1cqw;color:#6b6459}
+.sl-chart{position:relative;min-height:0}.sl-chart svg{height:auto!important}.sl-leg{font-size:1.15cqw;color:#444;display:flex;gap:1cqw;align-items:center;margin-top:.4cqw}.sl-leg i{display:inline-block;width:2.4cqw;height:.45cqw;border-radius:1px}
+.sl-none{font-size:1.4cqw;color:#8a8072;padding:4cqw 0}
+.sl-tb{width:100%;border-collapse:collapse;margin-top:1.4cqw;font-size:1.3cqw}.sl-tb th{background:#2E7D32;color:#fff;text-align:left;padding:.7cqw .9cqw;font-weight:700}
+.sl-tb td{border-bottom:1px solid #e3e0d8;padding:.65cqw .9cqw;vertical-align:top}.sl-tb tr.g td{background:#E2EFDA;font-weight:800}.sl-tb td.sl-done{color:#2E7D32;font-weight:700}.sl-tb td.sl-prog{color:#b54708;font-weight:700}
+.sl-text{margin-top:1.6cqw;font-size:1.6cqw;line-height:1.5}
+.sl-ph{display:grid;gap:1.2cqw;margin-top:1.4cqw;height:calc(100% - 9cqw)}.sl-ph.n2,.sl-ph.n3,.sl-ph.n4{grid-template-columns:1fr 1fr}.sl-ph.n3,.sl-ph.n4{grid-template-rows:1fr 1fr}
+.sl-ph figure{margin:0;display:flex;flex-direction:column;min-height:0}.sl-ph img{flex:1;min-height:0;width:100%;object-fit:contain;background:#f3f1ec;border-radius:.5cqw}.sl-ph figcaption{font-size:1.1cqw;color:#6b6459;text-align:center;padding-top:.4cqw}
+.sl-nav{display:flex;align-items:center;gap:14px;color:#fff}.sl-nav .btn{min-width:56px;font-size:26px;line-height:1;padding:6px 14px;color:var(--ink,#222);background:#fff}.sl-count{font-weight:700;min-width:60px;text-align:center}
 .present{position:fixed;inset:0;z-index:200;background:#3a3f45;display:flex;flex-direction:column}
 .present .ptop{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#24282c;color:#fff}
 .present .ptop .btn:not(.pri){color:var(--ink);background:#fff}
@@ -2926,10 +2947,161 @@ function myRequests(){
   return out;
 }
 
+/* ---------- preview = the published PDF itself, page by page ---------- */
+S.pv = {};   // doc key → page images
+const pvKey = d => [d.id, d.updatedAt || '', (d.signatures || []).map(g => g ? (g.at || 1) + (g.name || '') + (g.date || '') : 0).join(','), d.rev || 0, d.paper ? 1 : 0, JSON.stringify(projById(d.projectId) || {}).length].join('|');
+const pvHTML = d => { const z = S.pv[pvKey(d)]; return z ? z.map((u, i) => `<img src="${u}" alt="Page ${i + 1}" loading="lazy">`).join('') : ''; };
+async function pdfPages(d){
+  const k = pvKey(d); if(S.pv[k]) return S.pv[k];
+  const r = await makePDF(d.id, {blob: true, doc: d}); if(!r || !r.blob) throw new Error('no pdf');
+  const lib = await pdfjs(), pdf = await lib.getDocument({data: new Uint8Array(await r.blob.arrayBuffer())}).promise, out = [];
+  for(let n = 1; n <= pdf.numPages; n++){ const pg = await pdf.getPage(n), v1 = pg.getViewport({scale: 1}), sc = Math.min(2.2, 1400 / v1.width), vp = pg.getViewport({scale: sc});
+    const cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height); const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    await pg.render({canvasContext: g, viewport: vp}).promise; out.push(cv.toDataURL('image/jpeg', 0.86)); }
+  const keys = Object.keys(S.pv); if(keys.length > 8) delete S.pv[keys[0]];
+  S.pv[k] = out; return out;
+}
+async function fillPdfPrev(){
+  for(const el of document.querySelectorAll('.pdfprev[data-pv]')){ if(el.dataset.busy) continue; const d = docById(el.dataset.pv); if(!d) continue; const k = pvKey(d);
+    if(el.dataset.k === k && el.querySelector('img')) continue; el.dataset.busy = '1';
+    try { await pdfPages(d); if(el.isConnected){ el.innerHTML = pvHTML(d); el.dataset.k = k; } }
+    catch(e){ console.warn('preview', e); if(el.isConnected){ el.innerHTML = `<div class="pvwait">The page preview needs an internet connection — <b>⤓ Download PDF</b> shows the published copy.</div>`; } }
+    delete el.dataset.busy; }
+}
 /* ---------- presentation mode (tablet / phone, for client meetings) ---------- */
+/* ---------- progress report as presentation slides (▶ Present, ⤓ PowerPoint) — not AXISWKPJ ----------
+   Built from the published report (or its final copy as sent): title, progress & S-curve, the report's tables, photos. */
+async function pptxLib(){ if(!window.PptxGenJS) await loadJs('https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js'); return window.PptxGenJS; }
+function scurveSVG(rows, cut){
+  const pts = (rows || []).map(r => ({iso: scDate(r.date), s: r.sched === '' || r.sched == null ? null : numv(r.sched), a: r.actual === '' || r.actual == null ? null : numv(r.actual)})).filter(o => o.iso);
+  if(pts.length < 2) return '';
+  const W = 1000, H = 420, L = 56, R = 18, Tp = 20, B = 46, x = i => L + i * (W - L - R) / (pts.length - 1), y = v => Tp + (100 - v) * (H - Tp - B) / 100;
+  const line = (k, col, w) => { const seg = pts.map((o, i) => o[k] == null ? null : `${x(i).toFixed(1)},${y(o[k]).toFixed(1)}`).filter(Boolean); return seg.length > 1 ? `<polyline points="${seg.join(' ')}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linejoin="round"/>` : ''; };
+  const step = Math.max(1, Math.ceil(pts.length / 8)), ci = cut ? pts.findIndex(o => o.iso >= cut) : -1;
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;font-family:Arial,sans-serif">
+    ${[0, 25, 50, 75, 100].map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e0d8"/><text x="${L - 8}" y="${y(v) + 5}" font-size="15" text-anchor="end" fill="#6b6459">${v}%</text>`).join('')}
+    ${pts.map((o, i) => i % step === 0 || i === pts.length - 1 ? `<text x="${x(i)}" y="${H - 18}" font-size="14" text-anchor="middle" fill="#6b6459">${o.iso.slice(8, 10)}/${o.iso.slice(5, 7)}/${o.iso.slice(2, 4)}</text>` : '').join('')}
+    ${ci >= 0 ? `<line x1="${x(ci)}" x2="${x(ci)}" y1="${Tp}" y2="${H - B}" stroke="#d92d20" stroke-dasharray="6 5" stroke-width="2"/><text x="${x(ci) + 6}" y="${Tp + 14}" font-size="14" fill="#d92d20">Cut-off</text>` : ''}
+    ${line('s', '#2f6fb3', 4)}${line('a', '#2E7D32', 5)}${pts.map((o, i) => o.a == null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(o.a).toFixed(1)}" r="7" fill="#2E7D32"/>`).join('')}
+    <rect x="${L + 10}" y="${H - B + 22}" width="0" height="0"/></svg>`;
+}
+function svgPng(svg, w = 1600, h = 672){ return new Promise(res => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h); res(c.toDataURL('image/png')); }; img.onerror = () => res(''); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }); }
+async function prSlides(d){
+  d = asSent(d); const x = d.data || {}, T = TT(d), p = projById(d.projectId) || {}, c = company(), prep = (d.signatures || []).find(Boolean);
+  const S2 = [], fv = (cc, v) => isEmpty(v) ? '' : cc.date ? fmtDate(v) : /^\d{4}-\d\d-\d\d$/.test(String(v)) ? `${String(v).slice(8, 10)}/${String(v).slice(5, 7)}/${String(v).slice(0, 4)}` : String(v);
+  const period = x.from && x.to ? `${fmtDate(x.from)} – ${fmtDate(x.to)}` : fmtDate(x.to || docDate(d));
+  S2.push({k: 'title', title: docName(T, x), no: d.number, project: p.name || '', code: p.code || '', period, prep: prep ? [prep.name, prep.designation].filter(Boolean).join(' · ') : '', company: c.name || ''});
+  const pl = isEmpty(x.planned) ? null : numv(x.planned), ac = isEmpty(x.actual) ? null : numv(x.actual), cd = p.start && p.end ? {day: dayDiff(p.start, x.to || today()) + 1, total: dayDiff(p.start, p.end) + 1} : null;
+  S2.push({k: 'kpi', title: 'Progress at a glance', pl, ac, diff: pl != null && ac != null ? Math.round((ac - pl) * 10) / 10 : null, cut: x.cutoff || x._scRow || x.to || '', cd, svg: scurveSVG(x.scurve, x._scRow || x.cutoff)});
+  const tbl = (title, head, rows, per = 9) => { const body = rows.filter(r => r && (r.g || r.c.some(v => !isEmpty(v)))); if(!body.length) return;
+    for(let i = 0; i < body.length; i += per) S2.push({k: 'table', title: title + (body.length > per ? ` (${Math.floor(i / per) + 1}/${Math.ceil(body.length / per)})` : ''), head, rows: body.slice(i, i + per)}); };
+  const fld = k => T.fields.find(f => f.k === k && shown(f, x));
+  ['mainWorks', 'otherWorks', 'lookahead', 'issues', 'byLevel', 'hse'].forEach(k => { const f = fld(k); if(!f || f.pdf === false) return; const cols = f.cols.filter(cc => cc.day == null);
+    const head = cols.map(cc => cc.l), rows = (x[k] || []).map(r => { if(!r) return null; const first = String(r[cols[0].k] || '').trim(), rest = cols.slice(1).some(cc => !isEmpty(r[cc.k]));
+      if(first && !rest && first === first.toUpperCase() && /[A-Z]/.test(first)) return {g: first};
+      return {c: cols.map(cc => fv(cc, cc.calc ? cc.calc(r) : r[cc.k]))}; }).filter(r => r && (r.g || (f.keepRows || k === 'hse' ? r.c.slice(1).some(v => !isEmpty(v)) : r.c.some(v => !isEmpty(v)))));
+    if(cols.length > 1 && !rows.some(r => r.c && r.c.slice(1).some(v => !isEmpty(v))) && !['lookahead', 'issues'].includes(k)) return;   // only names, nothing filled in
+    tbl(f.sec || (T.fields.slice(0, T.fields.indexOf(f)).filter(z => z.sec).pop() || {}).sec || f.l, head, rows); });
+  // manpower / machinery: total for the period per line
+  const grid = (k, title) => { const f = fld(k); if(!f) return; const days = f.cols.filter(cc => cc.day != null).slice(0, periodDays(x, f.maxDays || 7)), qty = f.cols.find(cc => cc.k === 'qty');
+    const rows = (x[k] || []).map(r => { if(!r) return null; const name = r[f.cols[0].k]; if(isEmpty(name)) return null;
+      const tot = days.length ? days.reduce((a, cc) => a + (numv(r[cc.k]) || 0), 0) : numv(r.qty) || 0, peak = days.length ? Math.max(0, ...days.map(cc => numv(r[cc.k]) || 0)) : tot;
+      return tot ? {c: [String(name), String(tot), String(peak)]} : null; }).filter(Boolean);
+    if(rows.length) tbl(title, [f.cols[0].l, days.length ? 'Total for the period' : 'No.', days.length ? 'Most on one day' : ''], rows.map(r => days.length ? r : {c: r.c.slice(0, 2).concat([''])}), 10); };
+  grid('manpower', 'Manpower at site'); grid('machinery', 'Plant & machinery at site');
+  if(!isEmpty(x.remarks)) S2.push({k: 'text', title: 'Other remarks', text: String(x.remarks)});
+  // photos, four to a slide
+  const ph = []; T.fields.filter(f => f.t === 'photos' && f.pdf !== false && shown(f, x)).forEach(f => (x[f.k] || []).forEach(q => q && q.id && ph.push({id: q.id, cap: q.caption || f.l})));
+  for(let i = 0; i < ph.length; i += 4) S2.push({k: 'photos', title: 'Progress photos' + (ph.length > 4 ? ` (${i / 4 + 1}/${Math.ceil(ph.length / 4)})` : ''), items: ph.slice(i, i + 4)});
+  S2.push({k: 'end', title: 'Thank you', company: c.name || '', project: p.name || '', no: d.number});
+  return S2;
+}
+function slideHTML(sl, i, n){
+  const ft = `<div class="sl-ft"><span>${esc(sl.footer || '')}</span><span>${i + 1} / ${n}</span></div>`;
+  if(sl.k === 'title') return `<div class="slide sl-title"><img class="sl-lh" src="${company().letterheadId ? blobUrl(company().letterheadId) : LETTERHEAD_JPG}" alt=""><div class="sl-band"></div>
+    <div class="sl-tt"><div class="sl-ey">${esc(sl.no)}</div><h1>${esc(sl.title)}</h1><h2>${esc(sl.project)}</h2><div class="sl-pd">${esc(sl.period)}</div>${sl.prep ? `<div class="sl-prep">Prepared by: ${esc(sl.prep)}</div>` : ''}</div>${ft}</div>`;
+  if(sl.k === 'kpi') return `<div class="slide"><h3>${esc(sl.title)}</h3><div class="sl-kpi">
+    <div class="sl-cards"><div class="sl-card"><span>Schedule</span><b>${sl.pl == null ? '—' : sl.pl + '%'}</b></div><div class="sl-card ac"><span>Actual</span><b>${sl.ac == null ? '—' : sl.ac + '%'}</b></div>
+      <div class="sl-card ${sl.diff == null ? '' : sl.diff < 0 ? 'bad' : 'ok'}"><span>${sl.diff == null ? 'Variance' : sl.diff < 0 ? 'Behind' : 'Ahead'}</span><b>${sl.diff == null ? '—' : Math.abs(sl.diff) + '%'}</b></div>
+      ${sl.cd ? `<div class="sl-card"><span>Contract time</span><b>Day ${sl.cd.day}</b><i>of ${sl.cd.total}</i></div>` : ''}<div class="sl-cut">Cut-off ${esc(fmtDate(sl.cut))}</div></div>
+    <div class="sl-chart">${sl.svg || '<div class="sl-none">No S-curve data in this report.</div>'}<div class="sl-leg"><i style="background:#2f6fb3"></i>Schedule <i style="background:#2E7D32"></i>Actual</div></div></div>${ft}</div>`;
+  if(sl.k === 'table') return `<div class="slide"><h3>${esc(sl.title)}</h3><table class="sl-tb"><thead><tr>${sl.head.filter((h, j) => sl.head[j] !== '' || sl.rows.some(r => r.c && r.c[j])).map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>
+    ${sl.rows.map(r => r.g ? `<tr class="g"><td colspan="${sl.head.length}">${esc(r.g)}</td></tr>` : `<tr>${r.c.filter((v, j) => sl.head[j] !== '' || sl.rows.some(q => q.c && q.c[j])).map(v => `<td class="${/^(completed?)$/i.test(v) ? 'sl-done' : /^(in progress|ongoing|on-going)$/i.test(v) ? 'sl-prog' : ''}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>${ft}</div>`;
+  if(sl.k === 'text') return `<div class="slide"><h3>${esc(sl.title)}</h3><div class="sl-text">${esc(sl.text).replace(/\n/g, '<br>')}</div>${ft}</div>`;
+  if(sl.k === 'photos') return `<div class="slide"><h3>${esc(sl.title)}</h3><div class="sl-ph n${sl.items.length}">${sl.items.map(q => `<figure><img ${photoAttr(q.id)} alt=""><figcaption>${esc(q.cap)}</figcaption></figure>`).join('')}</div>${ft}</div>`;
+  return `<div class="slide sl-end"><div class="sl-band"></div><h1>${esc(sl.title)}</h1><h2>${esc(sl.project)}</h2><div class="sl-pd">${esc(sl.company)}</div>${ft}</div>`;
+}
+async function presentSlides(d){
+  const sl = await prSlides(d); sl.forEach(z => z.footer = `${d.number} · ${projById(d.projectId)?.name || ''}`);
+  S.slides = {id: d.id, list: sl, i: 0};
+  const ov = document.createElement('div'); ov.className = 'present slides';
+  ov.innerHTML = `<div class="ptop"><b>${esc(d.number)} · Slides</b><div class="sp"></div><button class="btn sm" data-act="pptx" data-id="${esc(d.id)}">⤓ PowerPoint</button><button class="btn sm" data-act="ppages" data-id="${esc(d.id)}">📄 Report pages</button><button class="btn sm pri" data-act="pclose">✕ Close</button></div>
+    <div class="pbody sl-body"><div class="sl-stage"></div><div class="sl-nav"><button class="btn" data-act="slmove" data-z="-1" aria-label="Previous slide">‹</button><span class="sl-count"></span><button class="btn" data-act="slmove" data-z="1" aria-label="Next slide">›</button></div></div>`;
+  document.body.appendChild(ov); document.body.style.overflow = 'hidden';
+  try { ov.requestFullscreen && ov.requestFullscreen().catch(() => {}); } catch(e){}
+  slideShow(0);
+  let sx = null; ov.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, {passive: true});
+  ov.addEventListener('touchend', e => { if(sx == null) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if(Math.abs(dx) > 50) slideShow(S.slides.i + (dx < 0 ? 1 : -1)); });
+}
+function slideShow(i){
+  const z = S.slides, ov = document.querySelector('.present.slides'); if(!z || !ov) return; z.i = Math.max(0, Math.min(z.list.length - 1, i));
+  ov.querySelector('.sl-stage').innerHTML = slideHTML(z.list[z.i], z.i, z.list.length); ov.querySelector('.sl-count').textContent = `${z.i + 1} / ${z.list.length}`;
+  try { hydratePhotos(ov); } catch(e){}
+}
+document.addEventListener('keydown', e => { if(!document.querySelector('.present.slides')) return; if(e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' '){ e.preventDefault(); slideShow(S.slides.i + 1); } if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); slideShow(S.slides.i - 1); } });
+async function slidesPptx(id){
+  const d = docById(id); if(!d) return; toast('Making the PowerPoint…');
+  try {
+    const P = await pptxLib(), pres = new P(), sl = await prSlides(d), c = company(), foot = `${d.number} · ${projById(d.projectId)?.name || ''}`;
+    pres.layout = 'LAYOUT_WIDE'; pres.title = (docName(TT(d), d.data) + ' ' + d.number).replace(/[&<>"']/g, ' ');   // the library writes these unescaped (an "&" breaks the file)
+    const G = '2E7D32', INK = '222222', MUT = '6B6459', F = 'Arial';
+    const head = (s, t) => { s.addText(t, {x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontFace: F, fontSize: 26, bold: true, color: INK}); s.addShape(pres.ShapeType.rect, {x: 0.5, y: 0.95, w: 1.2, h: 0.06, fill: {color: G}, line: {color: G}}); };
+    const foo = (s, i) => s.addText([{text: foot, options: {color: MUT}}, {text: `   ${i + 1} / ${sl.length}`, options: {color: MUT, bold: true}}], {x: 0.5, y: 7.0, w: 12.3, h: 0.3, fontFace: F, fontSize: 10, align: 'right'});
+    const lh = c.letterheadId ? await photoData(c.letterheadId).catch(() => '') : LETTERHEAD_JPG;
+    for(let i = 0; i < sl.length; i++){ const z = sl[i], s = pres.addSlide(); s.background = {color: 'FFFFFF'};
+      if(z.k === 'title'){ if(lh){ const im = await new Promise(r => { const g = new Image(); g.onload = () => r(g); g.onerror = () => r(null); g.src = lh; }), ar = im && im.naturalWidth ? im.naturalWidth / im.naturalHeight : 6, w = Math.min(7.5, 1.3 * ar);
+          s.addImage({data: lh, x: 0.5, y: 0.35, w, h: w / ar}); }
+        s.addShape(pres.ShapeType.rect, {x: 0, y: 2.0, w: 13.333, h: 0.08, fill: {color: G}, line: {color: G}});
+        s.addText(z.no, {x: 0.8, y: 2.5, w: 11.7, h: 0.4, fontFace: F, fontSize: 14, color: G, bold: true});
+        s.addText(z.title, {x: 0.8, y: 2.95, w: 11.7, h: 0.9, fontFace: F, fontSize: 38, bold: true, color: INK});
+        s.addText(z.project, {x: 0.8, y: 3.9, w: 11.7, h: 0.9, fontFace: F, fontSize: 22, color: INK, valign: 'top'});
+        s.addText(z.period, {x: 0.8, y: 4.9, w: 11.7, h: 0.5, fontFace: F, fontSize: 18, color: MUT});
+        if(z.prep) s.addText('Prepared by: ' + z.prep, {x: 0.8, y: 5.6, w: 11.7, h: 0.4, fontFace: F, fontSize: 14, color: MUT}); }
+      else if(z.k === 'kpi'){ head(s, z.title);
+        const cards = [['Schedule', z.pl == null ? '—' : z.pl + '%', '2F6FB3'], ['Actual', z.ac == null ? '—' : z.ac + '%', G], [z.diff == null ? 'Variance' : z.diff < 0 ? 'Behind' : 'Ahead', z.diff == null ? '—' : Math.abs(z.diff) + '%', z.diff != null && z.diff < 0 ? 'B42318' : G]].concat(z.cd ? [['Contract time', `Day ${z.cd.day} of ${z.cd.total}`, INK]] : []);
+        cards.forEach(([l, v, col], j) => { const y = 1.3 + j * 1.25; s.addShape(pres.ShapeType.roundRect, {x: 0.5, y, w: 3.4, h: 1.05, fill: {color: 'F6F4EF'}, line: {color: 'E3E0D8'}, rectRadius: 0.08});
+          s.addText(l.toUpperCase(), {x: 0.7, y: y + 0.08, w: 3.0, h: 0.3, fontFace: F, fontSize: 11, color: MUT, bold: true}); s.addText(v, {x: 0.7, y: y + 0.38, w: 3.0, h: 0.6, fontFace: F, fontSize: 26, bold: true, color: col}); });
+        s.addText('Cut-off ' + fmtDate(z.cut), {x: 0.5, y: 6.35, w: 3.4, h: 0.3, fontFace: F, fontSize: 11, color: MUT});
+        if(z.svg){ const png = await svgPng(z.svg); if(png) s.addImage({data: png, x: 4.2, y: 1.3, w: 8.6, h: 3.61}); s.addText([{text: '━ Schedule   ', options: {color: '2F6FB3', bold: true}}, {text: '━ Actual', options: {color: G, bold: true}}], {x: 4.2, y: 5.0, w: 8.6, h: 0.35, fontFace: F, fontSize: 12}); } }
+      else if(z.k === 'table'){ head(s, z.title); const keep = z.head.map((h, j) => h !== '' || z.rows.some(r => r.c && r.c[j])), hd = z.head.filter((h, j) => keep[j]), nc = hd.length;
+        const rows = [hd.map(h => ({text: h, options: {bold: true, color: 'FFFFFF', fill: {color: G}}}))].concat(z.rows.map(r => r.g ? [{text: r.g, options: {colspan: nc, bold: true, fill: {color: 'E2EFDA'}}}] : r.c.filter((v, j) => keep[j]).map(v => ({text: v, options: {color: /^completed?$/i.test(v) ? G : INK}}))));
+        const wide = 12.3, first = nc > 2 ? Math.min(6.2, wide * 0.5) : wide * 0.6, rest = (wide - first) / Math.max(1, nc - 1);
+        s.addTable(rows, {x: 0.5, y: 1.25, w: wide, colW: [first, ...Array(nc - 1).fill(rest)], fontFace: F, fontSize: 13, color: INK, border: {type: 'solid', color: 'D9D4C8', pt: 0.75}, valign: 'middle', rowH: 0.42, autoPage: false}); }
+      else if(z.k === 'text'){ head(s, z.title); s.addText(z.text, {x: 0.5, y: 1.3, w: 12.3, h: 5.4, fontFace: F, fontSize: 16, color: INK, valign: 'top'}); }
+      else if(z.k === 'photos'){ head(s, z.title); const n = z.items.length, cols = n === 1 ? 1 : 2, rowsN = n <= 2 ? 1 : 2, cw = 12.3 / cols, ch = 5.5 / rowsN;
+        for(let j = 0; j < n; j++){ const q = z.items[j], data = await photoData(q.id).catch(() => ''); const cx = 0.5 + (j % cols) * cw, cy = 1.25 + Math.floor(j / cols) * ch;
+          if(data){ const im = await new Promise(r => { const g = new Image(); g.onload = () => r(g); g.onerror = () => r(null); g.src = data; }), bw = cw - 0.2, bh = ch - 0.5;   // fit, keep the photo's shape
+            const ar = im && im.naturalWidth ? im.naturalWidth / im.naturalHeight : 4 / 3, w = Math.min(bw, bh * ar), h = w / ar;
+            s.addImage({data, x: cx + 0.1 + (bw - w) / 2, y: cy + (bh - h) / 2, w, h}); }
+          s.addText(q.cap, {x: cx + 0.1, y: cy + ch - 0.48, w: cw - 0.2, h: 0.4, fontFace: F, fontSize: 12, color: MUT, align: 'center'}); } }
+      else { s.addShape(pres.ShapeType.rect, {x: 0, y: 3.0, w: 13.333, h: 0.08, fill: {color: G}, line: {color: G}}); s.addText(z.title, {x: 0.8, y: 1.6, w: 11.7, h: 1.1, fontFace: F, fontSize: 44, bold: true, color: INK});
+        s.addText(z.project, {x: 0.8, y: 3.4, w: 11.7, h: 0.8, fontFace: F, fontSize: 20, color: INK}); s.addText(z.company, {x: 0.8, y: 4.2, w: 11.7, h: 0.5, fontFace: F, fontSize: 16, color: MUT}); }
+      if(z.k !== 'title') foo(s, i); }
+    const name = `${d.number} ${docName(TT(d), d.data)}`.replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.pptx';
+    await pres.writeFile({fileName: name}); toast('PowerPoint saved — ' + name);
+  } catch(e){ console.warn(e); toast('Could not make the PowerPoint — check the internet connection and try again.', true); }
+}
 function presentDoc(id){
   const d = docById(id); if(!d) return;
+  if(d.type === 'PR' && !isAxP(d.projectId) && !S.pagesOnly){ presentSlides(d); return; }   // progress report → slides
+  S.pagesOnly = false;
   const ov = document.createElement('div'); ov.className = 'present';
+  if(!isAxP(d.projectId)){   // present the published PDF pages themselves
+    ov.innerHTML = `<div class="ptop"><b>${esc(d.number)} · ${esc(docTitle(d))}</b><div class="sp"></div><button class="btn sm" data-act="pzoom" data-z="-1">A−</button><button class="btn sm" data-act="pzoom" data-z="1">A+</button><button class="btn sm pri" data-act="pclose">✕ Close</button></div>
+      <div class="pbody"><div class="pres-pages" style="width:${Math.round(100 * (S.pzoom || 1))}%"><div class="pdfprev" data-pv="${esc(d.id)}">${pvHTML(d) || '<div class="pvwait">Preparing the pages…</div>'}</div></div></div>`;
+    document.body.appendChild(ov); document.body.style.overflow = 'hidden';
+    try { ov.requestFullscreen && ov.requestFullscreen().catch(() => {}); } catch(e){}
+    fillPdfPrev(); return; }
   ov.innerHTML = `<div class="ptop"><b>${esc(d.number)} · ${esc(docTitle(d))}</b><div class="sp"></div><button class="btn sm" data-act="pzoom" data-z="-1">A−</button><button class="btn sm" data-act="pzoom" data-z="1">A+</button><button class="btn sm pri" data-act="pclose">✕ Close</button></div>
     <div class="pbody"><div class="sheet pres-sheet" style="zoom:${S.pzoom || 1}">${letterheadHTML(d)}${docBodyHTML(d)}<div class="sigs" style="margin-top:14px">${presentSigs(d)}</div></div></div>`;
   document.body.appendChild(ov); document.body.style.overflow = 'hidden';
@@ -3569,7 +3741,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 24 Nov 2026 (${APP_VER}) · Edited Word progress reports read back into the app (all projects)</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 25 Nov 2026 (${APP_VER}) · Preview = the published PDF; Present shows progress reports as slides (⤓ PowerPoint)</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -3974,6 +4146,7 @@ function docView(id){
   const needResp = st.next >= 0 && T.sigs[st.next].needsResponse;
   const respFilled = T.fields.filter(f => f.phase==='response' && f.req).every(f => !isEmpty(d.data?.[f.k]));
   const cols = Math.min(T.sigs.length, 4);
+  const usePv = !isAxP(d.projectId);   // the preview is the published PDF itself (AXISWKPJ keeps its earlier screen)
   const sigHTML = T.sigs.map((s,i) => {
     const g = sigs[i];
     if(g) return `<div class="sig"><div class="role">${esc(s.role)}</div>${T.noSigImg ? '' : `<div class="img"><img src="${esc(g.img)}" alt="Signature of ${esc(g.name)}"></div>`}<div class="nm">${esc(g.name)}</div>${isAxP(d.projectId) ? `<div class="ds">${esc(g.designation||'')}${T.sigDate && g.date ? ' · dated ' + fmtDate(g.date) : ''}</div><div class="when">${fmtDT(g.at)}</div>` : `<div class="ds">${esc(g.designation||'')}</div><div class="when">${esc(sigWhen(g, d))}</div>`}${S.canEdit ? `<button class="btn sm ghost" style="margin-top:6px" data-act="sigedit" data-id="${esc(d.id)}" data-i="${i}">✎ Edit name / designation</button>` : ''}</div>`;
@@ -3991,12 +4164,15 @@ function docView(id){
   <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
   <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}${d.data?._subcon ? ` <span class="pill draft">From sub-contractor: ${esc(d.data._subcon)}</span>` : ''}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
   <div class="docwrap">
-    <div class="sheet" id="sheet">
+    <div class="sheet${usePv ? ' pvsheet' : ''}" id="sheet">
+      ${usePv ? `<div class="pdfprev" data-pv="${esc(d.id)}">${pvHTML(d) || '<div class="pvwait">Preparing the preview…</div>'}</div>${(() => { setTimeout(fillPdfPrev, 0); return ''; })()}
+      <div class="pvsigs-h">Signatures</div>` : `
       ${letterheadHTML(d)}
       <table class="metat"><tr><td class="k">Project</td><td>${esc(p.name)}</td><td class="k">Doc no.</td><td class="mono">${esc(d.number)}${d.rev ? ` <span class="pill">Rev ${d.rev}</span>` : ''}</td></tr>
         <tr><td class="k">Client</td><td>${esc(p.client||'—')}</td><td class="k">Date</td><td>${T.fields.find(f=>f.k===T.dateField)?.t==='datetime'?fmtDT(docDate(d)):fmtDate(docDate(d))}</td></tr>
         <tr><td class="k">Location</td><td>${esc(p.location||'—')}</td><td class="k">Contract no.</td><td>${esc(p.contractNo||'—')}</td></tr></table>
       ${docBodyHTML(d)}
+      `}
       <div class="sigs" style="grid-template-columns:repeat(${cols},1fr)">${sigHTML}</div>
       ${S.canWrite && !S.isSub && !T.noSigImg && st.next !== -1 && (!sigs.some(Boolean) || S.canEdit) ? `<div style="text-align:right;margin-top:6px"><button class="btn sm ghost" data-act="sigsetup" data-id="${esc(d.id)}">✍ Add / remove signatures</button></div>` : ''}
     </div>
@@ -5128,7 +5304,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z104';
+const APP_VER = 'Z105';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6768,6 +6944,9 @@ document.addEventListener('click', async e => {
     case 'asksend': askSignSend(el); break;
     case 'askcancel': cancelSigReq(id); break;
     case 'present': presentDoc(id); break;
+    case 'slmove': slideShow((S.slides?.i || 0) + (+el.dataset.z)); break;
+    case 'pptx': slidesPptx(id); break;
+    case 'ppages': { document.querySelector('.present')?.remove(); S.pagesOnly = true; presentDoc(id); break; }
     case 'presentproj': presentProject(el.dataset.p); break;
     case 'pclose': closePresent(); break;
     case 'pzoom': { S.pzoom = Math.max(0.7, Math.min(1.8, (S.pzoom || 1) + 0.15 * +el.dataset.z)); const sh = document.querySelector('.pres-sheet'); if(sh) sh.style.zoom = S.pzoom; break; }
