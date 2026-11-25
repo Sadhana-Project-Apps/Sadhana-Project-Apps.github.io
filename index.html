@@ -1862,8 +1862,13 @@ const fmtOf = d => { if(d.type === 'PR' && typeof projPreset === 'function'){ co
 // progress report (user, 24 Nov 2026): no signature — only who prepared it (name & designation). AXISWKPJ keeps its format.
 // A report already signed by more than "Prepared by" the old way keeps its signers.
 const PR_PREP = [{role: 'Prepared by', hint: 'Name & designation'}];
+// progress summary – main works (not AXISWKPJ): target finish date from the work programme, before the actual finish date (user, 25 Nov 2026)
+const prMwCols = cols => { if(cols.some(c => c.k === 'target')) return cols; const out = [];
+  cols.forEach(c => { if(c.k === 'finish') out.push({k: 'target', l: 'Target finish date', w: 100, center: 1}, {...c, l: 'Actual finish date'}); else out.push(c); }); return out; };
 const TT = d => { const T = buildType(d.type, fmtOf(d)); const n = (d.signatures || []).filter(Boolean).length;
-  if(d.type === 'PR'){ if(T.coverStyle === 'axis' || isAxP(d.projectId) || n > 1) return T; return {...T, sigs: PR_PREP, noSigImg: true, done: 'Submitted'}; }
+  if(d.type === 'PR'){ if(T.coverStyle === 'axis' || isAxP(d.projectId)) return T;
+    const T2 = {...T, fields: T.fields.map(f => f.k === 'mainWorks' ? {...f, cols: prMwCols(f.cols)} : f)};
+    return n > 1 ? T2 : {...T2, sigs: PR_PREP, noSigImg: true, done: 'Submitted'}; }
   if(d.type !== 'DSR') return T;
   const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
   if(n > sigs.length) return {...T, sigs: [...sigs, ...DSR_OLD_SIGS.slice(sigs.length, n)]};
@@ -3747,7 +3752,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 25 Nov 2026 (${APP_VER}) · Document preview fits the screen</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 25 Nov 2026 (${APP_VER}) · Progress summary: target finish date from the work programme</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4397,6 +4402,7 @@ function progMainWorks(x, g, axis){
       if(sec && !secRow.has(sec)) secRow.set(sec, r); rowSec.set(r, sec); out.push(r); return; }
     const t = find(r); if(t) used.add(t); rowSec.set(r, sec);
     if(!t){ out.push(r); return; }
+    if(t.f && r.target !== fd(t.f)){ r.target = fd(t.f); n++; }   // target finish = the programme's finish date
     const st = String(r.status || '').trim(), std = !st || /^(completed?|in progress|ongoing|on-going|not started)\b/i.test(st), done = /^complet/i.test(st);
     if(t.pc >= 100){ if(!done){ r.status = 'Completed'; n++; } if(isEmpty(r.start)) r.start = fd(t.s); if(isEmpty(r.finish) && t.f && t.f >= iso(r.start)){ r.finish = fd(t.f); n++; } }
     else if(t.pc > 0){ if(std && !done && !/^(in progress|ongoing|on-going)/i.test(st)){ r.status = 'In progress'; n++; } if(isEmpty(r.start)){ r.start = fd(t.s); n++; } }
@@ -4404,7 +4410,7 @@ function progMainWorks(x, g, axis){
     out.push(r); });
   // started activities that aren't listed yet → under their section's heading (a new heading if there is none)
   L.filter(t => t.pc > 0 && !used.has(t)).forEach(t => {
-    const sc = secOf(t), row = {desc: t.name, start: fd(t.s), finish: t.pc >= 100 ? fd(t.f) : '', status: t.pc >= 100 ? 'Completed' : 'In progress'}; n++;
+    const sc = secOf(t), row = {desc: t.name, start: fd(t.s), target: fd(t.f), finish: t.pc >= 100 ? fd(t.f) : '', status: t.pc >= 100 ? 'Completed' : 'In progress'}; n++;
     let hi = sc ? out.indexOf(secRow.get(sc)) : -1;
     if(sc && hi < 0){ const h = {desc: (axis ? '0. ' : '') + String(sc.name).toUpperCase()}; secRow.set(sc, h); rowSec.set(h, sc);
       // keep the programme's order: before the first heading of a later section
@@ -5310,7 +5316,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z106';
+const APP_VER = 'Z107';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
