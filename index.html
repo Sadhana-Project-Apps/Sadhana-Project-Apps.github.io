@@ -297,6 +297,12 @@ table.reg tr.click{cursor:pointer} table.reg tr.click:hover td{background:#faf9f
 /* document sheet */
 .docwrap{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;align-items:start}
 .sheet{background:#fff;border:1px solid var(--line);box-shadow:0 2px 18px rgba(0,0,0,.07);padding:34px 38px;border-radius:4px;max-width:860px}
+/* PDF page preview: each page fits the column, never wider than the screen */
+.sheet.pvsheet{background:transparent;border:0;box-shadow:none;padding:0;min-width:0;max-width:860px;width:100%}
+.pdfprev{display:grid;gap:14px;min-width:0;width:100%}
+.pdfprev img{display:block;width:100%;max-width:100%;height:auto;background:#fff;border:1px solid var(--line);box-shadow:0 2px 14px rgba(0,0,0,.10);border-radius:3px}
+.pvwait{background:#fff;border:1px solid var(--line);border-radius:4px;padding:48px 20px;text-align:center;color:var(--muted,#8a8072)}
+.pres-pages{margin:0 auto;max-width:100%}.pres-pages .pdfprev img{box-shadow:0 6px 30px rgba(0,0,0,.35)}
 .lh{display:flex;gap:14px;align-items:flex-start;padding-bottom:12px;border-bottom:3px solid var(--hazard)}
 .lh .mark{width:52px;height:52px;font-size:18px;color:#fff}
 .lh .co b{font:800 17px Archivo;display:block}
@@ -446,7 +452,7 @@ body.dropping .dropzone{border-color:var(--hazard);background:var(--hazard-l);co
   .grid2,.docwrap{grid-template-columns:1fr}
   .side{position:static;order:-1}
   .side .acts{display:flex;flex-wrap:wrap;gap:8px}.side .acts .btn{width:auto;flex:1}
-  .sheet{padding:18px 14px}
+  .sheet{padding:18px 14px}.sheet.pvsheet{padding:0}
   .lh{flex-wrap:wrap}.lh .dt{margin-left:0;text-align:left;width:100%}
   .dphotos{grid-template-columns:1fr 1fr}
   .kv{grid-template-columns:1fr}.kv div:nth-child(odd){border-right:0}
@@ -3098,7 +3104,7 @@ function presentDoc(id){
   const ov = document.createElement('div'); ov.className = 'present';
   if(!isAxP(d.projectId)){   // present the published PDF pages themselves
     ov.innerHTML = `<div class="ptop"><b>${esc(d.number)} · ${esc(docTitle(d))}</b><div class="sp"></div><button class="btn sm" data-act="pzoom" data-z="-1">A−</button><button class="btn sm" data-act="pzoom" data-z="1">A+</button><button class="btn sm pri" data-act="pclose">✕ Close</button></div>
-      <div class="pbody"><div class="pres-pages" style="width:${Math.round(100 * (S.pzoom || 1))}%"><div class="pdfprev" data-pv="${esc(d.id)}">${pvHTML(d) || '<div class="pvwait">Preparing the pages…</div>'}</div></div></div>`;
+      <div class="pbody"><div class="pres-pages" style="width:min(${Math.round(100 * (S.pzoom || 1))}%, ${Math.round(900 * (S.pzoom || 1))}px)"><div class="pdfprev" data-pv="${esc(d.id)}">${pvHTML(d) || '<div class="pvwait">Preparing the pages…</div>'}</div></div></div>`;
     document.body.appendChild(ov); document.body.style.overflow = 'hidden';
     try { ov.requestFullscreen && ov.requestFullscreen().catch(() => {}); } catch(e){}
     fillPdfPrev(); return; }
@@ -3741,7 +3747,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 25 Nov 2026 (${APP_VER}) · Preview = the published PDF; Present shows progress reports as slides (⤓ PowerPoint)</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 25 Nov 2026 (${APP_VER}) · Document preview fits the screen</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -5304,7 +5310,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z105';
+const APP_VER = 'Z106';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6949,7 +6955,7 @@ document.addEventListener('click', async e => {
     case 'ppages': { document.querySelector('.present')?.remove(); S.pagesOnly = true; presentDoc(id); break; }
     case 'presentproj': presentProject(el.dataset.p); break;
     case 'pclose': closePresent(); break;
-    case 'pzoom': { S.pzoom = Math.max(0.7, Math.min(1.8, (S.pzoom || 1) + 0.15 * +el.dataset.z)); const sh = document.querySelector('.pres-sheet'); if(sh) sh.style.zoom = S.pzoom; break; }
+    case 'pzoom': { S.pzoom = Math.max(0.7, Math.min(1.8, (S.pzoom || 1) + 0.15 * +el.dataset.z)); const sh = document.querySelector('.pres-sheet'); if(sh) sh.style.zoom = S.pzoom; const pg = document.querySelector('.pres-pages'); if(pg) pg.style.width = `min(${Math.round(100 * S.pzoom)}%, ${Math.round(900 * S.pzoom)}px)`; break; }
     case 'ltrdraft': { const go2 = () => { const x = S.draft.data; if(!x.subject) x.subject = ltrSubject(x); x.body = draftLetter(S.draft); S.dirty = true; rerenderEditorField('subject'); rerenderEditorField('body'); const b = $('[data-f="body"]'); if(b){ b.style.minHeight = '420px'; b.scrollIntoView({block:'center'}); } toast('Letter drafted — check and edit it before signing'); };
       if(String(S.draft.data.body || '').trim()) confirmBox('Replace the letter content?', 'The current letter content will be replaced by a new draft from the details above.', 'Replace', go2); else go2(); break; }
     case 'isopack': isoPackForm(); break;
