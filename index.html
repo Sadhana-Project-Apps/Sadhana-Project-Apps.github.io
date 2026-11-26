@@ -116,6 +116,10 @@ main{max-width:1180px;margin:0 auto;padding:20px 16px 110px}
 .sl-ph{display:grid;gap:1.2cqw;margin-top:1.4cqw;height:calc(100% - 9cqw)}.sl-ph.n2,.sl-ph.n3,.sl-ph.n4{grid-template-columns:1fr 1fr}.sl-ph.n3,.sl-ph.n4{grid-template-rows:1fr 1fr}
 .sl-ph figure{margin:0;display:flex;flex-direction:column;min-height:0}.sl-ph img{flex:1;min-height:0;width:100%;object-fit:contain;background:#f3f1ec;border-radius:.5cqw}.sl-ph figcaption{font-size:1.1cqw;color:#6b6459;text-align:center;padding-top:.4cqw}
 .sl-nav{display:flex;align-items:center;gap:14px;color:#fff}.sl-nav .btn{min-width:56px;font-size:26px;line-height:1;padding:6px 14px;color:var(--ink,#222);background:#fff}.sl-count{font-weight:700;min-width:60px;text-align:center}
+.signpage header.top,.signpage .nav,.signpage nav,.signpage .bnav{display:none!important}
+.csign{max-width:860px;margin:0 auto;padding:14px 12px 60px}.csh{text-align:center}.cslh{width:100%;max-width:560px;display:block;margin:0 auto 10px}.csh h2{margin:4px 0}
+.cspages{display:grid;gap:12px;margin:10px 0 16px}.cspages img{width:100%;min-height:120px;background:#fff;border:1px solid var(--line);box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.cssign{border:2px solid #2E7D32}
 .present{position:fixed;inset:0;z-index:200;background:#3a3f45;display:flex;flex-direction:column}
 .present .ptop{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#24282c;color:#fff}
 .present .ptop .btn:not(.pri){color:var(--ink);background:#fff}
@@ -3752,7 +3756,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 25 Nov 2026 (${APP_VER}) · Progress summary: target finish date from the work programme</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 26 Nov 2026 (${APP_VER}) · Send a document to the client to sign through a WhatsApp link</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4170,7 +4174,7 @@ function docView(id){
   const sigEditsTrail = (d.signatures || []).flatMap(g => (g && g.edited || []).map(e => `<div><i></i><span>${e.date ? `Date on the form for <b>${esc(g.name)}</b> changed from ${fmtDate(e.date)} to ${fmtDate(g.date)}` + (e.name !== g.name ? ` · name was <b>${esc(e.name)}</b>` : '') : `Name under a signature changed from <b>${esc(e.name)}</b>${e.designation ? ' (' + esc(e.designation) + ')' : ''} to <b>${esc(g.name)}</b>`}<br><span class="muted">${fmtDT(e.at)} by ${esc(nameOf(e.by))}</span></span></div>`));
   const paperTrail = d.paper ? `<div><i></i><span>Signed on paper (${esc(fmtDate(d.paper.date))}) — signed copy uploaded<br><span class="muted">${fmtDT(d.paper.at)} by ${esc(d.paper.name || nameOf(d.paper.by))}</span></span></div>` : '';
   const trail = [`<div><i></i><span>Created ${fmtDT(d.createdAt)}<br><span class="muted">by ${esc(nameOf(d.createdBy))}</span></span></div>`, ...(d.data?._import ? [`<div><i></i><span>Imported from the old report <b>${esc(d.data._import.file || '')}</b>${d.data._import.writer ? `<br><span class="muted">written by ${esc(d.data._import.writer)}</span>` : ''}</span></div>`] : [])]
-    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b>${sigs[i].date && !isAxP(d.projectId) ? ` — dated ${esc(fmtDate(sigs[i].date))}` : ''}<br><span class="muted">${sigs[i].date && !isAxP(d.projectId) ? 'actually signed ' : ''}${fmtDT(sigs[i].at)}</span></span></div>` : d.paper ? `<div><i></i><span>${esc(s.role)} — <b>signed on paper</b></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('') + sigEditsTrail.join('') + paperTrail;
+    .concat(T.sigs.map((s,i) => sigs[i] ? `<div><i></i><span>${esc(s.role)} <b>${esc(sigs[i].name)}</b>${sigs[i].via === 'link' ? ' <span class="muted">(signed through the link)</span>' : ''}${sigs[i].date && !isAxP(d.projectId) ? ` — dated ${esc(fmtDate(sigs[i].date))}` : ''}<br><span class="muted">${sigs[i].date && !isAxP(d.projectId) ? 'actually signed ' : ''}${fmtDT(sigs[i].at)}</span></span></div>` : d.paper ? `<div><i></i><span>${esc(s.role)} — <b>signed on paper</b></span></div>` : `<div><i class="o"></i><span class="muted">${esc(s.role)} — pending</span></div>`)).join('') + sigEditsTrail.join('') + paperTrail;
   return `
   <button class="crumb" data-act="proj" data-id="${esc(d.projectId)}">← ${esc(p.name||'Project')}</button>
   <div class="pagehead"><div><span class="pill type">${esc(d.type)}</span> ${pill(d)}${d.data?._subcon ? ` <span class="pill draft">From sub-contractor: ${esc(d.data._subcon)}</span>` : ''}<h1 style="margin-top:6px">${esc(docTitle(d))}</h1></div></div>
@@ -4195,6 +4199,7 @@ function docView(id){
         ${st.next>0 && S.canWrite && !(S.isSub && d.type === 'PR') && !(needResp && !respFilled) ? `<button class="btn pri" data-act="sign" data-id="${esc(d.id)}" data-i="${st.next}">✍ Sign as ${esc(T.sigs[st.next].role.toLowerCase())}</button>`:''}
         ${d.paper && (d.paper.fileIds || []).length ? `<button class="btn pri" data-act="papershow" data-id="${esc(d.id)}">📄 Signed copy (hardcopy)</button>` : ''}
         <button class="btn dark" data-act="pdf" data-id="${esc(d.id)}">⤓ Download PDF${d.paper ? ' (unsigned)' : ''}</button>
+        ${st.next > 0 && !isAxP(d.projectId) && !T.noSigImg && S.canWrite && !S.isSub && !(needResp && !respFilled) ? `<button class="btn" data-act="sharesign" data-id="${esc(d.id)}" style="border-color:#25D366">🔗 Send to client to sign (WhatsApp)</button><div class="small" id="shareList" data-doc="${esc(d.id)}"></div>${(() => { setTimeout(() => shareListFill(d.id), 0); return ''; })()}` : ''}
         ${!d.paper && st.next !== -1 && S.canWrite && !S.isSub ? `<button class="btn" data-act="paperup" data-id="${esc(d.id)}">📄 Signed on paper? Upload the signed copy</button>` : ''}
         ${T.paperForm ? '' : `<button class="btn" data-act="docx" data-id="${esc(d.id)}" title="Word copy you can edit">⤓ Word</button>`}
         ${st.next !== 0 && !isAxP(d.projectId) && S.canWrite && !S.isDev && !S.isSub ? `<button class="btn" data-act="subup" data-id="${esc(d.id)}" title="The Word file as it was finally sent">⇪ ${d.asSub ? 'Upload a newer final copy' : 'Upload the final copy (as sent)'}</button>` : ''}
@@ -5259,6 +5264,106 @@ async function stampFromFile(file){
   } finally { URL.revokeObjectURL(url); }
 }
 // signature drawn over the stamp, as one picture — so every PDF / Word / screen layout shows both
+
+/* ---------- client signs through a link (WhatsApp) — no sign-in (user, 26 Nov 2026; not AXISWKPJ) ----------
+   Staff make a link for the next signature. shares/{token} holds what the client sees (the PDF pages, in shares/{token}/pages/{n})
+   and, once signed, the client's name, designation, company, signature and stamp. A staff phone that is online puts the
+   signature on the document (applyShares) — the document itself is never opened to the public. Links expire after 14 days. */
+const SHARE_DAYS = 14;
+const shareToken = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return [...a].map(b => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'[b % 56]).join(''); };
+const shareUrl = t => location.origin + location.pathname.replace(/index\.html$/, '') + '?sign=' + t;
+function shrinkJpeg(src, maxW, q){ return new Promise(res => { const im = new Image(); im.onload = () => { const sc = Math.min(1, maxW / im.naturalWidth), c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * sc); c.height = Math.round(im.naturalHeight * sc);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); }; im.onerror = () => res(src); im.src = src; }); }
+function shareForm(id){
+  const d = docById(id); if(!d) return; const T = TT(d), st = statusOf(d), slot = T.sigs[st.next]; if(!slot) return;
+  showModal(`<div class="box" style="max-width:500px"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>🔗 Send to client to sign</h3></div></div><div class="mb">
+    <p class="small" style="margin-top:0">The client opens the link on their phone — <b>no sign-in</b> — sees this document exactly as published, and signs as <b>${esc(slot.role)}</b>${slot.hint ? ` (${esc(slot.hint)})` : ''}, with their company stamp if they have one. Their signature appears here by itself. The link works for ${SHARE_DAYS} days, once.</p>
+    <div class="fgrid"><div class="fld half"><label>Client's name (optional)</label><input id="shName" placeholder="e.g. Ir. Ahmad"></div><div class="fld half"><label>WhatsApp number (optional)</label><input id="shPhone" inputmode="tel" placeholder="e.g. 012-345 6789"></div></div></div>
+    <div class="mf"><button class="btn pri" data-act="sharego" data-id="${esc(id)}">Make the link</button></div></div>`);
+}
+async function shareMake(id, btn){
+  const d = docById(id); if(!d) return; const T = TT(d), st = statusOf(d), slot = T.sigs[st.next], p = projById(d.projectId) || {};
+  if(!navigator.onLine){ toast('No internet — making the link needs a connection.', true); return; }
+  const name = ($('#shName')?.value || '').trim(), phone = ($('#shPhone')?.value || '').replace(/[^\d+]/g, '');
+  btn.disabled = true; btn.textContent = 'Preparing the pages…';
+  try {
+    const pages = await pdfPages(d), imgs = [];
+    for(const u of pages){ let v = u; if(v.length > 900000) v = await shrinkJpeg(v, 1300, 0.72); if(v.length > 900000) v = await shrinkJpeg(v, 1100, 0.6); imgs.push(v); }
+    const t = shareToken(), now = Date.now();
+    btn.textContent = 'Uploading…';
+    for(let i = 0; i < imgs.length; i++) await S.db.doc(`shares/${t}/pages/${i}`).set({img: imgs[i], n: i});
+    const sh = {docId: d.id, projectId: d.projectId, type: d.type, slot: st.next, role: slot.role, hint: slot.hint || '', number: d.number, title: docTitle(d) || '', project: p.name || '', company: company().name || '',
+      pages: imgs.length, status: 'open', expMs: now + SHARE_DAYS * 864e5, createdAt: new Date(now).toISOString(), by: S.me || null, byName: S.names[S.me] || '', client: name, sigCount: (d.signatures || []).filter(Boolean).length};
+    await S.db.doc('shares/' + t).set(sh);
+    const url = shareUrl(t), msg = `${name ? 'Dear ' + name + ',\n\n' : ''}Please review and sign ${d.number}${sh.title ? ' – ' + sh.title : ''} (${sh.project}) as ${slot.role.toLowerCase()}:\n${url}\n\nNo sign-in needed. The link works for ${SHARE_DAYS} days.\n— ${S.names[S.me] || ''}, ${sh.company}`.trim();
+    const wa = 'https://wa.me/' + (phone ? phone.replace(/^\+/, '').replace(/^0/, '60') : '') + '?text=' + encodeURIComponent(msg);
+    showModal(`<div class="box" style="max-width:500px"><div class="mh"><div><div class="eyebrow">${esc(d.number)}</div><h3>✓ Link ready</h3></div></div><div class="mb">
+      <div class="card pad small" style="box-shadow:none;word-break:break-all;margin-bottom:10px">${esc(url)}</div>
+      <a class="btn pri" style="width:100%;justify-content:center;background:#25D366;border-color:#25D366" href="${esc(wa)}" target="_blank" rel="noopener">Send on WhatsApp</a>
+      <button class="btn" style="width:100%;margin-top:8px" data-act="sharecopy" data-v="${esc(msg)}">Copy the message</button>
+      <p class="small muted">When the client signs, their signature and stamp are added to ${esc(d.number)} by themselves (an app with the project open has to be online).</p></div></div>`);
+    shareListFill(d.id);
+  } catch(e){ console.warn(e); btn.disabled = false; btn.textContent = 'Make the link';
+    toast(e && e.code === 'permission-denied' ? 'Not allowed yet — the admin needs to publish the latest Firebase rules.' : 'Could not make the link — check the internet connection and try again.', true); }
+}
+async function shareListFill(docId){
+  const box = document.querySelector(`#shareList[data-doc="${docId}"]`); if(!box) return;
+  try { const q = await S.db.collection('shares').where('docId', '==', docId).get(); const L = q.docs.map(x => ({id: x.id, ...x.data()})).filter(z => z.status === 'open').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    box.innerHTML = L.map(z => `<div style="display:flex;gap:6px;align-items:center;margin:6px 0 0"><span style="flex:1">🔗 Sent ${esc(fmtDT(z.createdAt))}${z.client ? ' to ' + esc(z.client) : ''}${Date.now() > z.expMs ? ' — <b>expired</b>' : ' — waiting'}</span><button class="btn sm ghost" data-act="sharestop" data-v="${esc(z.id)}" data-id="${esc(docId)}">Cancel</button></div>`).join(''); }
+  catch(e){ box.innerHTML = ''; }
+}
+// a signed link → put the signature on the document (any staff app that is online)
+async function applyShares(list){
+  for(const z of list){ if(S.applyingShare && S.applyingShare[z.id]) continue; (S.applyingShare = S.applyingShare || {})[z.id] = 1;
+    try { const ref = S.db.doc(dpath(z.docId, z.type)), snap = await ref.get(); if(!snap.exists){ await S.db.doc('shares/' + z.id).update({status: 'void', note: 'document deleted'}); continue; }
+      const cur = snap.data(), sigs = [...(cur.signatures || [])], g = z.signed || {};
+      if(sigs[z.slot] || sigs.filter(Boolean).length !== z.slot){ await S.db.doc('shares/' + z.id).update({status: 'void', note: 'already signed in the app'}); continue; }
+      sigs[z.slot] = {name: g.name || '', designation: [g.designation, g.company].filter(Boolean).join(', '), img: g.stamp ? await withStamp(g.img, g.stamp) : g.img, at: g.at || new Date().toISOString(),
+        ...(g.date && g.date !== String(g.at || '').slice(0, 10) ? {date: g.date} : {}), uid: null, via: 'link', ...(g.stamp ? {stamped: true} : {})};
+      await ref.update({signatures: sigs, updatedAt: new Date().toISOString(), updatedBy: S.me || null});
+      await S.db.doc('shares/' + z.id).update({status: 'done', appliedAt: new Date().toISOString(), appliedBy: S.me || null});
+      const dd = docById(z.docId); if(dd) dd.signatures = sigs; toast(`✍ ${g.name || 'The client'} signed ${z.number}`); softRender();
+    } catch(e){ console.warn('share', e); delete S.applyingShare[z.id]; } }
+}
+// ---------- the client's page (?sign=…) ----------
+async function clientSignPage(t){
+  document.title = 'Sign document';
+  const main = $('#main'), shell = h => `<div class="csign">${h}</div>`;
+  main.innerHTML = shell('<p class="muted" style="padding:40px 0;text-align:center">Opening the document…</p>');
+  let z; try { const r = await S.db.doc('shares/' + t).get(); z = r.exists ? r.data() : null; } catch(e){ z = null; }
+  if(!z){ main.innerHTML = shell('<h2>Link not found</h2><p>This signing link is not valid. Please ask the sender for a new link.</p>'); return; }
+  const head = `<div class="csh"><img src="${LETTERHEAD_JPG}" alt="" class="cslh"><div class="eyebrow">${esc(z.number)}</div><h2>${esc(z.title || 'Document')}</h2><div class="muted">${esc(z.project)}</div></div>`;
+  if(z.status !== 'open'){ main.innerHTML = shell(head + `<div class="card pad" style="margin-top:14px"><b>${z.status === 'signed' || z.status === 'done' ? '✓ This document has been signed' + (z.signed ? ' by ' + esc(z.signed.name) + ' on ' + esc(fmtDate(z.signed.date || String(z.signed.at).slice(0, 10))) : '') + '.' : 'This link is no longer active.'}</b><p class="small muted">You can close this page.</p></div>`); return; }
+  if(Date.now() > z.expMs){ main.innerHTML = shell(head + `<div class="card pad" style="margin-top:14px"><b>This link has expired.</b><p class="small muted">Please ask ${esc(z.byName || 'the sender')} for a new link.</p></div>`); return; }
+  main.innerHTML = shell(head + `<p class="small" style="margin:12px 0">${esc(z.byName || 'Sadhana')} of ${esc(z.company)} asks you to review this document and sign as <b>${esc(z.role)}</b>${z.hint ? ' (' + esc(z.hint) + ')' : ''}. No sign-in needed.</p>
+    <div class="cspages">${Array.from({length: z.pages}, (_, i) => `<img data-pg="${i}" alt="Page ${i + 1}">`).join('')}</div>
+    <div class="card pad cssign" id="csForm"><h3 style="margin-top:0">✍ Sign as ${esc(z.role)}</h3>
+      <div class="fgrid"><div class="fld half" id="fld_sn"><label>Full name <em>*</em></label><input id="sgName" value="${esc(z.client || '')}" autocomplete="name"></div>
+        <div class="fld half"><label>Designation</label><input id="sgDes" placeholder="e.g. Project Engineer"></div>
+        <div class="fld half"><label>Company</label><input id="csCo" autocomplete="organization"></div>
+        <div class="fld half"><label>Date</label><input type="date" id="sgDate" value="${today()}" max="${today()}"></div>
+        <div class="fld"><label>Signature <em>*</em></label><div class="padbox"><canvas id="sgPad"></canvas><div class="line"></div><div class="x">✕</div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span class="hint" style="margin:0">Sign with your finger inside the box.</span><button type="button" class="btn sm ghost" id="csClear">Clear</button></div></div>
+        <div class="fld"><label>Company stamp (optional)</label><input type="file" id="csStamp" accept="image/*"><div class="hint">Take a photo of the stamp on white paper — it is placed over your signature.</div><img id="csStampPv" alt="" style="max-width:160px;display:none;margin-top:6px"></div></div>
+      <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px"><input type="checkbox" id="csOk"> I have reviewed ${esc(z.number)} and sign it as ${esc(z.role.toLowerCase())}.</label>
+      <button class="btn pri" id="csGo" style="width:100%">Sign document</button></div>`);
+  // pages one by one
+  (async () => { for(let i = 0; i < z.pages; i++){ try { const r = await S.db.doc(`shares/${t}/pages/${i}`).get(); const im = main.querySelector(`img[data-pg="${i}"]`); if(r.exists && im) im.src = r.data().img; } catch(e){} } })();
+  setTimeout(() => { try { initPad(); } catch(e){} }, 50);
+  let stamp = '';
+  $('#csStamp').addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; if(!f) return; const u = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+    stamp = await shrinkJpeg(u, 500, 0.85); const pv = $('#csStampPv'); pv.src = stamp; pv.style.display = 'block'; });
+  $('#csClear').addEventListener('click', () => { const c = $('#sgPad'); c.replaceWith(c.cloneNode()); try { initPad(); } catch(x){} });
+  $('#csGo').addEventListener('click', async () => {
+    const name = $('#sgName').value.trim(); if(!name){ toast('Please type your full name.', true); $('#sgName').focus(); return; }
+    if(!PAD || PAD.strokes === 0 || (PAD.maxX - PAD.minX) < 12 * PAD.dpr){ toast('Please sign inside the box.', true); return; }
+    if(!$('#csOk').checked){ toast('Please tick the box to confirm you have reviewed the document.', true); return; }
+    const b = $('#csGo'); b.disabled = true; b.textContent = 'Signing…';
+    try { const signed = {name, designation: $('#sgDes').value.trim(), company: $('#csCo').value.trim(), date: $('#sgDate').value || today(), at: new Date().toISOString(), img: padImage(), ...(stamp ? {stamp} : {})};
+      await S.db.doc('shares/' + t).update({status: 'signed', signed});
+      $('#csForm').innerHTML = `<h3 style="margin:0">✓ Thank you, ${esc(name)}</h3><p class="small muted">${esc(z.number)} is signed. ${esc(z.byName || 'The sender')} will receive it. You can close this page.</p>`;
+      window.scrollTo(0, document.body.scrollHeight); }
+    catch(e){ console.warn(e); b.disabled = false; b.textContent = 'Sign document'; toast('Could not sign — check the internet connection and try again.', true); } });
+}
 async function withStamp(sig, stamp){
   const [a, b] = await Promise.all([loadImg(sig), loadImg(stamp)]);
   const H = 220, sw = Math.min(H * 1.1, b.naturalWidth / b.naturalHeight * H), sh = sw * b.naturalHeight / b.naturalWidth;
@@ -5316,7 +5421,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z107';
+const APP_VER = 'Z108';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -6859,6 +6964,10 @@ document.addEventListener('click', async e => {
     case 'mpcut': { const i = $('#mpCut'); if(i){ i.value = el.dataset.v; mppPreview(); } break; }
     case 'mpgo': prMppApply(el); break;
     case 'mppick': $('#mpFile')?.click(); break;
+    case 'sharesign': shareForm(id); break;
+    case 'sharego': shareMake(id, el); break;
+    case 'sharecopy': try { await navigator.clipboard.writeText(el.dataset.v); toast('Copied — paste it in WhatsApp'); } catch(e){ toast('Could not copy — select the link and copy it.', true); } break;
+    case 'sharestop': try { await S.db.doc('shares/' + el.dataset.v).update({status: 'void', note: 'cancelled'}); toast('Link cancelled'); shareListFill(id); } catch(e){ dbErr(e); } break;
     case 'subup': prPick('', f => subUpload(id, f)); break;
     case 'prdocmpp': case 'prdocword': { const g = docById(id); if(!g) break; if(nextSigIndex(g) !== 0){ toast('Signed documents are locked — use “✎ Ask to correct this report”.', true); break; }
       S.draft = clone(g); S.respMode = false; go('edit'); if(a === 'prdocmpp') setTimeout(prMppForm, 150); else prPick('.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', prFromWord); break; }
@@ -8654,6 +8763,7 @@ function startData(){
   const db = S.db;
   const onErr = e => { console.error(e); if(e && e.code === 'permission-denied') return; toast('Lost connection to records — reload the page.', true); };
   unsubs.push(db.collection('projects').onSnapshot(s => { S.projects = s.docs.map(x => ({id: x.id, ...x.data()})); S.loaded.p = 1; softRender(); }, onErr));
+  if(S.canWrite) unsubs.push(db.collection('shares').where('status', '==', 'signed').onSnapshot(s => applyShares(s.docs.map(x => ({id: x.id, ...x.data()}))), e => console.warn('shares', e)));
   unsubs.push(db.collection('files').onSnapshot(s => { S.filesN = s.docs.map(x => ({id: x.id, ...x.data()})); mergeFiles(); S.filesErr = ''; softRender(); }, e => { S.filesErr = (e && e.code) || 'error'; console.warn('files', e); softRender(); }));
   // Only recent documents stream live (keeps daily database reads inside the free plan).
   // Older ones load when a project or the full register is opened.
@@ -8810,6 +8920,7 @@ async function onSignedIn(u){
   }
   S.db = makeDB(); S.assets = photoStore; S.dl = downloader; S.sample = aiSample;
   if(!window.APP_CONFIG.aiEndpoint) S.sample = null;
+  { const tk = new URLSearchParams(location.search).get('sign'); if(tk && /^[A-Za-z0-9]{12,40}$/.test(tk)){ document.body.classList.add('signpage'); clientSignPage(tk); return; } }
   authM_getRedirect();
   FB.authM.onAuthStateChanged(FB.auth, u => {
     stopData(); if(S.unsubMe){ S.unsubMe(); S.unsubMe = null; } S.myRole = null; S.canWrite = false; S.canEdit = false; S.canAdmin = false; S.isDev = false; S.isSub = false; S.subProjects = [];
