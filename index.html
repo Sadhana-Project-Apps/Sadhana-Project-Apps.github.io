@@ -1873,10 +1873,22 @@ const TT = d => { const T = buildType(d.type, fmtOf(d)); const n = (d.signatures
   if(d.type === 'PR'){ if(T.coverStyle === 'axis' || isAxP(d.projectId)) return T;
     const T2 = {...T, fields: T.fields.map(f => f.k === 'mainWorks' ? {...f, cols: prMwCols(f.cols)} : f)};
     return n > 1 ? T2 : {...T2, sigs: PR_PREP, noSigImg: true, done: 'Submitted'}; }
+  if(d.type === 'EMD') return emdTT(T, d);
   if(d.type !== 'DSR') return T;
   const sigs = d.data?.clientSign === 'Yes' && T.sigs.length < 2 ? [...T.sigs, DSR_CLIENT_SIG] : T.sigs;
   if(n > sigs.length) return {...T, sigs: [...sigs, ...DSR_OLD_SIGS.slice(sigs.length, n)]};
   return sigs === T.sigs ? T : {...T, sigs, done: 'Acknowledged'}; };
+/* EMD (not AXISWKPJ): many lorries / drivers — one row each. Records that already used the single Lorry / Driver boxes keep them. */
+const EMD_ONE = ['vehicle', 'driver', 'driverId'];
+const EMD_DRIVERS = {k:'drivers', l:'Lorries & drivers', t:'table', num:1, sub:false, lorries:1, hint:'One row per lorry — add as many as the vendor sends. Plates used before on this project are suggested; choosing one fills in its driver.',
+  cols:[{k:'plate', l:'Lorry plate no.', w:130, center:1, pw:26}, {k:'driver', l:'Driver name', pw:40}, {k:'ic', l:'Driver IC / passport no.', w:150, center:1, pw:30}],
+  def: () => [{}]};
+function emdTT(T, d){
+  if(isAxP(d.projectId)) return T;
+  const x = d.data || {};
+  if(!(x.drivers && x.drivers.length) && EMD_ONE.some(k => String(x[k] || '').trim())) return T;
+  const f = T.fields.filter(f => !EMD_ONE.includes(f.k)); const i = f.findIndex(f => f.k === 'transporter');
+  f.splice(i + 1, 0, EMD_DRIVERS); return {...T, fields: f}; }
 /* ---------- project presets: a client's own report format, used until the project has its own saved format ---------- */
 const AXIS_MP = ['Project Manager', 'Site Manager', 'Site Supervisor', 'Machinery Operator', 'General Workers'];
 const AXIS_MC = ['Breaker', 'Drill', 'Concrete Mixer', 'Mobile Crane', 'Lorry', 'Backhoe', 'Forklift', 'Oxygen & Acetylene Set', 'Roro Bin', 'Genset'];
@@ -3756,7 +3768,7 @@ function settingsView(){
     ${ed?'<div class="row" style="margin-top:16px"><button class="btn pri" data-act="savesettings">Save details</button></div>':''}
   </div>
   ${S.canAdmin ? `<div class="card pad form" style="margin-top:16px"><div class="row"><div><b>Check setup</b><div class="small muted">Confirms the database and its rules are ready (reports, project files).</div></div><div class="sp"></div><button class="btn" data-act="checksetup">Check now</button></div><div id="setupOut">${S.setupOut || ''}</div></div>` : ''}
-  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 26 Nov 2026 (${APP_VER}) · Send a document to the client to sign through a WhatsApp link</div>
+  ${secureCard()}${viewAsCard()}<div class="card pad form" style="margin-top:16px"><div class="row"><div><div class="eyebrow">Signed in as</div><b>${esc(S.names[S.me]||'')}</b> <span class="small muted">${esc(FB.auth?.currentUser?.email||'')} · ${esc(ROLE_LABEL[S.myRole]||'')}</span></div><div class="sp"></div><button class="btn" data-act="signout">Sign out</button></div><div class="small muted" style="margin-top:8px"><button class="btn sm" data-act="chkupd" style="margin-right:8px">Check for update</button>App version 27 Nov 2026 (${APP_VER}) · Equipment declaration: list many lorries & drivers</div>
     <p class="small muted" style="margin-bottom:0">${isStandalone() ? '✓ Running as an installed app.' : S.installEvt ? '<button class="btn sm pri" data-act="install">📲 Install as app</button>' : 'Install as an app: Chrome ⋮ → <b>Install app</b> / <b>Add to Home screen</b> · iPhone Safari: Share → <b>Add to Home Screen</b>.'}</p></div>
   <div class="card pad form" style="margin-top:16px">
     <h3 style="font-size:16px;margin-bottom:6px">How records are kept</h3>
@@ -4536,6 +4548,7 @@ function newDraft(pid, type){
     const lwp = (last?.data?.wp || []).filter(r => r && String(r.act || '').trim());
     if(lwp.length) data.wp = lwp.map(r => ({act: r.act, start: r.start, finish: r.finish, weight: r.weight, 'actp': r['actp'] || '', _auto: r._auto || ''})); }
   if(type === 'MM'){ data.to = monthEnd(data.from); }
+  if(type === 'EMD' && !isAxP(pid)){ data.drivers = [{}]; EMD_ONE.forEach(k => delete data[k]); }
   if(type === 'MOM'){ const prev = prevOf('MOM'); data.meetNo = String(prev.reduce((a, x) => Math.max(a, parseInt(x.data?.meetNo) || 0), 0) + 1);
     const last = prev[0], isH = r => r && String(r.matter || '').trim() && String(r.matter).trim() === String(r.matter).trim().toUpperCase() && isEmpty(r.by) && isEmpty(r.status);
     const open = ((last && last.data?.items) || []).filter(r => r && !isH(r) && String(r.matter || '').trim() && ['Open', 'In progress'].includes(r.status)).map(r => ({matter: r.matter, by: r.by || '', due: r.due || '', status: r.status}));
@@ -4735,6 +4748,26 @@ function actNames(pid){
   return out;
 }
 function actDatalist(k){ const n = actNames(S.draft?.projectId); return n.length ? `<datalist id="act_${k}">${n.map(t => `<option value="${esc(t)}">`).join('')}</datalist>` : ''; }
+/* lorries & drivers used before on this project's equipment movement forms (newest first) */
+function lorDir(pid){
+  const out = [], seen = new Set();
+  S.docs.filter(d => d.type === 'EMD' && d.projectId === pid && (!S.draft || d.id !== S.draft.id)).sort((a, b) => String(b.data?.date || '').localeCompare(String(a.data?.date || '')))
+    .forEach(d => { const x = d.data || {}; ((x.drivers && x.drivers.length) ? x.drivers : [{plate:x.vehicle, driver:x.driver, ic:x.driverId}]).forEach(r => {
+      const plate = String(r?.plate || '').trim(), driver = String(r?.driver || '').trim(), ic = String(r?.ic || '').trim();
+      const key = (plate + '|' + driver).toUpperCase().replace(/\s+/g, ''); if((!plate && !driver) || seen.has(key)) return; seen.add(key); out.push({plate, driver, ic}); }); });
+  return out;
+}
+function lorDatalists(k){
+  const dir = lorDir(S.draft?.projectId); if(!dir.length) return '';
+  const pl = [...new Map(dir.filter(r => r.plate).map(r => [r.plate.toUpperCase(), r])).values()], dr = [...new Map(dir.filter(r => r.driver).map(r => [r.driver.toUpperCase(), r])).values()];
+  return `<datalist id="lor_${k}_plate">${pl.map(r => `<option value="${esc(r.plate)}">${esc([r.driver, r.ic].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><datalist id="lor_${k}_driver">${dr.map(r => `<option value="${esc(r.driver)}">${esc([r.plate, r.ic].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>`;
+}
+function lorAutofill(inp, row){
+  const c = inp.dataset.col, v = String(inp.value || '').trim().toUpperCase().replace(/\s+/g, ''); if(!v) return;
+  const m = lorDir(S.draft?.projectId).find(r => String(r[c] || '').toUpperCase().replace(/\s+/g, '') === v); if(!m) return;
+  const tr = inp.closest('tr');
+  ['plate', 'driver', 'ic'].forEach(k => { if(k === c || !m[k] || !isEmpty(row[k])) return; row[k] = m[k]; const el = tr?.querySelector(`[data-col="${k}"]`); if(el) el.value = m[k]; });
+}
 function pplDatalists(k){
   const dir = pplDir(), comp = [...new Set(dir.map(p => p.company).filter(Boolean))].sort();
   return `<datalist id="ppl_${k}_name">${dir.map(p => `<option value="${esc(p.name)}">${esc([p.company, p.id].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><datalist id="ppl_${k}_company">${comp.map(c => `<option value="${esc(c)}"></option>`).join('')}</datalist>`;
@@ -4784,9 +4817,9 @@ function fieldInput(f, v){
       const sk = sumKeysOf(f, fcols), dayC = fcols.filter(c => c.day != null);
       const foot = sk.length ? `<tfoot><tr class="ft">${fcols.map((c, ci) => sk.includes(c.k) ? `<td data-l="${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)} total"><b data-ft="${f.k}" data-col="${c.k}">${fmtN(sumOf(rows, c.k), c.dp)}</b></td>` : ci === 0 ? '<td><b>TOTAL</b></td>' : '<td></td>').join('')}${f.rowTotal ? `<td data-l="Grand total"><b data-ft="${f.k}" data-col="_all">${rows.reduce((a, r) => a + dayC.reduce((s2, c) => s2 + numv(r && r[c.k]), 0), 0)}</b></td>` : ''}<td></td></tr></tfoot>` : '';
       if(f.marks){ const di = S.draft?.data?.from ? dDiff(today(), S.draft.data.from) : -1; if(di >= 0 && di < fcols.filter(c => c.day != null).length) S._dayok = di; else S._dayok = null; }
-      return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
-        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''}${f.actList && c.k === f.cols[0].k ? ` list="act_${f.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
-      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.actList ? actDatalist(f.k) : ''}${f.people ? `<button class="addrow" data-act="pplpick" data-k="${f.k}" style="margin-left:6px">👥 Choose people</button>${pplDatalists(f.k)}` : ''}${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
+      return `${f.marks && S._dayok != null ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="dayok" data-k="${f.k}">✓ Today (${esc(dayLabel(S.draft.data.from, S._dayok))}) all OK</button><span class="small muted">Then change any item that is not OK to X.</span></div>` : ''}${f.check ? `<div class="row" style="gap:8px;margin:0 0 8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="allyes" data-k="${f.k}">✓ Mark all unanswered as ${f.ok || 'Yes'}</button><span class="small muted">${chkCount(rows, f)}</span></div>` : ''}<div class="ftbl ${f.pair ? 'pair ' : ''}${(fcols.length <= 3 || (fcols.length === 4 && !f.check)) && !fcols.some(c => c.ta) && !f.lorries ? 'compact' + (fcols.length === 4 ? ' c4' : '') : ''}" style="--n:${fcols.length - 1 + (f.rowTotal ? 1 : 0)}"><table><thead><tr>${fcols.map(c=>`<th style="${c.w?'width:'+c.w+'px':''}">${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)}</th>`).join('')}${f.rowTotal ? '<th>Total</th>' : ''}<th></th></tr></thead><tbody>
+        ${rows.map((r,i)=> r && r._g ? `<tr class="tgrp ${String(r[fcols[0].k] || '') === String(r[fcols[0].k] || '').toUpperCase() ? 'main' : ''}"><td colspan="${fcols.length + (f.rowTotal ? 1 : 0)}">${f.groups ? `<input class="tgin" data-tbl="${f.k}" data-row="${i}" data-col="${fcols[0].k}" value="${esc(r[fcols[0].k] || '')}">` : esc(r[fcols[0].k] || '')}</td><td>${f.groups ? `<button class="del" data-act="delrow" data-k="${f.k}" data-i="${i}" title="Remove heading">×</button>` : ''}</td></tr>` : `<tr class="${f.check && r?.ans === (f.bad || 'No') ? 'tno' : ''}">${fcols.map(c=>`<td data-l="${esc(c.day!=null ? dayLabel(gridStart(S.draft?.data || {}), c.day) : c.l)}">${c.o ? `<select class="tsel" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}"><option value=""></option>${c.o.map(o=>`<option ${o===r?.[c.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>` : (c.mul || c.calc) ? `<input readonly tabindex="-1" style="background:#f4f2ec!important;font-weight:600" title="Calculated automatically" data-calc="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">` : c.ta ? `<textarea class="tta" rows="${Math.min(8, Math.max(2, String(r?.[c.k] ?? '').split('\n').length))}" placeholder="${esc(c.l)}" data-tbl="${f.k}" data-row="${i}" data-col="${c.k}">${esc(r?.[c.k])}</textarea>` : `<input ${c.n?'inputmode="decimal"':''}${c.time ? ' type="time"' : c.date ? ' type="date"' : ''} placeholder="${c.n ? '0' : c === fcols[0] ? (f.people ? 'Type or pick a name' : 'Type here') : esc(c.l)}"${f.people && (c.k === 'name' || c.k === 'company') ? ` list="ppl_${f.k}_${c.k}" autocomplete="off"` : ''}${f.actList && c.k === f.cols[0].k ? ` list="act_${f.k}" autocomplete="off"` : ''}${f.lorries && (c.k === 'plate' || c.k === 'driver') ? ` list="lor_${f.k}_${c.k}" autocomplete="off"` : ''} data-tbl="${f.k}" data-row="${i}" data-col="${c.k}" value="${esc(r?.[c.k])}">`}</td>`).join('')}${f.rowTotal ? `<td data-l="Total" style="text-align:center"><b data-rt="${f.k}" data-row="${i}">${dayC.reduce((a, c) => a + numv(r && r[c.k]), 0)}</b></td>` : ''}<td class="x"><button class="xbtn" title="Remove row" data-act="delrow" data-k="${f.k}" data-i="${i}">×</button></td></tr>`).join('')}
+      </tbody>${foot}</table><button class="addrow" data-act="addrow" data-k="${f.k}">+ Add row</button>${f.actList ? actDatalist(f.k) : ''}${f.lorries ? lorDatalists(f.k) : ''}${f.people ? `<button class="addrow" data-act="pplpick" data-k="${f.k}" style="margin-left:6px">👥 Choose people</button>${pplDatalists(f.k)}` : ''}${f.groups ? `<button class="addrow" data-act="addgrp" data-k="${f.k}" style="margin-left:6px">+ Add ${f.k === 'rows' && S.draft?.type === 'EAIA' ? 'activity' : 'heading'}</button>` : ''}</div>`;
     }
     case 'photos': {
       const ph = v || [];
@@ -5421,7 +5454,7 @@ function stampConfirm(img){
 }
 
 /* ---------- auto-update: phones pick up a new index.html by themselves (no hard refresh) ---------- */
-const APP_VER = 'Z108';
+const APP_VER = 'Z109';
 async function checkUpdate(){
   if(!navigator.onLine || location.protocol === 'file:') return;
   try {
@@ -7267,6 +7300,7 @@ document.addEventListener('input', e => {
     if((t.dataset.f === 'from' || t.dataset.f === 'to' || t.dataset.f === 'period') && (S.draft.type === 'PR' || S.draft.type === 'MM')){ rerenderEditorField('manpower'); rerenderEditorField('machinery'); } t.closest('.fld')?.classList.remove('err'); }
   else if(t.dataset.tbl){ const rows = S.draft.data[t.dataset.tbl] = S.draft.data[t.dataset.tbl] || []; const i = +t.dataset.row; rows[i] = rows[i] || {}; rows[i][t.dataset.col] = t.value; S.dirty = true; t.closest('.fld')?.classList.remove('err');
     if(t.dataset.col === 'name' && t.getAttribute('list')) pplAutofill(t, rows[i]);
+    if(/^lor_/.test(t.getAttribute('list') || '')) lorAutofill(t, rows[i]);
     if(t.dataset.tbl === 'manpower' && S.draft.type === 'PR' && TT(S.draft).coverStyle === 'axis' && axisHseFromGrid(S.draft.data)) rerenderEditorField('hseW');
     if(t.dataset.tbl === 'scurve' && t.dataset.col === 'actual' && S.draft.type === 'PR' && isAxP(S.draft.projectId)){ const c = scCutRowAx(S.draft.data);   // AXISWKPJ: as before
       if(c && c.i === i){ S.draft.data.actual = t.value; const ae = document.querySelector('[data-f="actual"]'); if(ae) ae.value = t.value; } }
